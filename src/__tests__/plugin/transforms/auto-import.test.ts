@@ -1,0 +1,229 @@
+import { describe, it, expect } from 'vitest'
+import { autoImportTransform } from '../../../plugin/transforms/auto-import.js'
+
+const srcDir = '/project/app'
+const opts = { srcDir }
+
+const RUNTIME_PKG = `'@jasonshimmy/custom-elements-runtime'`
+const DIRECTIVES_PKG = `'@jasonshimmy/custom-elements-runtime/directives'`
+const FRAMEWORK_PKG = `'vite-plugin-cer-app/composables'`
+
+// ─── Target-directory gating ─────────────────────────────────────────────────
+
+describe('autoImportTransform — target directory gating', () => {
+  it('returns null for files outside pages/, layouts/, components/', () => {
+    expect(
+      autoImportTransform("component('x', () => html``)", '/project/app/composables/useTheme.ts', opts),
+    ).toBeNull()
+  })
+
+  it('returns null for virtual modules (id starts with \\0)', () => {
+    expect(
+      autoImportTransform("component('x', () => html``)", '\0virtual:cer-routes', opts),
+    ).toBeNull()
+  })
+
+  it('returns null for non-.ts/.js files', () => {
+    expect(
+      autoImportTransform('<div>content</div>', '/project/app/pages/about.html', opts),
+    ).toBeNull()
+  })
+
+  it('transforms files in pages/', () => {
+    const result = autoImportTransform(
+      "component('page-about', () => html`<h1>About</h1>`)",
+      '/project/app/pages/about.ts',
+      opts,
+    )
+    expect(result).not.toBeNull()
+  })
+
+  it('transforms files in layouts/', () => {
+    const result = autoImportTransform(
+      "component('layout-default', () => html`<slot></slot>`)",
+      '/project/app/layouts/default.ts',
+      opts,
+    )
+    expect(result).not.toBeNull()
+  })
+
+  it('transforms files in components/', () => {
+    const result = autoImportTransform(
+      "component('my-button', () => html`<button></button>`)",
+      '/project/app/components/my-button.ts',
+      opts,
+    )
+    expect(result).not.toBeNull()
+  })
+})
+
+// ─── No injection needed ─────────────────────────────────────────────────────
+
+describe('autoImportTransform — no injection needed', () => {
+  it('returns null when no runtime or directive identifiers are used', () => {
+    expect(
+      autoImportTransform('const greeting = "hello"', '/project/app/pages/about.ts', opts),
+    ).toBeNull()
+  })
+
+  it('returns null when runtime is already imported from the package', () => {
+    const code =
+      `import { component, html } from ${RUNTIME_PKG}\ncomponent('test', () => html\`\`)`
+    expect(autoImportTransform(code, '/project/app/pages/about.ts', opts)).toBeNull()
+  })
+
+  it('returns null when directives already imported and no other identifiers used', () => {
+    const code = `import { when } from ${DIRECTIVES_PKG}\nconst x = 1`
+    expect(autoImportTransform(code, '/project/app/pages/about.ts', opts)).toBeNull()
+  })
+})
+
+// ─── Runtime import injection ────────────────────────────────────────────────
+
+describe('autoImportTransform — runtime import injection', () => {
+  it('injects runtime import when "component" identifier is used', () => {
+    const result = autoImportTransform(
+      "component('page-about', () => {})",
+      '/project/app/pages/about.ts',
+      opts,
+    )!
+    expect(result).toContain(`from ${RUNTIME_PKG}`)
+    expect(result).toContain('component')
+  })
+
+  it('injects runtime import when "html" identifier is used', () => {
+    const result = autoImportTransform(
+      'const t = html`<div></div>`',
+      '/project/app/pages/about.ts',
+      opts,
+    )!
+    expect(result).toContain(`from ${RUNTIME_PKG}`)
+  })
+
+  it('injects runtime import when "ref" identifier is used', () => {
+    const result = autoImportTransform(
+      'const count = ref(0)',
+      '/project/app/pages/counter.ts',
+      opts,
+    )!
+    expect(result).toContain(`from ${RUNTIME_PKG}`)
+  })
+
+  it('prepends import at the very top of the file', () => {
+    const original = "component('x', () => html``)"
+    const result = autoImportTransform(original, '/project/app/pages/test.ts', opts)!
+    expect(result.startsWith('import {')).toBe(true)
+  })
+
+  it('does not add duplicate runtime import when already present', () => {
+    const code = `import { component } from ${RUNTIME_PKG}\ncomponent('x', () => {})`
+    const result = autoImportTransform(code, '/project/app/pages/test.ts', opts)
+    const count = (result ?? code).split(`from ${RUNTIME_PKG}`).length - 1
+    expect(count).toBe(1)
+  })
+})
+
+// ─── Directive import injection ──────────────────────────────────────────────
+
+describe('autoImportTransform — directive import injection', () => {
+  it('injects directive import when "when" identifier is used', () => {
+    const result = autoImportTransform(
+      'const t = when(true, html`<span>yes</span>`)',
+      '/project/app/pages/about.ts',
+      opts,
+    )!
+    expect(result).toContain(`from ${DIRECTIVES_PKG}`)
+  })
+
+  it('injects directive import when "each" identifier is used', () => {
+    const result = autoImportTransform(
+      'const t = each(items, (item) => html`<li>${item}</li>`)',
+      '/project/app/pages/list.ts',
+      opts,
+    )!
+    expect(result).toContain(`from ${DIRECTIVES_PKG}`)
+  })
+
+  it('injects directive import when "match" identifier is used', () => {
+    const result = autoImportTransform(
+      'const t = match(state, {})',
+      '/project/app/pages/test.ts',
+      opts,
+    )!
+    expect(result).toContain(`from ${DIRECTIVES_PKG}`)
+  })
+
+  it('does not add duplicate directive import when already present', () => {
+    const code = `import { when } from ${DIRECTIVES_PKG}\nconst t = when(true, html\`\`)`
+    // html is used → runtime import needed, but directives should not be duplicated
+    const result = autoImportTransform(code, '/project/app/pages/test.ts', opts)!
+    const count = (result ?? code).split(`from ${DIRECTIVES_PKG}`).length - 1
+    expect(count).toBe(1)
+  })
+})
+
+// ─── Both runtime + directive injected ───────────────────────────────────────
+
+describe('autoImportTransform — both runtime and directive injection', () => {
+  it('injects both when both are needed', () => {
+    const code = "component('x', () => html`${when(true, html`<span></span>`)}`)"
+    const result = autoImportTransform(code, '/project/app/pages/test.ts', opts)!
+    expect(result).toContain(`from ${RUNTIME_PKG}`)
+    expect(result).toContain(`from ${DIRECTIVES_PKG}`)
+  })
+
+  it('only injects runtime when directives already imported', () => {
+    const code = `import { when } from ${DIRECTIVES_PKG}\ncomponent('x', () => html\`\`)`
+    const result = autoImportTransform(code, '/project/app/pages/test.ts', opts)!
+    expect(result).toContain(`from ${RUNTIME_PKG}`)
+    const directivesCount = result.split(`from ${DIRECTIVES_PKG}`).length - 1
+    expect(directivesCount).toBe(1) // only the original, not a new one
+  })
+})
+
+// ─── Framework composable injection (useHead) ────────────────────────────────
+
+describe('autoImportTransform — framework composable injection', () => {
+  it('injects useHead import when useHead is used', () => {
+    const code = "component('page-about', () => { useHead({ title: 'About' }); return html`<h1>About</h1>` })"
+    const result = autoImportTransform(code, '/project/app/pages/about.ts', opts)!
+    expect(result).toContain(`from ${FRAMEWORK_PKG}`)
+    expect(result).toContain('useHead')
+  })
+
+  it('does not inject useHead when not used', () => {
+    const code = "component('page-about', () => html`<h1>About</h1>`)"
+    const result = autoImportTransform(code, '/project/app/pages/about.ts', opts)
+    expect(result === null || !result.includes(FRAMEWORK_PKG)).toBe(true)
+  })
+
+  it('does not add duplicate useHead import when already present', () => {
+    const code = `import { useHead } from ${FRAMEWORK_PKG}\ncomponent('x', () => { useHead({ title: 'X' }); return html\`\` })`
+    const result = autoImportTransform(code, '/project/app/pages/test.ts', opts)!
+    const count = (result ?? code).split(`from ${FRAMEWORK_PKG}`).length - 1
+    expect(count).toBe(1)
+  })
+
+  it('injects usePageData import when usePageData is used', () => {
+    const code = "component('page-items-id', () => { const data = usePageData(); return html`<div></div>` })"
+    const result = autoImportTransform(code, '/project/app/pages/items/[id].ts', opts)!
+    expect(result).toContain(`from ${FRAMEWORK_PKG}`)
+    expect(result).toContain('usePageData')
+  })
+
+  it('injects both useHead and usePageData when both are used', () => {
+    const code = "component('page-blog-slug', () => { useHead({ title: 'x' }); const data = usePageData(); return html`<div></div>` })"
+    const result = autoImportTransform(code, '/project/app/pages/blog/[slug].ts', opts)!
+    expect(result).toContain('useHead')
+    expect(result).toContain('usePageData')
+    // Only one import statement from the framework package
+    const count = result.split(`from ${FRAMEWORK_PKG}`).length - 1
+    expect(count).toBe(1)
+  })
+
+  it('injects usePageData for root-level convention files (loading.ts, error.ts)', () => {
+    const code = "component('page-loading', () => { const d = usePageData(); return html`<div></div>` })"
+    const result = autoImportTransform(code, '/project/app/loading.ts', opts)!
+    expect(result).toContain('usePageData')
+  })
+})

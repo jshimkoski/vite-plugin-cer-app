@@ -1,0 +1,330 @@
+import { resolve, join } from 'pathe'
+import type { Plugin, ViteDevServer, ModuleNode } from 'vite'
+import type { CerAppConfig } from '../types/config.js'
+import type { ResolvedCerConfig } from './dev-server.js'
+import { cerPlugin } from '@jasonshimmy/custom-elements-runtime/vite-plugin'
+import { autoImportTransform } from './transforms/auto-import.js'
+import { scanComposableExports, writeAutoImportDts, writeTsconfigPaths } from './dts-generator.js'
+import { configureCerDevServer } from './dev-server.js'
+import { generateRoutesCode } from './virtual/routes.js'
+import { generateLayoutsCode } from './virtual/layouts.js'
+import { generateComponentsCode } from './virtual/components.js'
+import { generateComposablesCode } from './virtual/composables.js'
+import { generatePluginsCode } from './virtual/plugins.js'
+import { generateMiddlewareCode } from './virtual/middleware.js'
+import { generateServerApiCode } from './virtual/server-api.js'
+import { generateServerMiddlewareCode } from './virtual/server-middleware.js'
+import { generateLoadingCode } from './virtual/loading.js'
+import { generateErrorCode } from './virtual/error.js'
+import { createWatcher } from './scanner.js'
+
+// Virtual module IDs (raw)
+const VIRTUAL_IDS = {
+  routes: 'virtual:cer-routes',
+  layouts: 'virtual:cer-layouts',
+  components: 'virtual:cer-components',
+  composables: 'virtual:cer-composables',
+  plugins: 'virtual:cer-plugins',
+  middleware: 'virtual:cer-middleware',
+  serverApi: 'virtual:cer-server-api',
+  serverMiddleware: 'virtual:cer-server-middleware',
+  appConfig: 'virtual:cer-app-config',
+  loading: 'virtual:cer-loading',
+  error: 'virtual:cer-error',
+} as const
+
+// Resolved virtual module IDs (prefixed with \0)
+const RESOLVED_IDS = Object.fromEntries(
+  Object.entries(VIRTUAL_IDS).map(([k, v]) => [k, `\0${v}`]),
+) as Record<keyof typeof VIRTUAL_IDS, string>
+
+/**
+ * Fills in default values for all config fields and resolves absolute paths.
+ */
+export function resolveConfig(userConfig: CerAppConfig, root: string = process.cwd()): ResolvedCerConfig {
+  const mode = userConfig.mode ?? 'spa'
+  const srcDir = resolve(root, userConfig.srcDir ?? 'app')
+
+  return {
+    mode,
+    srcDir,
+    root,
+    pagesDir: join(srcDir, 'pages'),
+    layoutsDir: join(srcDir, 'layouts'),
+    componentsDir: join(srcDir, 'components'),
+    composablesDir: join(srcDir, 'composables'),
+    pluginsDir: join(srcDir, 'plugins'),
+    middlewareDir: join(srcDir, 'middleware'),
+    serverApiDir: join(root, 'server/api'),
+    serverMiddlewareDir: join(root, 'server/middleware'),
+    port: userConfig.port ?? 3000,
+    ssr: {
+      dsd: userConfig.ssr?.dsd ?? true,
+      streaming: userConfig.ssr?.streaming ?? false,
+    },
+    ssg: {
+      routes: userConfig.ssg?.routes ?? 'auto',
+      concurrency: userConfig.ssg?.concurrency ?? 4,
+      fallback: userConfig.ssg?.fallback ?? false,
+    },
+    router: {
+      base: userConfig.router?.base,
+      scrollToFragment: userConfig.router?.scrollToFragment,
+    },
+    jitCss: {
+      content: userConfig.jitCss?.content ?? [
+        `${srcDir}/pages/**/*.ts`,
+        `${srcDir}/components/**/*.ts`,
+        `${srcDir}/layouts/**/*.ts`,
+      ],
+      extendedColors: userConfig.jitCss?.extendedColors ?? false,
+    },
+    autoImports: {
+      components: userConfig.autoImports?.components ?? true,
+      composables: userConfig.autoImports?.composables ?? true,
+      directives: userConfig.autoImports?.directives ?? true,
+      runtime: userConfig.autoImports?.runtime ?? true,
+    },
+  }
+}
+
+/**
+ * Maps a resolved virtual ID to the appropriate generator function.
+ */
+async function generateVirtualModule(
+  id: string,
+  config: ResolvedCerConfig,
+): Promise<string | null> {
+  switch (id) {
+    case RESOLVED_IDS.routes:
+      return generateRoutesCode(config.pagesDir)
+    case RESOLVED_IDS.layouts:
+      return generateLayoutsCode(config.layoutsDir)
+    case RESOLVED_IDS.components:
+      return generateComponentsCode(config.componentsDir)
+    case RESOLVED_IDS.composables:
+      return generateComposablesCode(config.composablesDir)
+    case RESOLVED_IDS.plugins:
+      return generatePluginsCode(config.pluginsDir)
+    case RESOLVED_IDS.middleware:
+      return generateMiddlewareCode(config.middlewareDir)
+    case RESOLVED_IDS.serverApi:
+      return generateServerApiCode(config.serverApiDir)
+    case RESOLVED_IDS.serverMiddleware:
+      return generateServerMiddlewareCode(config.serverMiddlewareDir)
+    case RESOLVED_IDS.appConfig:
+      return generateAppConfigModule(config)
+    case RESOLVED_IDS.loading:
+      return generateLoadingCode(config.srcDir)
+    case RESOLVED_IDS.error:
+      return generateErrorCode(config.srcDir)
+    default:
+      return null
+  }
+}
+
+/**
+ * Generates a virtual module that exports the resolved app config.
+ */
+function generateAppConfigModule(config: ResolvedCerConfig): string {
+  const exportedConfig = {
+    mode: config.mode,
+    router: config.router,
+    ssr: config.ssr,
+    ssg: config.ssg,
+  }
+  return `// AUTO-GENERATED by vite-plugin-cer-app\nexport const appConfig = ${JSON.stringify(exportedConfig, null, 2)}\nexport default appConfig\n`
+}
+
+/**
+ * Determines which virtual module IDs should be invalidated when a file changes
+ * in a given directory.
+ */
+function getDirtyVirtualIds(filePath: string, config: ResolvedCerConfig): string[] {
+  const dirty: string[] = []
+
+  if (filePath.startsWith(config.pagesDir)) {
+    dirty.push(RESOLVED_IDS.routes)
+  }
+  if (filePath.startsWith(config.layoutsDir)) {
+    dirty.push(RESOLVED_IDS.layouts)
+  }
+  if (filePath.startsWith(config.componentsDir)) {
+    dirty.push(RESOLVED_IDS.components)
+  }
+  if (filePath.startsWith(config.composablesDir)) {
+    dirty.push(RESOLVED_IDS.composables)
+  }
+  if (filePath.startsWith(config.pluginsDir)) {
+    dirty.push(RESOLVED_IDS.plugins)
+  }
+  if (filePath.startsWith(config.middlewareDir)) {
+    dirty.push(RESOLVED_IDS.middleware)
+  }
+  if (filePath.startsWith(config.serverApiDir)) {
+    dirty.push(RESOLVED_IDS.serverApi)
+  }
+  if (filePath.startsWith(config.serverMiddlewareDir)) {
+    dirty.push(RESOLVED_IDS.serverMiddleware)
+  }
+
+  return dirty
+}
+
+/**
+ * The main cerApp() Vite plugin factory.
+ * Returns an array of plugins: the cer-app orchestrator + the runtime JIT CSS plugin(s).
+ */
+export function cerApp(userConfig: CerAppConfig = {}): Plugin[] {
+  let config: ResolvedCerConfig
+  let composableExports = new Map<string, string>()
+
+  // Cache for generated virtual module code (invalidated on file changes)
+  const moduleCache = new Map<string, string>()
+
+  const cerAppPlugin: Plugin = {
+    name: 'vite-plugin-cer-app',
+
+    config(viteConfig) {
+      const root = viteConfig.root ? resolve(viteConfig.root) : process.cwd()
+      config = resolveConfig(userConfig, root)
+      return {
+        build: {
+          target: 'esnext',
+          rollupOptions: {
+            onwarn(warning, warn) {
+              // loader and meta are optional exports from page files — suppress noise
+              if (
+                warning.code === 'MISSING_EXPORT' &&
+                (warning.binding === 'loader' || warning.binding === 'meta')
+              ) {
+                return
+              }
+              warn(warning)
+            },
+          },
+        },
+      }
+    },
+
+    configResolved(resolvedConfig) {
+      // Re-resolve with the final root
+      config = resolveConfig(userConfig, resolvedConfig.root)
+    },
+
+    resolveId(id: string) {
+      if ((Object.values(VIRTUAL_IDS) as string[]).includes(id)) {
+        return `\0${id}`
+      }
+    },
+
+    async load(id: string) {
+      const allResolved = Object.values(RESOLVED_IDS) as string[]
+      if (!allResolved.includes(id)) return null
+
+      // Return from cache if available
+      if (moduleCache.has(id)) {
+        return moduleCache.get(id)!
+      }
+
+      // Generate and cache
+      const code = await generateVirtualModule(id, config)
+      if (code !== null) {
+        moduleCache.set(id, code)
+        return code
+      }
+
+      return null
+    },
+
+    transform(code: string, id: string) {
+      if (!config) return null
+      if (config.autoImports?.runtime === false) return null
+      // Skip virtual modules
+      if (id.startsWith('\0')) return null
+
+      const result = autoImportTransform(code, id, {
+        srcDir: config.srcDir,
+        composableExports: config.autoImports?.composables !== false ? composableExports : undefined,
+      })
+      if (result === null) return null
+      return { code: result, map: null }
+    },
+
+    async configureServer(server: ViteDevServer) {
+      if (!config) {
+        // config might not be set yet; resolve with cwd
+        config = resolveConfig(userConfig, process.cwd())
+      }
+      // Scan composables and write .d.ts + tsconfig paths on dev server start
+      composableExports = await scanComposableExports(config.composablesDir)
+      await writeAutoImportDts(config.root, config.composablesDir, composableExports)
+      writeTsconfigPaths(config.root, config.srcDir)
+
+      // Watch app/ and server/ directories for file changes
+      const watchDirs = [
+        config.pagesDir,
+        config.layoutsDir,
+        config.componentsDir,
+        config.composablesDir,
+        config.pluginsDir,
+        config.middlewareDir,
+        config.serverApiDir,
+        config.serverMiddlewareDir,
+      ]
+
+      createWatcher(server.watcher, watchDirs, async (event, file) => {
+        if (event === 'add' || event === 'unlink') {
+          // Re-scan composables and regenerate .d.ts if a composable changed
+          if (file.startsWith(config.composablesDir)) {
+            composableExports = await scanComposableExports(config.composablesDir)
+            await writeAutoImportDts(config.root, config.composablesDir, composableExports)
+          }
+          // Invalidate relevant virtual modules
+          const dirtyIds = getDirtyVirtualIds(file, config)
+          for (const resolvedId of dirtyIds) {
+            moduleCache.delete(resolvedId)
+            const mod = server.moduleGraph.getModuleById(resolvedId)
+            if (mod) {
+              server.moduleGraph.invalidateModule(mod)
+            }
+          }
+          // Trigger HMR
+          server.ws.send({ type: 'full-reload' })
+        }
+      })
+
+      // Register dev server middleware for API routes + SSR
+      configureCerDevServer(server, config)
+    },
+
+    async buildStart() {
+      if (!config) {
+        config = resolveConfig(userConfig, process.cwd())
+      }
+      // Scan composables and generate type declarations + tsconfig paths
+      composableExports = await scanComposableExports(config.composablesDir)
+      await writeAutoImportDts(config.root, config.composablesDir, composableExports)
+      writeTsconfigPaths(config.root, config.srcDir)
+      // Warm the virtual module cache
+      for (const resolvedId of Object.values(RESOLVED_IDS)) {
+        const code = await generateVirtualModule(resolvedId, config)
+        if (code !== null) {
+          moduleCache.set(resolvedId, code)
+        }
+      }
+    },
+  }
+
+  // Include cerPlugin from the runtime for JIT CSS support
+  const jitPlugins = cerPlugin({
+    content: userConfig.jitCss?.content ?? [
+      `${userConfig.srcDir ?? 'app'}/pages/**/*.ts`,
+      `${userConfig.srcDir ?? 'app'}/components/**/*.ts`,
+      `${userConfig.srcDir ?? 'app'}/layouts/**/*.ts`,
+    ],
+    ssr: userConfig.ssr?.dsd ? { dsd: true } : undefined,
+  })
+
+  return [cerAppPlugin, ...jitPlugins]
+}
