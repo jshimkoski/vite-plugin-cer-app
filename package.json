@@ -3,6 +3,22 @@
   "version": "0.0.0",
   "description": "Nuxt-style meta-framework for @jasonshimmy/custom-elements-runtime",
   "type": "module",
+  "keywords": [
+    "web-components",
+    "custom-elements",
+    "meta-framework",
+    "reactive",
+    "typescript",
+    "frontend",
+    "ui"
+  ],
+  "author": "Jason Shimkoski <https://jasonshimmy.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jshimkoski/vite-plugin-cer-app.git"
+  },
+  "homepage": "https://github.com/jshimkoski/vite-plugin-cer-app#readme",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -52,5 +68,8 @@
     "typescript": "^5.4.0",
     "vite": "^8.0.0",
     "vitest": "^4.1.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
