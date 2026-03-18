@@ -6,7 +6,7 @@ const opts = { srcDir }
 
 const RUNTIME_PKG = `'@jasonshimmy/custom-elements-runtime'`
 const DIRECTIVES_PKG = `'@jasonshimmy/custom-elements-runtime/directives'`
-const FRAMEWORK_PKG = `'vite-plugin-cer-app/composables'`
+const FRAMEWORK_PKG = `'@jasonshimmy/vite-plugin-cer-app/composables'`
 
 // ─── Target-directory gating ─────────────────────────────────────────────────
 

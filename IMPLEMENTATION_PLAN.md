@@ -1,4 +1,4 @@
-# vite-plugin-cer-app — Implementation Plan
+# @jasonshimmy/vite-plugin-cer-app — Implementation Plan
 
 Gaps identified by comparing the framework against Nuxt 3 and Next.js 14.
 Items are ordered by priority. Each section notes the files touched, the

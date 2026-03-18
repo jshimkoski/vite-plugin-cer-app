@@ -15,7 +15,7 @@ Create a file in `app/middleware/`. It runs before every route navigation:
 
 ```ts
 // app/middleware/auth.ts
-import type { RouteMiddleware } from 'vite-plugin-cer-app/types'
+import type { RouteMiddleware } from '@jasonshimmy/vite-plugin-cer-app/types'
 
 const auth: RouteMiddleware = async (to, from, next) => {
   const session = await getSession()
@@ -89,7 +89,7 @@ Server middleware runs on the HTTP level — before API routes and before SSR re
 
 ```ts
 // server/middleware/cors.ts
-import type { ServerMiddleware } from 'vite-plugin-cer-app/types'
+import type { ServerMiddleware } from '@jasonshimmy/vite-plugin-cer-app/types'
 
 const cors: ServerMiddleware = (req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*')

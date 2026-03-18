@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite-plugin-cer-app'
+import { defineConfig } from '@jasonshimmy/vite-plugin-cer-app'
 
 export default defineConfig({
   mode: 'ssg',

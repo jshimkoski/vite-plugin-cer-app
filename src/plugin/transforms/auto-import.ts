@@ -11,7 +11,7 @@ const RUNTIME_IMPORTS = `import { component, html, css, ref, computed, watch, wa
 
 const DIRECTIVE_IMPORTS = `import { when, each, match, anchorBlock } from '@jasonshimmy/custom-elements-runtime/directives';`
 
-const FRAMEWORK_IMPORTS = `import { useHead, usePageData } from 'vite-plugin-cer-app/composables';`
+const FRAMEWORK_IMPORTS = `import { useHead, usePageData } from '@jasonshimmy/vite-plugin-cer-app/composables';`
 
 const FRAMEWORK_IDENTIFIERS = ['useHead', 'usePageData']
 
@@ -160,8 +160,8 @@ function buildComposableImport(code: string, composableExports?: Map<string, str
  * Returns true if injection is needed (not already imported).
  */
 function isFrameworkImportNeeded(code: string): boolean {
-  if (code.includes("from 'vite-plugin-cer-app/composables'") ||
-      code.includes('from "vite-plugin-cer-app/composables"')) {
+  if (code.includes("from '@jasonshimmy/vite-plugin-cer-app/composables'") ||
+      code.includes('from "@jasonshimmy/vite-plugin-cer-app/composables"')) {
     return false
   }
 

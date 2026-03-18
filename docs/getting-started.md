@@ -49,7 +49,7 @@ npx create-cer-app my-app --mode ssr
 ### 1. Install
 
 ```sh
-npm install -D vite-plugin-cer-app
+npm install -D @jasonshimmy/vite-plugin-cer-app
 npm install @jasonshimmy/custom-elements-runtime
 ```
 
@@ -58,7 +58,7 @@ npm install @jasonshimmy/custom-elements-runtime
 ```ts
 // vite.config.ts
 import { defineConfig } from 'vite'
-import { cerApp } from 'vite-plugin-cer-app'
+import { cerApp } from '@jasonshimmy/vite-plugin-cer-app'
 
 export default defineConfig({
   plugins: [cerApp()],
@@ -69,7 +69,7 @@ Or use a separate `cer.config.ts` (picked up automatically by the CLI, and passe
 
 ```ts
 // cer.config.ts
-import { defineConfig } from 'vite-plugin-cer-app'
+import { defineConfig } from '@jasonshimmy/vite-plugin-cer-app'
 
 export default defineConfig({
   mode: 'spa',
@@ -79,7 +79,7 @@ export default defineConfig({
 ```ts
 // vite.config.ts (when using cer.config.ts)
 import { defineConfig } from 'vite'
-import { cerApp } from 'vite-plugin-cer-app'
+import { cerApp } from '@jasonshimmy/vite-plugin-cer-app'
 import cerConfig from './cer.config.ts'
 
 export default defineConfig({

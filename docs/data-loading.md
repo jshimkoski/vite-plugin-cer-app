@@ -8,7 +8,7 @@ Each page can export a `loader` function that runs on the server before the page
 
 ```ts
 // app/pages/blog/[slug].ts
-import type { PageLoader } from 'vite-plugin-cer-app/types'
+import type { PageLoader } from '@jasonshimmy/vite-plugin-cer-app/types'
 
 component('page-blog-slug', () => {
   const props = useProps({ slug: '', title: '', body: '' })

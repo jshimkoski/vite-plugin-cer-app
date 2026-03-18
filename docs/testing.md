@@ -9,7 +9,7 @@ This guide walks through how to manually test every major feature of the framewo
 Build the plugin first:
 
 ```sh
-cd /path/to/vite-plugin-cer-app
+cd /path/to/@jasonshimmy/vite-plugin-cer-app
 npm install
 npm run build
 ```
@@ -31,7 +31,7 @@ node dist/cli/create/index.js my-ssg  --mode ssg
 In each directory, install dependencies and link the plugin:
 
 ```sh
-cd my-spa && npm install && npm link /path/to/vite-plugin-cer-app
+cd my-spa && npm install && npm link /path/to/@jasonshimmy/vite-plugin-cer-app
 ```
 
 ### Start the dev server
@@ -325,7 +325,7 @@ EOF
 
 ```ts
 // app/pages/about.ts
-import { useHead } from 'vite-plugin-cer-app/composables'
+import { useHead } from '@jasonshimmy/vite-plugin-cer-app/composables'
 
 component('page-about', () => {
   useHead({
@@ -431,7 +431,7 @@ cat dist/items/1/index.html  # should contain "Item 1"
 The framework ships with 211 unit and integration tests:
 
 ```sh
-cd /path/to/vite-plugin-cer-app
+cd /path/to/@jasonshimmy/vite-plugin-cer-app
 npm test
 ```
 

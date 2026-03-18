@@ -5,10 +5,10 @@ The framework provides two CLI programs:
 - **`cer-app`** — dev server, build, preview, and generate commands
 - **`create-cer-app`** — project scaffolding
 
-Both are available after installing `vite-plugin-cer-app` as a dev dependency, or globally:
+Both are available after installing `@jasonshimmy/vite-plugin-cer-app` as a dev dependency, or globally:
 
 ```sh
-npm install -g vite-plugin-cer-app
+npm install -g @jasonshimmy/vite-plugin-cer-app
 ```
 
 ---

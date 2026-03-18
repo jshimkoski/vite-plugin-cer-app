@@ -10,7 +10,7 @@ The `useHead()` composable manages `<title>`, `<meta>`, `<link>`, `<script>`, an
 ## Import
 
 ```ts
-import { useHead } from 'vite-plugin-cer-app/composables'
+import { useHead } from '@jasonshimmy/vite-plugin-cer-app/composables'
 ```
 
 ---
@@ -175,10 +175,10 @@ Style tags are not deduplicated.
 
 During SSR rendering, `useHead()` calls are collected via a request-scoped array. After rendering is complete, the collected tags are serialized and injected before `</head>` in the HTML shell.
 
-You can use the underlying primitives directly from `vite-plugin-cer-app/composables` if you need manual control:
+You can use the underlying primitives directly from `@jasonshimmy/vite-plugin-cer-app/composables` if you need manual control:
 
 ```ts
-import { beginHeadCollection, endHeadCollection, serializeHeadTags } from 'vite-plugin-cer-app/composables'
+import { beginHeadCollection, endHeadCollection, serializeHeadTags } from '@jasonshimmy/vite-plugin-cer-app/composables'
 
 // Before rendering:
 beginHeadCollection()

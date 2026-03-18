@@ -4,7 +4,7 @@ The framework is configured via `cer.config.ts` at the project root. All fields 
 
 ```ts
 // cer.config.ts
-import { defineConfig } from 'vite-plugin-cer-app'
+import { defineConfig } from '@jasonshimmy/vite-plugin-cer-app'
 
 export default defineConfig({
   mode: 'spa',
@@ -239,7 +239,7 @@ When using `vite.config.ts` instead of (or alongside) `cer.config.ts`:
 ```ts
 // vite.config.ts
 import { defineConfig } from 'vite'
-import { cerApp } from 'vite-plugin-cer-app'
+import { cerApp } from '@jasonshimmy/vite-plugin-cer-app'
 
 export default defineConfig({
   plugins: [
@@ -257,7 +257,7 @@ export default defineConfig({
 
 ## TypeScript types
 
-All config interfaces are exported from `vite-plugin-cer-app/types`:
+All config interfaces are exported from `@jasonshimmy/vite-plugin-cer-app/types`:
 
 ```ts
 import type {
@@ -266,5 +266,5 @@ import type {
   JitCssConfig,
   SsrConfig,
   AutoImportsConfig,
-} from 'vite-plugin-cer-app/types'
+} from '@jasonshimmy/vite-plugin-cer-app/types'
 ```

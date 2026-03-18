@@ -94,7 +94,7 @@ Export a `meta` object from any page file to customize behavior:
 
 ```ts
 // app/pages/blog/[slug].ts
-import type { PageMeta } from 'vite-plugin-cer-app/types'
+import type { PageMeta } from '@jasonshimmy/vite-plugin-cer-app/types'
 
 component('page-blog-slug', () => { /* ... */ })
 

@@ -8,7 +8,7 @@ import type { ResolvedCerConfig } from './dev-server.js'
  * exports a request handler for Node.js (Express-compatible).
  */
 function generateServerEntryCode(config: ResolvedCerConfig): string {
-  return `// AUTO-GENERATED server entry by vite-plugin-cer-app
+  return `// AUTO-GENERATED server entry by @jasonshimmy/vite-plugin-cer-app
 import 'virtual:cer-components'
 import routes from 'virtual:cer-routes'
 import layouts from 'virtual:cer-layouts'

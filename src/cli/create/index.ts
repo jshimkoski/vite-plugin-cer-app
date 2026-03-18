@@ -198,7 +198,7 @@ async function generateInlineTemplate(
         },
         devDependencies: {
           vite: '^5.0.0',
-          'vite-plugin-cer-app': '^0.1.0',
+          '@jasonshimmy/vite-plugin-cer-app': '^0.1.0',
           typescript: '^5.4.0',
         },
       },
@@ -211,7 +211,7 @@ async function generateInlineTemplate(
   // cer.config.ts
   await writeFile(
     join(targetDir, 'cer.config.ts'),
-    `import { defineConfig } from 'vite-plugin-cer-app'\n\nexport default defineConfig({\n  mode: '${mode}',\n  autoImports: { components: true, composables: true, directives: true, runtime: true },\n})\n`,
+    `import { defineConfig } from '@jasonshimmy/vite-plugin-cer-app'\n\nexport default defineConfig({\n  mode: '${mode}',\n  autoImports: { components: true, composables: true, directives: true, runtime: true },\n})\n`,
     'utf-8',
   )
 

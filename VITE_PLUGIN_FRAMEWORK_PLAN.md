@@ -1,4 +1,4 @@
-# Vite Plugin Framework Plan: `vite-plugin-cer-app`
+# Vite Plugin Framework Plan: `@jasonshimmy/vite-plugin-cer-app`
 
 A Nuxt/Next.js-style meta-framework built on top of `@jasonshimmy/custom-elements-runtime`.
 
@@ -44,7 +44,7 @@ A Nuxt/Next.js-style meta-framework built on top of `@jasonshimmy/custom-element
 
 ## Plugin Overview
 
-**Package name:** `vite-plugin-cer-app`
+**Package name:** `@jasonshimmy/vite-plugin-cer-app`
 
 The plugin transforms any Vite project into a full-stack application framework by:
 
@@ -99,7 +99,7 @@ my-app/
 ## Configuration File (`cer.config.ts`)
 
 ```typescript
-import { defineConfig } from 'vite-plugin-cer-app';
+import { defineConfig } from '@jasonshimmy/vite-plugin-cer-app';
 
 export default defineConfig({
   // Rendering mode
@@ -169,7 +169,7 @@ Every file in `app/pages/` exports a `component()` definition. Optional metadata
 // app/pages/blog/[slug].ts
 
 import { component, html, ref, useProps } from '@jasonshimmy/custom-elements-runtime';
-import type { PageMeta, PageLoader } from 'vite-plugin-cer-app/types';
+import type { PageMeta, PageLoader } from '@jasonshimmy/vite-plugin-cer-app/types';
 
 // Required: define the custom element
 component('page-blog-slug', () => {
@@ -243,7 +243,7 @@ The framework wraps each `<router-view>` output inside the layout declared in `m
 ```typescript
 // server/api/users/[id].ts   (server/ stays at project root, not inside app/)
 
-import type { ApiHandler } from 'vite-plugin-cer-app/types';
+import type { ApiHandler } from '@jasonshimmy/vite-plugin-cer-app/types';
 
 // Named exports per HTTP method
 export const GET: ApiHandler = async (req, res) => {
@@ -275,7 +275,7 @@ API routes are registered:
 ```typescript
 // server/middleware/cors.ts   (server/ stays at project root, not inside app/)
 
-import type { ServerMiddleware } from 'vite-plugin-cer-app/types';
+import type { ServerMiddleware } from '@jasonshimmy/vite-plugin-cer-app/types';
 
 const cors: ServerMiddleware = (req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -292,7 +292,7 @@ export default cors;
 ```typescript
 // app/middleware/auth.ts
 
-import type { RouteMiddleware } from 'vite-plugin-cer-app/types';
+import type { RouteMiddleware } from '@jasonshimmy/vite-plugin-cer-app/types';
 
 const auth: RouteMiddleware = async (to, from, next) => {
   const session = await getSession();
@@ -315,7 +315,7 @@ Global middleware runs before every route. Named middleware (referenced in `meta
 ```typescript
 // app/plugins/01.store.ts
 
-import type { AppPlugin } from 'vite-plugin-cer-app/types';
+import type { AppPlugin } from '@jasonshimmy/vite-plugin-cer-app/types';
 import { createStore } from '@jasonshimmy/custom-elements-runtime/store';
 
 export default {
@@ -336,7 +336,7 @@ Plugins are loaded in filename order (numeric prefix recommended). They receive 
 Built into the framework runtime, not the library:
 
 ```typescript
-import { useHead } from 'vite-plugin-cer-app/composables';
+import { useHead } from '@jasonshimmy/vite-plugin-cer-app/composables';
 
 component('page-about', () => {
   useHead({
@@ -414,7 +414,7 @@ The page `loader` export solves the SSR→client data hydration problem:
 
 **Goal**: Get a basic SPA working with file-based routing.
 
-- [x] Scaffold `vite-plugin-cer-app` package with `definePlugin`, `defineConfig`
+- [x] Scaffold `@jasonshimmy/vite-plugin-cer-app` package with `definePlugin`, `defineConfig`
 - [x] Resolve `app/` directory relative to project root (configurable via `srcDir` option)
 - [x] Implement `app/pages/` scanner → generate `virtual:cer-routes` as `Route[]`
 - [x] File-name → route-path transformer (index, dynamic `[param]`, catch-all `[...rest]`)
@@ -517,7 +517,7 @@ The page `loader` export solves the SSR→client data hydration problem:
 ## Technical Architecture
 
 ```
-vite-plugin-cer-app/
+@jasonshimmy/vite-plugin-cer-app/
 ├── src/
 │   ├── plugin/
 │   │   ├── index.ts            # Main Vite plugin factory
@@ -568,7 +568,7 @@ vite-plugin-cer-app/
 ## Dependency Map
 
 ```
-vite-plugin-cer-app
+@jasonshimmy/vite-plugin-cer-app
 ├── @jasonshimmy/custom-elements-runtime   (peer — all rendering, reactivity, routing)
 ├── vite                                   (peer — plugin host, build, dev server)
 ├── fast-glob                              (file scanning for pages/, components/, etc.)

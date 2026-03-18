@@ -10,7 +10,7 @@ Export one function per HTTP method. Method names must be uppercase:
 
 ```ts
 // server/api/users/index.ts  →  GET /api/users, POST /api/users
-import type { ApiHandler } from 'vite-plugin-cer-app/types'
+import type { ApiHandler } from '@jasonshimmy/vite-plugin-cer-app/types'
 
 export const GET: ApiHandler = async (req, res) => {
   const users = await db.user.findAll()

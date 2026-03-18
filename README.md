@@ -1,4 +1,4 @@
-# vite-plugin-cer-app
+# @jasonshimmy/vite-plugin-cer-app
 
 A Nuxt/Next.js-style meta-framework built on top of [`@jasonshimmy/custom-elements-runtime`](https://github.com/jasonshimmy/custom-elements-runtime). Turns any Vite project into a full-stack application with file-based routing, server-side rendering, static site generation, server API routes, and more — all through native Web Components.
 
@@ -24,7 +24,7 @@ A Nuxt/Next.js-style meta-framework built on top of [`@jasonshimmy/custom-elemen
 ## Installation
 
 ```sh
-npm install -D vite-plugin-cer-app
+npm install -D @jasonshimmy/vite-plugin-cer-app
 npm install @jasonshimmy/custom-elements-runtime
 ```
 
@@ -33,7 +33,7 @@ Add the plugin to `vite.config.ts`:
 ```ts
 // vite.config.ts
 import { defineConfig } from 'vite'
-import { cerApp } from 'vite-plugin-cer-app'
+import { cerApp } from '@jasonshimmy/vite-plugin-cer-app'
 
 export default defineConfig({
   plugins: [cerApp()],
@@ -44,7 +44,7 @@ Or use a `cer.config.ts` alongside `vite.config.ts` (the CLI reads this automati
 
 ```ts
 // cer.config.ts
-import { defineConfig } from 'vite-plugin-cer-app'
+import { defineConfig } from '@jasonshimmy/vite-plugin-cer-app'
 
 export default defineConfig({
   mode: 'spa', // 'spa' | 'ssr' | 'ssg'
@@ -68,7 +68,7 @@ npm run dev
 Or install the CLI globally:
 
 ```sh
-npm install -g vite-plugin-cer-app
+npm install -g @jasonshimmy/vite-plugin-cer-app
 cer-app dev
 ```
 
@@ -172,7 +172,7 @@ The framework wraps each route's content inside the layout declared by `meta.lay
 
 ```ts
 // server/api/users/[id].ts
-import type { ApiHandler } from 'vite-plugin-cer-app/types'
+import type { ApiHandler } from '@jasonshimmy/vite-plugin-cer-app/types'
 
 export const GET: ApiHandler = async (req, res) => {
   res.json({ id: req.params.id })
@@ -188,7 +188,7 @@ export const DELETE: ApiHandler = async (req, res) => {
 ## `useHead()`
 
 ```ts
-import { useHead } from 'vite-plugin-cer-app/composables'
+import { useHead } from '@jasonshimmy/vite-plugin-cer-app/composables'
 
 component('page-about', () => {
   useHead({

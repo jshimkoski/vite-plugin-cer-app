@@ -8,7 +8,7 @@ Plugins are loaded once before the app renders. They receive an `app` context wi
 
 ```ts
 // app/plugins/01.store.ts
-import type { AppPlugin } from 'vite-plugin-cer-app/types'
+import type { AppPlugin } from '@jasonshimmy/vite-plugin-cer-app/types'
 import { createStore } from '@jasonshimmy/custom-elements-runtime/store'
 
 export default {
