@@ -69,13 +69,16 @@ function _mergeWithClientTemplate(ssrHtml, clientTemplate) {
     ? ssrHtml.slice(headStart + headTag.length, headEnd).trim() : ''
   const ssrBody = bodyStart >= 0 && bodyEnd > bodyStart
     ? ssrHtml.slice(bodyStart + bodyTag.length, bodyEnd).trim() : ssrHtml
-  // Hoist <style> elements from the SSR body into the document <head> so
-  // JIT CSS rules are applied before the layout paints.
+  // Hoist only top-level <style id=...> elements (cer-ssr-jit, cer-ssr-global)
+  // from the SSR body into the document <head>. Plain <style> blocks without
+  // an id attribute belong to shadow DOM templates and must stay in place —
+  // hoisting them to <head> breaks shadow DOM style encapsulation (document
+  // styles do not pierce shadow roots), which is the root cause of FOUC.
   const headParts = ssrHead ? [ssrHead] : []
   let ssrBodyContent = ssrBody
   let pos = 0
   while (pos < ssrBodyContent.length) {
-    const styleOpen  = ssrBodyContent.indexOf('<style', pos)
+    const styleOpen  = ssrBodyContent.indexOf('<style id=', pos)
     if (styleOpen < 0) break
     const styleClose = ssrBodyContent.indexOf('</style>', styleOpen)
     if (styleClose < 0) break
