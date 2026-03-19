@@ -127,7 +127,7 @@ component('layout-default', () => {
     <title>My App</title>
   </head>
   <body>
-    <router-view></router-view>
+    <cer-layout-view></cer-layout-view>
     <script type="module" src="/app/app.ts"></script>
   </body>
 </html>

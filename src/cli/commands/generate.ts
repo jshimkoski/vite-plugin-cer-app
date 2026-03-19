@@ -77,5 +77,7 @@ export function generateCommand(): Command {
       }
 
       await buildSSG(config, viteUserConfig)
+      // Force exit: the SSG path-enumeration Vite server may keep alive Node timers.
+      process.exit(0)
     })
 }

@@ -160,6 +160,15 @@ export default async function handler(req, res) {
 | **SPA production** | Not included — deploy API routes separately or use a proxy |
 | **SSG production** | Optionally called at build time for data; otherwise deployed separately |
 
+### SPA mode — by design
+
+In SPA mode (`mode: 'spa'`) the build output is a pure client bundle with no server component. API routes defined in `server/api/` are **only active during development** (Vite dev server middleware). At runtime the SPA has no server to serve them from.
+
+Options for SPA + API:
+- **Separate API server** — deploy a Node.js/Express server alongside the SPA that mounts the same `server/api/` handlers.
+- **Reverse proxy** — proxy `/api/*` requests from your CDN or web server to a backend service.
+- **Switch to SSR mode** — `mode: 'ssr'` gives you a full Node.js server that serves both the SSR pages and the API routes from a single process.
+
 ---
 
 ## Virtual module

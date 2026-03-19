@@ -54,20 +54,21 @@ interface PageLoaderContext<P extends Record<string, string>> {
 1. A request arrives for `/blog/hello-world`
 2. The router matches `app/pages/blog/[slug].ts`
 3. The server calls `loader({ params: { slug: 'hello-world' }, query, req })`
-4. The returned data is serialized as `window.__CER_DATA__` in a `<script>` tag in the HTML:
+4. The returned data is serialized as `window.__CER_DATA__` in a `<script>` tag in the HTML `<head>`:
    ```html
    <script>window.__CER_DATA__ = {"title":"Hello World","body":"..."}</script>
    ```
-5. `renderToString` or `renderToStream` renders `<page-blog-slug>` with the data as props
-6. The full HTML is sent to the browser
+5. The server renders `<page-blog-slug>` directly into the layout using Declarative Shadow DOM
+6. The full HTML (pre-rendered content + client scripts) is sent to the browser
 
 ---
 
 ## Client hydration flow
 
-1. Browser receives the full HTML (no layout flash because of Declarative Shadow DOM)
-2. The runtime reads `window.__CER_DATA__` and passes the values as component props
-3. Components attach event listeners to the pre-rendered DOM — no re-fetch required
+1. Browser receives the full HTML — content is immediately visible via Declarative Shadow DOM before any JS runs
+2. Client JS boots; `usePageData()` reads `window.__CER_DATA__` and returns the hydrated values
+3. The value is cleared after the first read so subsequent client-side navigations trigger a fresh fetch
+4. Components that received SSR data skip their `useOnConnected` fetch — no duplicate request
 
 ---
 

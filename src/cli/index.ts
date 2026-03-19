@@ -17,4 +17,4 @@ program.addCommand(buildCommand())
 program.addCommand(previewCommand())
 program.addCommand(generateCommand())
 
-program.parse(process.argv)
+await program.parseAsync(process.argv)

@@ -22,7 +22,7 @@ The simplest mode. Vite builds a standard client-only bundle. No server required
 
 ### How it works
 
-- `index.html` is the entry point with `<router-view>` as the root element
+- `index.html` is the entry point with `<cer-layout-view>` as the app mount element
 - All routing is client-side; the server returns the same `index.html` for every URL
 - `virtual:cer-routes` injects all routes into the client-side router
 

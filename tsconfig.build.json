@@ -6,5 +6,5 @@
     "outDir": "dist",
     "rootDir": "src"
   },
-  "exclude": ["node_modules", "dist", "src/cli/create/templates"]
+  "exclude": ["node_modules", "dist", "src/cli/create/templates", "src/__tests__"]
 }

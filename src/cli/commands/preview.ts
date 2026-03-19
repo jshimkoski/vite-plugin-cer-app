@@ -95,9 +95,13 @@ export function previewCommand(): Command {
       const distDir = join(root, 'dist')
       const serverBundle = join(distDir, 'server/server.js')
 
-      // Check if SSR server bundle exists
+      // Check if SSR server bundle exists.
+      // An SSG build also produces a server bundle, but previewing SSG means serving
+      // the pre-rendered static HTML — detect the SSG manifest to avoid switching to
+      // live SSR mode for SSG builds.
       const hasServerBundle = existsSync(serverBundle)
-      const useSSR = options.ssr || hasServerBundle
+      const hasSsgManifest = existsSync(join(distDir, 'ssg-manifest.json'))
+      const useSSR = options.ssr || (hasServerBundle && !hasSsgManifest)
 
       if (useSSR && hasServerBundle) {
         console.log('[cer-app] Starting SSR preview server...')
@@ -200,6 +204,21 @@ export function previewCommand(): Command {
         }
 
         const server = createHttpServer((req: IncomingMessage, res: ServerResponse) => {
+          const urlPath = (req.url ?? '/').split('?')[0]
+          // SSG builds put assets in dist/client/ while HTML lives in dist/.
+          // For requests with a non-HTML file extension, check dist/client/ first
+          // so the static server finds the Vite-built JS/CSS bundles.
+          const clientDist = join(distDir, 'client')
+          const ext = extname(urlPath).toLowerCase()
+          if (ext && ext !== '.html' && existsSync(clientDist)) {
+            const assetPath = join(clientDist, urlPath)
+            if (existsSync(assetPath) && !statSync(assetPath).isDirectory()) {
+              res.setHeader('Content-Type', getMimeType(assetPath))
+              res.setHeader('Cache-Control', 'no-cache')
+              createReadStream(assetPath).pipe(res)
+              return
+            }
+          }
           const served = serveStaticFile(req, res, distDir)
           if (!served) {
             res.statusCode = 404

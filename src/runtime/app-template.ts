@@ -135,6 +135,12 @@ for (const plugin of plugins) {
 
 if (typeof window !== 'undefined') {
   await router.replace(window.location.pathname + window.location.search + window.location.hash)
+  // Clear SSR loader data after the initial navigation so that subsequent
+  // client-side navigations don't accidentally reuse it. We wait until after
+  // router.replace() so both the pre-rendered element (upgraded during
+  // component registration) and the new element from router.replace() can
+  // both call usePageData() and receive the hydration data.
+  delete (globalThis as any).__CER_DATA__
   createDOMJITCSS().mount()
 }
 

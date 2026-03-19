@@ -1,4 +1,4 @@
-import { writeFile, mkdir, readFile } from 'node:fs/promises'
+import { writeFile, mkdir } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join } from 'pathe'
 import { createServer, build, type UserConfig } from 'vite'
@@ -101,14 +101,13 @@ let _serverMod: Record<string, unknown> | null = null
 /**
  * Renders a single path using the SSR server bundle and returns the HTML.
  *
- * The server bundle exports `handler` — an Express-style (req, res) middleware
- * produced by createStreamingSSRHandler.  We call it with a mock req/res that
- * captures the final HTML string via res.end().
+ * The server bundle's handler already merges the SSR output with
+ * dist/client/index.html internally (via the _mergeWithClientTemplate helper
+ * it embeds at build time), so this function simply captures the response.
  */
 async function renderPath(
   path: string,
   serverBundlePath: string,
-  clientDistDir: string,
 ): Promise<string> {
   // Load server bundle once
   if (!_serverMod) {
@@ -130,28 +129,17 @@ async function renderPath(
     return ''
   }
 
-  // Mock req/res for the Express-style handler
+  // Mock req/res for the Express-style handler.
+  // The handler internally merges with dist/client/index.html, so we just
+  // capture whatever it ends with.
   const mockReq = { url: path, headers: {} }
-  const html = await new Promise<string>((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     const mockRes = {
       setHeader: () => {},
-      // Intentionally omit write() so the handler uses the non-streaming code path
       end: (body: string) => resolve(body),
     }
     ;(handlerFn as Function)(mockReq, mockRes).catch(reject)
   })
-
-  // Read the client index.html template and inject the server-rendered body
-  const templatePath = join(clientDistDir, 'index.html')
-  if (!existsSync(templatePath)) return html
-
-  const template = await readFile(templatePath, 'utf-8')
-  // The handler already emits a full document; just return it as-is
-  // If it only emits a fragment we fall back to injecting into the template
-  if (html.trimStart().startsWith('<!DOCTYPE') || html.trimStart().startsWith('<html')) {
-    return html
-  }
-  return template.replace('<div id="app"></div>', `<div id="app">${html}</div>`)
 }
 
 /**
@@ -190,7 +178,6 @@ export async function buildSSG(
   viteUserConfig: UserConfig = {},
 ): Promise<void> {
   const distDir = join(config.root, 'dist')
-  const clientDistDir = join(distDir, 'client')
   const serverDistDir = join(distDir, 'server')
   const serverBundlePath = join(serverDistDir, 'server.js')
 
@@ -222,7 +209,7 @@ export async function buildSSG(
     const results = await Promise.allSettled(
       chunk.map(async (path) => {
         console.log(`[cer-app] Generating: ${path}`)
-        const html = await renderPath(path, serverBundlePath, clientDistDir)
+        const html = await renderPath(path, serverBundlePath)
         await writeRenderedPath(path, html, distDir)
         return path
       }),
