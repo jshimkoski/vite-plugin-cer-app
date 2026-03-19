@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.1.2] - 2026-03-19
+
+- fix(build): fix SSR and SSG build modes (23d5363)
+
 ## [v0.1.1] - 2026-03-18
 
 - fix: rename vite-plugin-cer-app usage to @jasonshimmy/vite-plugin-cer-app (60c4bdf)
