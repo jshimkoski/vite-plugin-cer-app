@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.1.3] - 2026-03-19
+
+- fix: FOUC in ssr and ssg (e4fb53d)
+
 ## [v0.1.2] - 2026-03-19
 
 - fix(build): fix SSR and SSG build modes (23d5363)
