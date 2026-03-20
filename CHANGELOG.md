@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.3.0] - 2026-03-20
+
+- feat: add default .gitignore templates for SPA, SSR, and SSG projects fix: remove unused streaming ssr option fix: generated .cer directory to get out of the way of the user (8656788)
+
 ## [v0.2.0] - 2026-03-20
 
 - feat: introduce generated directory for app files and HTML (c8fdcdd)
