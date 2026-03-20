@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.2.0] - 2026-03-20
+
+- feat: introduce generated directory for app files and HTML (c8fdcdd)
+
 ## [v0.1.6] - 2026-03-20
 
 - fix: update CLI usage instructions to include --package flag for create-cer-app (457114d)
