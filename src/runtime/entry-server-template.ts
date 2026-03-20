@@ -28,6 +28,25 @@ registerBuiltinComponents()
 // minimal set (&lt;, &gt;, &amp; …) and re-escapes everything else.
 registerEntityMap(entitiesJson)
 
+// Run plugins once at server startup so their provide() values are available
+// to useInject() during every SSR render pass. Stored on globalThis so all
+// dynamically-imported page chunks share the same reference (same pattern as
+// __CER_HEAD_COLLECTOR__ and __CER_DATA_STORE__).
+const _pluginProvides = new Map()
+;(globalThis).__cerPluginProvides = _pluginProvides
+const _pluginsReady = (async () => {
+  const _bootstrapRouter = initRouter({ routes })
+  for (const plugin of plugins) {
+    if (plugin && typeof plugin.setup === 'function') {
+      await plugin.setup({
+        router: _bootstrapRouter,
+        provide: (key, value) => _pluginProvides.set(key, value),
+        config: {},
+      })
+    }
+  }
+})()
+
 // Async-local storage for request-scoped SSR loader data.
 // Using AsyncLocalStorage ensures concurrent SSR renders (e.g. SSG with
 // concurrency > 1) never see each other's data — each request's async chain
@@ -109,6 +128,7 @@ function _mergeWithClientTemplate(ssrHtml, clientTemplate) {
  * context so concurrent renders never share state.
  */
 const vnodeFactory = async (req) => {
+  await _pluginsReady
   const router = initRouter({ routes, initialUrl: req.url ?? '/' })
   const current = router.getCurrent()
   const { route, params } = router.matchRoute(current.path)

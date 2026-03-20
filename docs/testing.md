@@ -223,12 +223,12 @@ Use in a page:
 ```ts
 // app/pages/index.ts
 component('page-index', () => {
-  const greeting = inject('greeting')
+  const greeting = useInject<string>('greeting')
   return html`<p>${greeting}</p>`
 })
 ```
 
-**Expected:** Page shows the injected string.
+**Expected:** Page shows the injected string in all three modes (SPA, SSR, SSG). `useInject` is auto-imported — no explicit import needed.
 
 ---
 
@@ -428,7 +428,7 @@ cat dist/items/1/index.html  # should contain "Item 1"
 
 ## 14. Run the automated test suite
 
-The framework ships with 211 unit and integration tests:
+The framework ships with unit and integration tests. Run them with:
 
 ```sh
 cd /path/to/@jasonshimmy/vite-plugin-cer-app

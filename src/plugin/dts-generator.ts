@@ -76,7 +76,7 @@ const RUNTIME_GLOBALS = [
 
 const DIRECTIVE_GLOBALS = ['when', 'each', 'match', 'anchorBlock']
 
-const FRAMEWORK_GLOBALS = ['useHead', 'usePageData']
+const FRAMEWORK_GLOBALS = ['useHead', 'usePageData', 'useInject']
 
 /**
  * Scans a composables directory and returns a map of export name → file path.

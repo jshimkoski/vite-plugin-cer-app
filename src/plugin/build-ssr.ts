@@ -50,6 +50,23 @@ registerBuiltinComponents()
 // minimal set (&lt;, &gt;, &amp; …) and re-escapes everything else.
 registerEntityMap(entitiesJson)
 
+// Run plugins once at server startup so their provide() values are available
+// to useInject() during every SSR/SSG render pass.
+const _pluginProvides = new Map()
+;(globalThis).__cerPluginProvides = _pluginProvides
+const _pluginsReady = (async () => {
+  const _bootstrapRouter = initRouter({ routes })
+  for (const plugin of plugins) {
+    if (plugin && typeof plugin.setup === 'function') {
+      await plugin.setup({
+        router: _bootstrapRouter,
+        provide: (key, value) => _pluginProvides.set(key, value),
+        config: {},
+      })
+    }
+  }
+})()
+
 // Load the Vite-built client index.html (dist/client/index.html) so every SSR
 // response includes the client-side scripts needed for hydration and routing.
 // The server bundle lives at dist/server/server.js, so ../client resolves correctly.
@@ -119,6 +136,7 @@ function _mergeWithClientTemplate(ssrHtml, clientTemplate) {
 // synchronously right before renderToStringWithJITCSS — guaranteeing that
 // concurrent renders (SSG concurrency > 1) never race on a shared global.
 const _prepareRequest = async (req) => {
+  await _pluginsReady
   const router = initRouter({ routes, initialUrl: req.url ?? '/' })
   const current = router.getCurrent()
   const { route, params } = router.matchRoute(current.path)

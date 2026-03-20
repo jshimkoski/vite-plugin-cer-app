@@ -83,7 +83,7 @@ dist/
 
 ```ts
 export const handler: (req, res) => void  // main request handler
-export { apiRoutes, middleware, plugins, layouts, routes }
+export { apiRoutes, plugins, layouts }
 export default handler
 ```
 

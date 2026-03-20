@@ -104,3 +104,40 @@ export function useSession() { return session }
 ```
 
 Use `useOnConnected` or lazy initialization inside the function body for side effects.
+
+---
+
+## Built-in framework composables
+
+These composables are provided by the framework and auto-imported alongside the runtime. They do **not** live in `app/composables/` — they are injected from `@jasonshimmy/vite-plugin-cer-app/composables`.
+
+### `useHead(input)`
+
+Sets document head tags (`<title>`, `<meta>`, `<link>`, etc.). Works in SPA, SSR, and SSG modes. See [head-management.md](./head-management.md).
+
+### `usePageData<T>()`
+
+Returns the serialized loader data for the current page, hydrated from `window.__CER_DATA__` on the client or from the per-request `AsyncLocalStorage` context during SSR/SSG. See [data-loading.md](./data-loading.md).
+
+### `useInject<T>(key, defaultValue?)`
+
+Reads a value provided by a plugin via `app.provide(key, value)`. Works consistently in all rendering modes:
+
+- **SPA / client** — resolves via `inject()` from the component context tree.
+- **SSR / SSG** — reads from `globalThis.__cerPluginProvides`, populated by the server entry before the first render.
+
+```ts
+// app/pages/dashboard.ts
+component('page-dashboard', () => {
+  const store = useInject<Store>('store')
+  return html`<p>Count: ${store?.state.count ?? 0}</p>`
+})
+```
+
+If you need it outside auto-imported directories, import explicitly:
+
+```ts
+import { useInject } from '@jasonshimmy/vite-plugin-cer-app/composables'
+```
+
+> **Note:** Prefer `useInject` over the raw `inject()` primitive whenever reading plugin-provided values. Raw `inject()` works in SPA mode but returns `undefined` in SSR and SSG because the server renders components without `<cer-layout-view>`'s provide context.

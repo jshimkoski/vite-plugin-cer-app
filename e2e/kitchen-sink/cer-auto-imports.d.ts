@@ -40,6 +40,7 @@ declare global {
 
   const useHead: typeof import('@jasonshimmy/vite-plugin-cer-app/composables')['useHead']
   const usePageData: typeof import('@jasonshimmy/vite-plugin-cer-app/composables')['usePageData']
+  const useInject: typeof import('@jasonshimmy/vite-plugin-cer-app/composables')['useInject']
 
   const useKsCounter: typeof import('./app/composables/useKsCounter')['useKsCounter']
 

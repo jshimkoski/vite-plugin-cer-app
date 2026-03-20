@@ -31,9 +31,9 @@ interface AppPlugin {
 }
 
 interface AppContext {
-  provide(key: string, value: unknown): void
+  provide(key: PropertyKey, value: unknown): void
   router: Router
-  config: ResolvedCerConfig
+  config: CerAppConfig
 }
 ```
 
@@ -75,8 +75,8 @@ export default {
 ```ts
 // app/pages/index.ts
 component('page-index', () => {
-  const store = inject('store')
-  const count = computed(() => store.state.count)
+  const store = useInject<Store>('store')
+  const count = computed(() => store?.state.count ?? 0)
 
   return html`<p>Count: ${count}</p>`
 })
@@ -120,20 +120,14 @@ export default {
 
 ---
 
-## SSG and `inject()`
+## Reading provided values with `useInject`
 
-In SSG mode there is a timing subtlety: the router loads a page chunk and renders it before `<cer-layout-view>` has called `provide()`. This means `inject()` may return `undefined` on the first render in SSG — even though the plugin ran and called `app.provide()` correctly.
-
-To write pages that work correctly in **all three modes** (SPA, SSR, SSG), use `globalThis.__cerPluginProvides` as a synchronous fallback when `inject()` returns `undefined`:
+To read values provided by a plugin, use `useInject` instead of the raw `inject()` from the runtime. `useInject` works correctly in **all three modes** — SPA, SSR, and SSG:
 
 ```ts
 // app/pages/dashboard.ts
 component('page-dashboard', () => {
-  // inject() resolves correctly in SPA and SSR modes.
-  // In SSG the page chunk may render before cer-layout-view calls provide(),
-  // so fall back to the global map that app/app.ts populates before any render.
-  const pluginProvides = (globalThis as any).__cerPluginProvides as Map<string, unknown> | undefined
-  const store = inject<Store>('store') ?? pluginProvides?.get('store') as Store | undefined
+  const store = useInject<Store>('store')
 
   if (!store) return html`<p>Loading…</p>`
 
@@ -141,7 +135,21 @@ component('page-dashboard', () => {
 })
 ```
 
-The `__cerPluginProvides` map is written by the bootstrapped `app/app.ts` before any route is rendered, so it is always available as a synchronous fallback regardless of render order.
+`useInject` is auto-imported in `app/pages/`, `app/layouts/`, and `app/components/` — no explicit import needed.
+
+**Why not raw `inject()`?** In SSR and SSG modes the server renders the component tree directly, without `<cer-layout-view>` establishing the Vue-style provide context. `useInject` bridges this gap:
+
+| Mode | How the value is resolved |
+|------|--------------------------|
+| SPA / client | `inject()` walks the component tree (provided by `<cer-layout-view>`) |
+| SSR (dev & prod) | reads from `globalThis.__cerPluginProvides` (set by the server entry at startup) |
+| SSG | same as SSR |
+
+If you need `useInject` outside of auto-imported directories, import it explicitly:
+
+```ts
+import { useInject } from '@jasonshimmy/vite-plugin-cer-app/composables'
+```
 
 ---
 
@@ -154,7 +162,7 @@ import plugins from 'virtual:cer-plugins'
 // plugins is an array of AppPlugin objects in load order
 ```
 
-In `app/app.ts`, plugins are executed sequentially before the router initializes:
+In `.cer/app.ts` (the auto-generated framework entry), plugins are executed sequentially before the router initializes:
 
 ```ts
 for (const plugin of plugins) {

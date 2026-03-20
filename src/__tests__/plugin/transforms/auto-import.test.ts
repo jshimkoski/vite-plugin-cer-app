@@ -221,6 +221,13 @@ describe('autoImportTransform — framework composable injection', () => {
     expect(count).toBe(1)
   })
 
+  it('injects useInject import when useInject is used', () => {
+    const code = "component('page-about', () => { const svc = useInject('my-service'); return html`<div></div>` })"
+    const result = autoImportTransform(code, '/project/app/pages/about.ts', opts)!
+    expect(result).toContain(`from ${FRAMEWORK_PKG}`)
+    expect(result).toContain('useInject')
+  })
+
   it('injects usePageData for root-level convention files (loading.ts, error.ts)', () => {
     const code = "component('page-loading', () => { const d = usePageData(); return html`<div></div>` })"
     const result = autoImportTransform(code, '/project/app/loading.ts', opts)!

@@ -37,6 +37,7 @@ vi.mock('../../plugin/virtual/error.js', () => ({ generateErrorCode: vi.fn().moc
 vi.mock('../../plugin/transforms/auto-import.js', () => ({ autoImportTransform: vi.fn().mockReturnValue(null) }))
 
 import { cerApp } from '../../plugin/index.js'
+import { APP_ENTRY_TEMPLATE } from '../../runtime/app-template.js'
 
 
 type TestPlugin = {
@@ -142,6 +143,12 @@ describe('cerApp plugin — resolveId hook', () => {
     expect(plugin.resolveId('virtual:cer-error')).toBe('\0virtual:cer-error')
   })
 
+  it('resolves /.cer/app.ts to \\0cer-app-entry (virtual, bypasses fs security)', () => {
+    const plugin = getCerPlugin()
+    plugin.config({ root: '/project' }, { command: 'serve', mode: 'development' })
+    expect(plugin.resolveId('/.cer/app.ts')).toBe('\0cer-app-entry')
+  })
+
   it('returns undefined for unknown ids', () => {
     const plugin = getCerPlugin()
     plugin.config({ root: '/project' }, { command: 'serve', mode: 'development' })
@@ -150,6 +157,14 @@ describe('cerApp plugin — resolveId hook', () => {
 })
 
 describe('cerApp plugin — load hook', () => {
+  it('loads \\0cer-app-entry with APP_ENTRY_TEMPLATE content', async () => {
+    const plugin = getCerPlugin()
+    plugin.config({ root: '/project' }, { command: 'serve', mode: 'development' })
+    plugin.configResolved(FAKE_RESOLVED)
+    const result = await plugin.load('\0cer-app-entry')
+    expect(result).toBe(APP_ENTRY_TEMPLATE)
+  })
+
   it('returns null for unknown resolved ids', async () => {
     const plugin = getCerPlugin()
     plugin.config({ root: '/project' }, { command: 'serve', mode: 'development' })

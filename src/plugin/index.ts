@@ -8,6 +8,7 @@ import { autoImportTransform } from './transforms/auto-import.js'
 import { scanComposableExports, writeAutoImportDts, writeTsconfigPaths } from './dts-generator.js'
 import { configureCerDevServer } from './dev-server.js'
 import { writeGeneratedDir, getGeneratedDir } from './generated-dir.js'
+import { APP_ENTRY_TEMPLATE } from '../runtime/app-template.js'
 import { generateRoutesCode } from './virtual/routes.js'
 import { generateLayoutsCode } from './virtual/layouts.js'
 import { generateComponentsCode } from './virtual/components.js'
@@ -39,6 +40,11 @@ const VIRTUAL_IDS = {
 const RESOLVED_IDS = Object.fromEntries(
   Object.entries(VIRTUAL_IDS).map(([k, v]) => [k, `\0${v}`]),
 ) as Record<keyof typeof VIRTUAL_IDS, string>
+
+// The generated app entry is served as a virtual module so Vite doesn't need
+// to find it on disk (Vite's fs security policy blocks paths starting with `/.`).
+const APP_ENTRY_URL = '/.cer/app.ts'
+const RESOLVED_APP_ENTRY = '\0cer-app-entry'
 
 /**
  * Fills in default values for all config fields and resolves absolute paths.
@@ -214,12 +220,15 @@ export function cerApp(userConfig: CerAppConfig = {}): Plugin[] {
     },
 
     resolveId(id: string) {
+      if (id === APP_ENTRY_URL) return RESOLVED_APP_ENTRY
       if ((Object.values(VIRTUAL_IDS) as string[]).includes(id)) {
         return `\0${id}`
       }
     },
 
     async load(id: string) {
+      if (id === RESOLVED_APP_ENTRY) return APP_ENTRY_TEMPLATE
+
       const allResolved = Object.values(RESOLVED_IDS) as string[]
       if (!allResolved.includes(id)) return null
 

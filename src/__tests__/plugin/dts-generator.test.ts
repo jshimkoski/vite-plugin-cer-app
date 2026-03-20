@@ -163,6 +163,11 @@ describe('generateAutoImportDts', () => {
     expect(dts).toContain("const usePageData: typeof import('@jasonshimmy/vite-plugin-cer-app/composables')['usePageData']")
   })
 
+  it('declares useInject as a framework global', async () => {
+    const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain("const useInject: typeof import('@jasonshimmy/vite-plugin-cer-app/composables')['useInject']")
+  })
+
   it('declares when directive as a global', async () => {
     const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
     expect(dts).toContain("const when: typeof import('@jasonshimmy/custom-elements-runtime/directives')['when']")

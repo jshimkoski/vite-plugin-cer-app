@@ -133,6 +133,16 @@ describe('build-ssr generateServerEntryCode (template content)', () => {
   it('sets Content-Type header on response', () => {
     expect(src).toContain('text/html; charset=utf-8')
   })
+
+  it('template initializes plugins and sets globalThis.__cerPluginProvides', () => {
+    expect(src).toContain('__cerPluginProvides')
+    expect(src).toContain('_pluginProvides')
+    expect(src).toContain('_pluginsReady')
+  })
+
+  it('template awaits _pluginsReady before handling each request', () => {
+    expect(src).toContain('await _pluginsReady')
+  })
 })
 
 describe('buildSSR', () => {
