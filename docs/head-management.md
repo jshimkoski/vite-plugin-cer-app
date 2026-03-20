@@ -9,21 +9,19 @@ The `useHead()` composable manages `<title>`, `<meta>`, `<link>`, `<script>`, an
 
 ## Import
 
-`useHead` is **not** auto-imported. You must explicitly import it in every file that uses it:
+`useHead` is auto-imported in files inside `app/pages/`, `app/layouts/`, `app/components/`, and root convention files (e.g. `app/loading.ts`). No import statement is needed in those locations.
+
+If you use `useHead` outside those directories, import it explicitly:
 
 ```ts
 import { useHead } from '@jasonshimmy/vite-plugin-cer-app/composables'
 ```
-
-Unlike `component`, `html`, `ref`, and other runtime APIs (which are injected automatically when `autoImports.runtime` is enabled), `useHead` comes from the framework package and requires an explicit import statement.
 
 ---
 
 ## Basic usage
 
 ```ts
-import { useHead } from '@jasonshimmy/vite-plugin-cer-app/composables'
-
 component('page-about', () => {
   useHead({
     title: 'About Us',

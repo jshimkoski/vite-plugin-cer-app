@@ -1,4 +1,5 @@
 import '@jasonshimmy/custom-elements-runtime/css'
+import 'virtual:cer-jit-css'
 import 'virtual:cer-components'
 import routes from 'virtual:cer-routes'
 import layouts from 'virtual:cer-layouts'
@@ -15,7 +16,6 @@ import {
 } from '@jasonshimmy/custom-elements-runtime'
 import { initRouter } from '@jasonshimmy/custom-elements-runtime/router'
 import { enableJITCSS } from '@jasonshimmy/custom-elements-runtime/jit-css'
-import { createDOMJITCSS } from '@jasonshimmy/custom-elements-runtime/dom-jit-css'
 
 registerBuiltinComponents()
 enableJITCSS()
@@ -88,7 +88,6 @@ if (typeof window !== 'undefined') {
 if (typeof window !== 'undefined') {
   // Use the original (unwrapped) replace so isNavigating stays false on first paint.
   await _replace(window.location.pathname + window.location.search + window.location.hash)
-  createDOMJITCSS().mount()
 }
 
 export { router }

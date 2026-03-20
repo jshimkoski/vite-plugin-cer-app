@@ -317,13 +317,17 @@ export function cerApp(userConfig: CerAppConfig = {}): Plugin[] {
   }
 
   // Include cerPlugin from the runtime for JIT CSS support
+  // Resolve config eagerly so cerPlugin can use the final resolved values
+  const resolvedForJit = resolveConfig(userConfig)
+  const { dsd } = resolvedForJit.ssr
+  const { content, ...jitOptions } = resolvedForJit.jitCss
   const jitPlugins = cerPlugin({
-    content: userConfig.jitCss?.content ?? [
-      `${userConfig.srcDir ?? 'app'}/pages/**/*.ts`,
-      `${userConfig.srcDir ?? 'app'}/components/**/*.ts`,
-      `${userConfig.srcDir ?? 'app'}/layouts/**/*.ts`,
-    ],
-    ssr: userConfig.ssr?.dsd ? { dsd: true } : undefined,
+    content,
+    ...jitOptions,
+    ssr: {
+      dsd,
+      jit: jitOptions,
+    },
   })
 
   return [cerAppPlugin, ...jitPlugins]

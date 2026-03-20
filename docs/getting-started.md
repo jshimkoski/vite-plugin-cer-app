@@ -140,6 +140,7 @@ The framework generates this file when you scaffold a new project. It bootstraps
 ```ts
 // app/app.ts
 import '@jasonshimmy/custom-elements-runtime/css'
+import 'virtual:cer-jit-css'
 import 'virtual:cer-components'
 import routes from 'virtual:cer-routes'
 import layouts from 'virtual:cer-layouts'
@@ -153,7 +154,6 @@ import {
 } from '@jasonshimmy/custom-elements-runtime'
 import { initRouter } from '@jasonshimmy/custom-elements-runtime/router'
 import { enableJITCSS } from '@jasonshimmy/custom-elements-runtime/jit-css'
-import { createDOMJITCSS } from '@jasonshimmy/custom-elements-runtime/dom-jit-css'
 
 registerBuiltinComponents()
 enableJITCSS()
@@ -226,7 +226,6 @@ if (typeof window !== 'undefined') {
 if (typeof window !== 'undefined') {
   await _replace(window.location.pathname + window.location.search + window.location.hash)
   delete (globalThis as any).__CER_DATA__
-  createDOMJITCSS().mount()
 }
 
 export { router }
