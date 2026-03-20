@@ -172,8 +172,10 @@ create-cer-app my-blog --mode ssg --dir ./sites/blog
 ```
 my-app/
   app/
+    app.ts          ← framework bootstrap (router, plugins, layout shell)
     pages/index.ts
     layouts/default.ts
+  index.html
   cer.config.ts
   package.json
 ```

@@ -1,12 +1,4 @@
-/**
- * Template string for `app/app.ts`.
- *
- * This file is the main application bootstrap entry point.
- * It registers all auto-discovered components, initialises the router,
- * runs plugins, and registers the framework-level <cer-layout-view> component
- * that handles layout selection, loading indicators, and error pages.
- */
-export const APP_TEMPLATE = `import '@jasonshimmy/custom-elements-runtime/css'
+import '@jasonshimmy/custom-elements-runtime/css'
 import 'virtual:cer-components'
 import routes from 'virtual:cer-routes'
 import layouts from 'virtual:cer-layouts'
@@ -16,6 +8,7 @@ import { hasError, errorTag } from 'virtual:cer-error'
 import {
   component,
   ref,
+  provide,
   useOnConnected,
   useOnDisconnected,
   registerBuiltinComponents,
@@ -25,28 +18,20 @@ import { enableJITCSS } from '@jasonshimmy/custom-elements-runtime/jit-css'
 import { createDOMJITCSS } from '@jasonshimmy/custom-elements-runtime/dom-jit-css'
 
 registerBuiltinComponents()
-
-// Enable JIT CSS globally for all Shadow DOM components.
 enableJITCSS()
 
-// initRouter registers router-view/router-link, creates the router, and sets it as active.
 const router = initRouter({ routes })
 
 // ─── Navigation state ────────────────────────────────────────────────────────
 
-// isNavigating becomes true while a lazy route chunk is loading.
 const isNavigating = ref(false)
-
-// currentError holds the last uncaught navigation or render error.
 const currentError = ref(null)
 
-// Expose resetError globally so page-error components can call it.
 ;(globalThis as any).resetError = () => {
   currentError.value = null
   router.replace(router.getCurrent().path)
 }
 
-// Wrap push/replace to track navigation pending state.
 const _push = router.push.bind(router)
 const _replace = router.replace.bind(router)
 
@@ -74,75 +59,84 @@ router.replace = async (path) => {
   }
 }
 
+// ─── Plugins ─────────────────────────────────────────────────────────────────
+
+// Collect plugin-provided values so cer-layout-view can forward them into
+// the component context tree via the real provide() hook (which inject() walks).
+// Declared BEFORE component('cer-layout-view') to avoid a temporal dead zone
+// ReferenceError: customElements.define() upgrades existing DOM elements
+// synchronously, calling the render function immediately.
+const _pluginProvides = new Map<string, unknown>()
+// Expose plugin provides globally so page components can read them synchronously
+// regardless of render order (inject/provide has timing issues in SSG mode).
+;(globalThis as any).__cerPluginProvides = _pluginProvides
+
 // ─── <cer-layout-view> ───────────────────────────────────────────────────────
-//
-// Wraps <router-view> in the layout appropriate for the current route.
-// Falls back to rendering <router-view> directly when no matching layout
-// exists. Also renders loading / error pages when those states are active.
-//
-// Layout stays mounted across navigations that share the same layout — the
-// vdom diff preserves the outer element when its tag name doesn't change.
 
 component('cer-layout-view', () => {
+  // Forward plugin-provided values into the component context so inject() in
+  // any descendant component can resolve them by walking up the DOM tree.
+  for (const [key, value] of _pluginProvides) {
+    provide(key, value)
+  }
+
   const current = ref(router.getCurrent())
   let unsub: (() => void) | undefined
 
   useOnConnected(() => {
-    unsub = router.subscribe((s: typeof current.value) => {
-      current.value = s
-    })
+    unsub = router.subscribe((s: typeof current.value) => { current.value = s })
   })
+  useOnDisconnected(() => { unsub?.(); unsub = undefined })
 
-  useOnDisconnected(() => {
-    unsub?.()
-    unsub = undefined
-  })
-
-  // Error state — show page-error if available, otherwise plain text.
   if (currentError.value !== null) {
     if (hasError && errorTag) {
       return { tag: errorTag, props: { attrs: { error: String(currentError.value) } }, children: [] }
     }
-    return { tag: 'div', props: { attrs: { style: 'padding:2rem;font-family:monospace' } }, children: [String(currentError.value)] }
+    return { tag: 'div', props: { attrs: { style: 'padding:2rem;font-family:monospace' } }, children: String(currentError.value) }
   }
 
-  // Loading state — show page-loading while a route chunk is fetching.
   if (isNavigating.value && hasLoading && loadingTag) {
     return { tag: loadingTag, props: {}, children: [] }
   }
 
-  // Normal state — wrap router-view in the active layout (if any).
   const matched = router.matchRoute(current.value.path)
   const layoutName = (matched?.route as any)?.meta?.layout ?? 'default'
   const layoutTag = (layouts as Record<string, string>)[layoutName]
   const routerView = { tag: 'router-view', props: {}, children: [] }
 
-  if (layoutTag) {
-    return { tag: layoutTag, props: {}, children: [routerView] }
-  }
+  if (layoutTag) return { tag: layoutTag, props: {}, children: [routerView] }
   return routerView
 })
 
-// ─── Plugins ─────────────────────────────────────────────────────────────────
-
 for (const plugin of plugins) {
   if (plugin && typeof plugin.setup === 'function') {
-    await plugin.setup({ router, provide: (key, value) => { (globalThis as any)[key] = value }, config: {} })
+    await plugin.setup({ router, provide: (key: string, value: unknown) => { _pluginProvides.set(key, value) }, config: {} })
+  }
+}
+
+// ─── Pre-load initial route ───────────────────────────────────────────────────
+// Download the current page's route chunk AFTER plugins run so that
+// cer-layout-view's first render (which calls provide()) completes before
+// page components are defined and their renders are scheduled. This ensures
+// inject() in child components can find values stored by provide().
+
+if (typeof window !== 'undefined') {
+  const _initMatch = router.matchRoute(window.location.pathname)
+  if (_initMatch?.route?.load) {
+    try { await _initMatch.route.load() } catch { /* non-fatal */ }
   }
 }
 
 // ─── Initial navigation ──────────────────────────────────────────────────────
 
 if (typeof window !== 'undefined') {
-  await router.replace(window.location.pathname + window.location.search + window.location.hash)
-  // Clear SSR loader data after the initial navigation so that subsequent
-  // client-side navigations don't accidentally reuse it. We wait until after
-  // router.replace() so both the pre-rendered element (upgraded during
-  // component registration) and the new element from router.replace() can
-  // both call usePageData() and receive the hydration data.
+  // Use the original (unwrapped) replace so isNavigating stays false during
+  // the initial paint — the loading component must not flash over pre-rendered content.
+  await _replace(window.location.pathname + window.location.search + window.location.hash)
+  // Clear SSR loader data after initial navigation so subsequent client-side
+  // navigations don't accidentally reuse stale server data.
   delete (globalThis as any).__CER_DATA__
   createDOMJITCSS().mount()
 }
 
 export { router }
-`

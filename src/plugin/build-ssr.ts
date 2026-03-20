@@ -40,6 +40,7 @@ import { registerBuiltinComponents } from '@jasonshimmy/custom-elements-runtime'
 import { registerEntityMap, renderToStringWithJITCSSDSD, DSD_POLYFILL_SCRIPT } from '@jasonshimmy/custom-elements-runtime/ssr'
 import entitiesJson from '@jasonshimmy/custom-elements-runtime/entities.json'
 import { initRouter } from '@jasonshimmy/custom-elements-runtime/router'
+import { beginHeadCollection, endHeadCollection, serializeHeadTags } from '@jasonshimmy/vite-plugin-cer-app/composables'
 
 registerBuiltinComponents()
 
@@ -98,7 +99,14 @@ function _mergeWithClientTemplate(ssrHtml, clientTemplate) {
       '<div id="app">' + ssrBodyContent + '</div>')
   }
   const headAdditions = headParts.filter(Boolean).join('\\n')
-  if (headAdditions) merged = merged.replace('</head>', headAdditions + '\\n</head>')
+  if (headAdditions) {
+    // If SSR provides a <title>, replace the client template's <title> so the
+    // SSR title wins (client template title is the fallback default).
+    if (headAdditions.includes('<title>')) {
+      merged = merged.replace(/<title>[^<]*<\\/title>/, '')
+    }
+    merged = merged.replace('</head>', headAdditions + '\\n</head>')
+  }
   return merged
 }
 
@@ -160,6 +168,9 @@ export const handler = async (req, res) => {
     ;(globalThis).__CER_DATA__ = loaderData
   }
 
+  // Begin collecting useHead() calls made during the synchronous render pass.
+  beginHeadCollection()
+
   // dsdPolyfill: false — we inject the polyfill manually after merging so it
   // lands at the end of <body>, not inside <cer-layout-view> light DOM where
   // scripts may not execute.
@@ -168,13 +179,19 @@ export const handler = async (req, res) => {
     router,
   })
 
+  // Collect and serialize any useHead() calls from the rendered components.
+  const headTags = serializeHeadTags(endHeadCollection())
+
   // Clear immediately after the synchronous render so the value never leaks
   // to the next request on this same server process.
   delete (globalThis).__CER_DATA__
 
+  // Merge loader data script + useHead() tags into the document head.
+  const headContent = [head, headTags].filter(Boolean).join('\\n')
+
   // Wrap the rendered body in a full HTML document and inject the head additions
   // (loader data script, useHead() tags, JIT styles). No polyfill in body yet.
-  const ssrHtml = \`<!DOCTYPE html><html><head>\${head ?? ''}</head><body>\${htmlWithStyles}</body></html>\`
+  const ssrHtml = \`<!DOCTYPE html><html><head>\${headContent}</head><body>\${htmlWithStyles}</body></html>\`
 
   let finalHtml = _clientTemplate
     ? _mergeWithClientTemplate(ssrHtml, _clientTemplate)
@@ -262,7 +279,7 @@ export async function buildSSR(
       },
     },
     ssr: {
-      noExternal: ['@jasonshimmy/custom-elements-runtime'],
+      noExternal: ['@jasonshimmy/custom-elements-runtime', '@jasonshimmy/vite-plugin-cer-app'],
     },
   })
 

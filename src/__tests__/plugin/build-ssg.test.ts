@@ -19,7 +19,7 @@ import fg from 'fast-glob'
 import { createServer } from 'vite'
 import { buildSSR } from '../../plugin/build-ssr.js'
 import { buildRouteEntry } from '../../plugin/path-utils.js'
-import { buildSSG } from '../../plugin/build-ssg.js'
+import { buildSSG, writeRenderedPath } from '../../plugin/build-ssg.js'
 import type { ResolvedCerConfig } from '../../plugin/dev-server.js'
 
 function makeConfig(overrides: Partial<ResolvedCerConfig> = {}): ResolvedCerConfig {
@@ -261,5 +261,51 @@ describe('buildSSG — path collection', () => {
     )
     const manifest = JSON.parse(String(manifestCall![1]))
     expect(manifest.paths.length + manifest.errors.length).toBe(1)
+  })
+})
+
+// ─── writeRenderedPath ────────────────────────────────────────────────────────
+
+describe('writeRenderedPath', () => {
+  beforeEach(() => {
+    vi.mocked(writeFile).mockClear()
+    vi.mocked(mkdir).mockClear()
+  })
+
+  it('writes root path to dist/index.html', async () => {
+    await writeRenderedPath('/', '<html>home</html>', '/project/dist')
+    const [writePath] = vi.mocked(writeFile).mock.calls[0]
+    expect(String(writePath)).toMatch(/dist\/index\.html$/)
+  })
+
+  it('writes /about to dist/about/index.html', async () => {
+    await writeRenderedPath('/about', '<html>about</html>', '/project/dist')
+    const [writePath] = vi.mocked(writeFile).mock.calls[0]
+    expect(String(writePath)).toMatch(/dist\/about\/index\.html$/)
+  })
+
+  it('writes nested path to correct subdirectory', async () => {
+    await writeRenderedPath('/blog/first-post', '<html>post</html>', '/project/dist')
+    const [writePath] = vi.mocked(writeFile).mock.calls[0]
+    expect(String(writePath)).toMatch(/dist\/blog\/first-post\/index\.html$/)
+  })
+
+  it('writes the provided html content', async () => {
+    const html = '<html><body>Hello</body></html>'
+    await writeRenderedPath('/page', html, '/project/dist')
+    const [, content] = vi.mocked(writeFile).mock.calls[0]
+    expect(content).toBe(html)
+  })
+
+  it('creates the output directory before writing', async () => {
+    await writeRenderedPath('/nested/deep', '<html/>', '/project/dist')
+    expect(mkdir).toHaveBeenCalledWith(expect.stringContaining('nested/deep'), { recursive: true })
+  })
+
+  it('strips leading and trailing slashes from path', async () => {
+    await writeRenderedPath('/trailing/', '<html/>', '/project/dist')
+    const [writePath] = vi.mocked(writeFile).mock.calls[0]
+    expect(String(writePath)).toMatch(/trailing\/index\.html$/)
+    expect(String(writePath)).not.toMatch(/\/\//)
   })
 })

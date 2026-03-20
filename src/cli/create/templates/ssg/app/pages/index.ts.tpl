@@ -6,12 +6,3 @@ component('page-index', () => {
     </div>
   `
 })
-
-// Export page metadata for SSG
-export const meta = {
-  layout: 'default',
-  ssg: {
-    // No dynamic paths needed for the index page
-    paths: async () => [],
-  },
-}

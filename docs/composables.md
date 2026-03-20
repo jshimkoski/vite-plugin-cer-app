@@ -28,10 +28,11 @@ export function useTheme() {
 
 ## Using a composable in a page
 
+When `autoImports.composables` is `true` (the default), composables are **automatically imported** in page, layout, and component files — you don't need to write the import statement at all:
+
 ```ts
 // app/pages/index.ts
-import { useTheme } from 'virtual:cer-composables'
-
+// No import needed — useTheme is auto-imported from virtual:cer-composables
 component('page-index', () => {
   const { isDark, toggle } = useTheme()
 
@@ -41,6 +42,12 @@ component('page-index', () => {
     </button>
   `
 })
+```
+
+If you need to import explicitly (e.g. in a file outside `app/pages/`, `app/layouts/`, or `app/components/`), import from `virtual:cer-composables`:
+
+```ts
+import { useTheme } from 'virtual:cer-composables'
 ```
 
 ---

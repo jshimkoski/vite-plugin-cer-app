@@ -8,6 +8,7 @@ import { hasError, errorTag } from 'virtual:cer-error'
 import {
   component,
   ref,
+  provide,
   useOnConnected,
   useOnDisconnected,
   registerBuiltinComponents,
@@ -41,7 +42,14 @@ router.replace = async (path) => {
   try { await _replace(path) } catch (err) { currentError.value = err instanceof Error ? err.message : String(err) } finally { isNavigating.value = false }
 }
 
+const _pluginProvides = new Map<string, unknown>()
+;(globalThis as any).__cerPluginProvides = _pluginProvides
+
 component('cer-layout-view', () => {
+  for (const [key, value] of _pluginProvides) {
+    provide(key, value)
+  }
+
   const current = ref(router.getCurrent())
   let unsub: (() => void) | undefined
   useOnConnected(() => { unsub = router.subscribe((s: typeof current.value) => { current.value = s }) })
@@ -49,7 +57,7 @@ component('cer-layout-view', () => {
 
   if (currentError.value !== null) {
     if (hasError && errorTag) return { tag: errorTag, props: { attrs: { error: String(currentError.value) } }, children: [] }
-    return { tag: 'div', props: { attrs: { style: 'padding:2rem;font-family:monospace' } }, children: [String(currentError.value)] }
+    return { tag: 'div', props: { attrs: { style: 'padding:2rem;font-family:monospace' } }, children: String(currentError.value) }
   }
   if (isNavigating.value && hasLoading && loadingTag) return { tag: loadingTag, props: {}, children: [] }
 
@@ -62,12 +70,28 @@ component('cer-layout-view', () => {
 
 for (const plugin of plugins) {
   if (plugin && typeof plugin.setup === 'function') {
-    await plugin.setup({ router, provide: (key, value) => { (globalThis as any)[key] = value }, config: {} })
+    await plugin.setup({ router, provide: (key: string, value: unknown) => { _pluginProvides.set(key, value) }, config: {} })
+  }
+}
+
+// Pre-load the current page's route chunk AFTER plugins run so that
+// cer-layout-view's first render (which calls provide()) completes before
+// page components are defined. This ensures inject() in child components
+// can find values stored by provide().
+if (typeof window !== 'undefined') {
+  const _initMatch = router.matchRoute(window.location.pathname)
+  if (_initMatch?.route?.load) {
+    try { await _initMatch.route.load() } catch { /* non-fatal */ }
   }
 }
 
 if (typeof window !== 'undefined') {
-  await router.replace(window.location.pathname + window.location.search + window.location.hash)
+  // Use the original (unwrapped) replace so isNavigating stays false on first
+  // paint — the loading component must not flash over pre-rendered SSG content.
+  await _replace(window.location.pathname + window.location.search + window.location.hash)
+  // Clear SSR hydration data after initial navigation so subsequent navigations
+  // don't accidentally reuse it.
+  delete (globalThis as any).__CER_DATA__
   createDOMJITCSS().mount()
 }
 

@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "paths": {
+      "~/*": [
+        "./app/*"
+      ],
+      "~/pages/*": [
+        "./app/pages/*"
+      ],
+      "~/layouts/*": [
+        "./app/layouts/*"
+      ],
+      "~/components/*": [
+        "./app/components/*"
+      ],
+      "~/composables/*": [
+        "./app/composables/*"
+      ],
+      "~/plugins/*": [
+        "./app/plugins/*"
+      ],
+      "~/middleware/*": [
+        "./app/middleware/*"
+      ],
+      "~/assets/*": [
+        "./app/assets/*"
+      ]
+    }
+  }
+}

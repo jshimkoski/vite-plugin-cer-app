@@ -13,15 +13,17 @@ Routes are automatically derived from files in the `app/pages/` directory. No ma
 | `app/pages/blog/index.ts` | `/blog` | `page-blog-index` |
 | `app/pages/blog/[slug].ts` | `/blog/:slug` | `page-blog-slug` |
 | `app/pages/users/[id]/edit.ts` | `/users/:id/edit` | `page-users-id-edit` |
-| `app/pages/[...all].ts` | `/*` (catch-all) | `page-all` |
+| `app/pages/404.ts` | `/:all*` (catch-all) | `page-404` |
+| `app/pages/[...all].ts` | `/:all*` (catch-all) | `page-all` |
 | `app/pages/(auth)/login.ts` | `/login` | `page-login` |
 
 ### Rules
 
 1. **`index.ts`** — The `index` segment is stripped: `blog/index.ts` → `/blog`
 2. **`[param]`** — Dynamic segment: `[slug].ts` → `:slug`
-3. **`[...rest]`** — Catch-all segment: `[...all].ts` → `/*`
-4. **`(group)/`** — Route group: directory name stripped from path, not from tag name
+3. **`[...rest]`** — Catch-all segment: `[...all].ts` → `/:all*`
+4. **`404.ts`** — Special shorthand: treated as a catch-all (`/:all*`) — the conventional 404 page
+5. **`(group)/`** — Route group: directory name stripped from path, not from tag name
 
 ---
 
@@ -57,9 +59,27 @@ The `:slug` param is populated by the router and passed as a prop to the compone
 
 ---
 
-## Catch-all routes
+## Catch-all routes and 404 pages
 
-A file named `[...anything].ts` matches any path not matched by a more specific route:
+There are two equivalent ways to define a catch-all / 404 page:
+
+**Option A — `404.ts` (recommended shorthand)**
+
+```ts
+// app/pages/404.ts
+component('page-404', () => {
+  return html`
+    <div>
+      <h1>404 — Page not found</h1>
+      <p><a href="/">← Back home</a></p>
+    </div>
+  `
+})
+```
+
+The framework special-cases `404.ts` and automatically registers it as the catch-all route (`/:all*`). This is the conventional name and is the approach used by the kitchen-sink example.
+
+**Option B — `[...name].ts` explicit catch-all**
 
 ```ts
 // app/pages/[...all].ts
@@ -68,7 +88,7 @@ component('page-all', () => {
 })
 ```
 
-This also serves as the 404 page. The catch-all segment matches `/*`.
+Both produce the same route (`/:all*`) and either form works. Use `404.ts` for clarity.
 
 ---
 
@@ -163,6 +183,28 @@ When multiple routes are matched, the router resolves them in this priority orde
 3. **Catch-all routes** — `/*` last
 
 Within each tier, routes are sorted alphabetically.
+
+---
+
+## Navigation with `<router-link>`
+
+`initRouter()` registers a `<router-link>` built-in custom element that renders a client-side navigation link. Use it anywhere in your pages or layouts instead of a plain `<a>` tag when you want the router to handle the navigation (no full page reload):
+
+```ts
+// app/layouts/default.ts
+component('layout-default', () => {
+  return html`
+    <nav>
+      <router-link to="/">Home</router-link>
+      <router-link to="/about">About</router-link>
+      <router-link to="/blog">Blog</router-link>
+    </nav>
+    <main><slot></slot></main>
+  `
+})
+```
+
+`<router-link to="/path">` calls `router.push(path)` on click, which triggers the wrapped navigation handler (loading state, error capture, etc.). Use a plain `<a href="/path">` when you need a standard browser navigation or an external link.
 
 ---
 

@@ -227,3 +227,66 @@ describe('autoImportTransform — framework composable injection', () => {
     expect(result).toContain('usePageData')
   })
 })
+
+// ─── Composable import injection ─────────────────────────────────────────────
+
+describe('autoImportTransform — composable import injection', () => {
+  const COMPOSABLES_PKG = `'virtual:cer-composables'`
+
+  it('injects composable import when a registered composable is used', () => {
+    const composableExports = new Map([['useTheme', '/project/app/composables/useTheme.ts']])
+    const code = "component('page-x', () => { const t = useTheme(); return html`<div></div>` })"
+    const result = autoImportTransform(code, '/project/app/pages/x.ts', { srcDir, composableExports })!
+    expect(result).toContain(`from ${COMPOSABLES_PKG}`)
+    expect(result).toContain('useTheme')
+  })
+
+  it('does not inject composable import when composable is not used in file', () => {
+    const composableExports = new Map([['useTheme', '/project/app/composables/useTheme.ts']])
+    const code = "component('page-x', () => html`<h1>Hello</h1>`)"
+    const result = autoImportTransform(code, '/project/app/pages/x.ts', { srcDir, composableExports })
+    expect(result === null || !result!.includes('virtual:cer-composables')).toBe(true)
+  })
+
+  it('does not inject when already imported from virtual:cer-composables (single quotes)', () => {
+    const composableExports = new Map([['useTheme', '/project/app/composables/useTheme.ts']])
+    const code = `import { useTheme } from 'virtual:cer-composables'\ncomponent('x', () => { useTheme(); return html\`\` })`
+    const result = autoImportTransform(code, '/project/app/pages/x.ts', { srcDir, composableExports })
+    const count = (result ?? code).split(`from ${COMPOSABLES_PKG}`).length - 1
+    expect(count).toBe(1)
+  })
+
+  it('does not inject when already imported from virtual:cer-composables (double quotes)', () => {
+    const composableExports = new Map([['useTheme', '/project/app/composables/useTheme.ts']])
+    const code = `import { useTheme } from "virtual:cer-composables"\ncomponent('x', () => { useTheme(); return html\`\` })`
+    const result = autoImportTransform(code, '/project/app/pages/x.ts', { srcDir, composableExports })
+    const count = (result ?? code).split('virtual:cer-composables').length - 1
+    expect(count).toBe(1)
+  })
+
+  it('injects all used composables in a single import statement', () => {
+    const composableExports = new Map([
+      ['useTheme', '/project/app/composables/useTheme.ts'],
+      ['useAuth', '/project/app/composables/useAuth.ts'],
+    ])
+    const code = "component('page-x', () => { useTheme(); useAuth(); return html`<div></div>` })"
+    const result = autoImportTransform(code, '/project/app/pages/x.ts', { srcDir, composableExports })!
+    expect(result).toContain('useTheme')
+    expect(result).toContain('useAuth')
+    const count = result.split(`from ${COMPOSABLES_PKG}`).length - 1
+    expect(count).toBe(1)
+  })
+
+  it('returns null when composableExports is empty and no other identifiers used', () => {
+    const composableExports = new Map<string, string>()
+    const code = 'const x = 1'
+    const result = autoImportTransform(code, '/project/app/pages/x.ts', { srcDir, composableExports })
+    expect(result).toBeNull()
+  })
+
+  it('returns null when composableExports is undefined and no other identifiers used', () => {
+    const code = 'const x = 1'
+    const result = autoImportTransform(code, '/project/app/pages/x.ts', { srcDir })
+    expect(result).toBeNull()
+  })
+})

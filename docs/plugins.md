@@ -120,6 +120,31 @@ export default {
 
 ---
 
+## SSG and `inject()`
+
+In SSG mode there is a timing subtlety: the router loads a page chunk and renders it before `<cer-layout-view>` has called `provide()`. This means `inject()` may return `undefined` on the first render in SSG — even though the plugin ran and called `app.provide()` correctly.
+
+To write pages that work correctly in **all three modes** (SPA, SSR, SSG), use `globalThis.__cerPluginProvides` as a synchronous fallback when `inject()` returns `undefined`:
+
+```ts
+// app/pages/dashboard.ts
+component('page-dashboard', () => {
+  // inject() resolves correctly in SPA and SSR modes.
+  // In SSG the page chunk may render before cer-layout-view calls provide(),
+  // so fall back to the global map that app/app.ts populates before any render.
+  const pluginProvides = (globalThis as any).__cerPluginProvides as Map<string, unknown> | undefined
+  const store = inject<Store>('store') ?? pluginProvides?.get('store') as Store | undefined
+
+  if (!store) return html`<p>Loading…</p>`
+
+  return html`<p>Count: ${store.state.count}</p>`
+})
+```
+
+The `__cerPluginProvides` map is written by the bootstrapped `app/app.ts` before any route is rendered, so it is always available as a synchronous fallback regardless of render order.
+
+---
+
 ## Virtual module
 
 The sorted plugin list is available via `virtual:cer-plugins`:

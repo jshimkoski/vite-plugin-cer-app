@@ -67,7 +67,7 @@ interface PageLoaderContext<P extends Record<string, string>> {
 
 1. Browser receives the full HTML — content is immediately visible via Declarative Shadow DOM before any JS runs
 2. Client JS boots; `usePageData()` reads `window.__CER_DATA__` and returns the hydrated values
-3. The value is cleared after the first read so subsequent client-side navigations trigger a fresh fetch
+3. After the initial `router.replace()` in `app/app.ts` completes, `window.__CER_DATA__` is deleted so subsequent client-side navigations trigger a fresh fetch instead of reusing stale server data
 4. Components that received SSR data skip their `useOnConnected` fetch — no duplicate request
 
 ---
@@ -164,3 +164,47 @@ export const loader: PageLoader<
   return { user: await fetchUser(params.id), posts: await fetchPosts(params.id) }
 }
 ```
+
+---
+
+## Multi-mode data loading (SPA fallback)
+
+When building a page that needs to work in **all three modes** — SSR/SSG (with a `loader`) and SPA (no server, no loader) — use the following pattern:
+
+1. In SSR/SSG, the server runs `loader` and injects the data via `window.__CER_DATA__`. `usePageData()` returns it immediately; `useOnConnected` sees `ssrData` and skips the client fetch.
+2. In SPA mode there is no server, so `ssrData` is `null`. The client tries the API first, then falls back to a direct module import.
+
+```ts
+// app/pages/blog/index.ts
+component('page-blog-index', () => {
+  const ssrData = usePageData<{ posts: Post[] }>()
+  const posts = ref<Post[]>(ssrData?.posts ?? [])
+
+  useOnConnected(async () => {
+    if (ssrData) return  // SSR/SSG: already hydrated, skip the fetch
+
+    // SPA: try the API server first
+    try {
+      const r = await fetch('/api/posts')
+      if (r.ok) {
+        posts.value = await r.json()
+        return
+      }
+    } catch { /* no API server in static preview */ }
+
+    // SPA static fallback: import data directly from source
+    const { posts: staticPosts } = await import('../data/posts')
+    posts.value = staticPosts
+  })
+
+  return html`<ul>${posts.value.map(p => html`<li>${p.title}</li>`)}</ul>`
+})
+
+// loader runs in SSR and SSG only
+export const loader = async () => {
+  const posts = await fetch('/api/posts').then(r => r.json())
+  return { posts }
+}
+```
+
+The key rule: **always check `ssrData` before fetching on the client**. This prevents a redundant network request when the data was already serialized by the server.

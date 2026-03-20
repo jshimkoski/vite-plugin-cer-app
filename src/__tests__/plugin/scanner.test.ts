@@ -54,10 +54,24 @@ describe('createWatcher', () => {
     expect(onChange).toHaveBeenCalledWith('change', '/project/app/pages/about.ts')
   })
 
-  it('does not call onChange for files outside all watched directories', () => {
+  it('does not call onChange for files outside all watched directories (add)', () => {
     const onChange = vi.fn()
     createWatcher(watcher as unknown as FSWatcher, ['/project/app/pages'], onChange)
     watcher.emit('add', '/project/other/about.ts')
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it('does not call onChange for files outside all watched directories (unlink)', () => {
+    const onChange = vi.fn()
+    createWatcher(watcher as unknown as FSWatcher, ['/project/app/pages'], onChange)
+    watcher.emit('unlink', '/project/other/about.ts')
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it('does not call onChange for files outside all watched directories (change)', () => {
+    const onChange = vi.fn()
+    createWatcher(watcher as unknown as FSWatcher, ['/project/app/pages'], onChange)
+    watcher.emit('change', '/project/other/about.ts')
     expect(onChange).not.toHaveBeenCalled()
   })
 

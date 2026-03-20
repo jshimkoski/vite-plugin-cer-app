@@ -107,6 +107,63 @@ import { component, html, ref } from '@jasonshimmy/custom-elements-runtime'
 
 ---
 
+## Accessing slot content with `useSlots()`
+
+Use `useSlots()` inside a component's render function to read the content passed to named or default slots:
+
+```ts
+// app/components/ui-badge.ts
+component('ui-badge', () => {
+  const slots = useSlots()
+
+  return html`
+    <span class="badge">
+      ${slots.default ?? 'badge'}
+    </span>
+  `
+})
+```
+
+Usage in a page:
+
+```ts
+// app/pages/index.ts
+component('page-index', () => {
+  return html`
+    <ui-badge>v1.0.0</ui-badge>
+    <ui-badge>beta</ui-badge>
+  `
+})
+```
+
+`slots.default` contains the light-DOM children passed to the component. Named slots are accessed by their slot name:
+
+```ts
+// app/components/app-card.ts
+component('app-card', () => {
+  const slots = useSlots()
+
+  return html`
+    <div class="card">
+      <header>${slots.header}</header>
+      <main>${slots.default}</main>
+      <footer>${slots.footer}</footer>
+    </div>
+  `
+})
+```
+
+```html
+<!-- usage -->
+<app-card>
+  <span slot="header">Title</span>
+  Body content goes here
+  <span slot="footer">Footer</span>
+</app-card>
+```
+
+---
+
 ## HMR
 
 When a file is added to or removed from `app/components/`, the `virtual:cer-components` module is invalidated and the browser performs a full reload to re-register the updated element list.

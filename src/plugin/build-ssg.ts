@@ -146,8 +146,9 @@ async function renderPath(
  * Writes the rendered HTML to the output directory.
  * path '/' -> dist/index.html
  * path '/about' -> dist/about/index.html
+ * @internal exported for unit testing
  */
-async function writeRenderedPath(
+export async function writeRenderedPath(
   path: string,
   html: string,
   distDir: string,

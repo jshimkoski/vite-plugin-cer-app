@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeEach } from 'vitest'
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'pathe'
 
@@ -176,5 +176,97 @@ describe('buildSSR', () => {
     await buildSSR(makeConfig(), { define: { MY_FLAG: 'true' } })
     const firstCall = buildMock.mock.calls[0][0] as Record<string, unknown>
     expect(firstCall.define).toEqual({ MY_FLAG: 'true' })
+  })
+})
+
+// ─── resolveClientEntry fallback paths ───────────────────────────────────────
+
+describe('buildSSR — resolveClientEntry fallbacks', () => {
+  let buildMock: ReturnType<typeof vi.fn>
+  let existsSyncMock: ReturnType<typeof vi.fn>
+  let buildSSR: (config: ResolvedCerConfig) => Promise<void>
+
+  beforeEach(async () => {
+    const { build } = await import('vite')
+    buildMock = vi.mocked(build)
+    buildMock.mockClear()
+    buildMock.mockResolvedValue(undefined as never)
+
+    const { existsSync } = await import('node:fs')
+    existsSyncMock = vi.mocked(existsSync)
+    ;({ buildSSR } = await import('../../plugin/build-ssr.js'))
+  })
+
+  afterEach(() => {
+    existsSyncMock.mockReturnValue(true) // restore default
+  })
+
+  it('uses index.html when it exists', async () => {
+    existsSyncMock.mockReturnValue(true) // index.html exists
+    await buildSSR(makeConfig())
+    const clientInput = (buildMock.mock.calls[0][0] as any).build.rollupOptions.input
+    expect(clientInput).toMatch(/index\.html$/)
+  })
+
+  it('falls back to entry-client.ts when index.html is absent', async () => {
+    existsSyncMock.mockImplementation((p: unknown) => String(p).endsWith('entry-client.ts'))
+    await buildSSR(makeConfig())
+    const clientInput = (buildMock.mock.calls[0][0] as any).build.rollupOptions.input
+    expect(clientInput).toMatch(/entry-client\.ts$/)
+  })
+
+  it('falls back to app.ts when neither index.html nor entry-client.ts exist', async () => {
+    existsSyncMock.mockReturnValue(false)
+    await buildSSR(makeConfig())
+    const clientInput = (buildMock.mock.calls[0][0] as any).build.rollupOptions.input
+    expect(clientInput).toMatch(/app\.ts$/)
+  })
+})
+
+// ─── Server build virtual plugin callbacks ────────────────────────────────────
+
+describe('buildSSR — virtual server-entry plugin', () => {
+  let buildMock: ReturnType<typeof vi.fn>
+  let buildSSR: (config: ResolvedCerConfig) => Promise<void>
+
+  beforeEach(async () => {
+    const { build } = await import('vite')
+    buildMock = vi.mocked(build)
+    buildMock.mockClear()
+    buildMock.mockResolvedValue(undefined as never)
+    ;({ buildSSR } = await import('../../plugin/build-ssr.js'))
+  })
+
+  async function getServerPlugin() {
+    await buildSSR(makeConfig())
+    const serverCallPlugins: any[] = (buildMock.mock.calls[1][0] as any).plugins ?? []
+    return serverCallPlugins.find((p: any) => p?.name === 'vite-plugin-cer-server-entry')
+  }
+
+  it('server build includes vite-plugin-cer-server-entry plugin', async () => {
+    const plugin = await getServerPlugin()
+    expect(plugin).toBeDefined()
+  })
+
+  it('resolveId returns resolved id for virtual:cer-server-entry', async () => {
+    const plugin = await getServerPlugin()
+    expect(plugin.resolveId('virtual:cer-server-entry')).toBe('\0virtual:cer-server-entry')
+  })
+
+  it('resolveId returns undefined for unknown ids', async () => {
+    const plugin = await getServerPlugin()
+    expect(plugin.resolveId('some-other-id')).toBeUndefined()
+  })
+
+  it('load returns server entry source for resolved id', async () => {
+    const plugin = await getServerPlugin()
+    const source = plugin.load('\0virtual:cer-server-entry')
+    expect(typeof source).toBe('string')
+    expect(source).toContain('AUTO-GENERATED server entry')
+  })
+
+  it('load returns undefined for other ids', async () => {
+    const plugin = await getServerPlugin()
+    expect(plugin.load('something-else')).toBeUndefined()
   })
 })

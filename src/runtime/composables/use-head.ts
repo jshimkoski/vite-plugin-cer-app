@@ -6,15 +6,18 @@ export interface HeadInput {
   style?: Array<Record<string, string>>
 }
 
-// SSR: global collector, reset per-request
-let _ssrCollector: HeadInput[] | null = null
+// SSR: store collector on globalThis so all module instances (server entry +
+// dynamically-imported page chunks) share the same reference. A module-level
+// variable would create separate instances per chunk, breaking the singleton.
+const _g = globalThis as Record<string, unknown>
+const _KEY = '__CER_HEAD_COLLECTOR__'
 
 /**
  * Begin collecting head tags for an SSR render pass.
  * Call this before invoking the render function.
  */
 export function beginHeadCollection(): void {
-  _ssrCollector = []
+  _g[_KEY] = [] as HeadInput[]
 }
 
 /**
@@ -22,8 +25,8 @@ export function beginHeadCollection(): void {
  * Resets the collector to null.
  */
 export function endHeadCollection(): HeadInput[] {
-  const collected = _ssrCollector ?? []
-  _ssrCollector = null
+  const collected = (_g[_KEY] as HeadInput[]) ?? []
+  _g[_KEY] = null
   return collected
 }
 
@@ -111,9 +114,10 @@ export function serializeHeadTags(heads: HeadInput[]): string {
  * - On the client: imperatively updates document.title and meta/link tags
  */
 export function useHead(input: HeadInput): void {
-  if (_ssrCollector !== null) {
-    // SSR mode
-    _ssrCollector.push(input)
+  const collector = _g[_KEY] as HeadInput[] | null | undefined
+  if (collector != null) {
+    // SSR mode: push to the shared globalThis collector
+    collector.push(input)
   } else if (typeof document !== 'undefined') {
     // Client-side
     if (input.title !== undefined) {

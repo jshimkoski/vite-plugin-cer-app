@@ -86,7 +86,14 @@ function _mergeWithClientTemplate(ssrHtml, clientTemplate) {
       '<div id="app">' + ssrBodyContent + '</div>')
   }
   const headAdditions = headParts.filter(Boolean).join('\\n')
-  if (headAdditions) merged = merged.replace('</head>', headAdditions + '\\n</head>')
+  if (headAdditions) {
+    // If SSR provides a <title>, replace the client template's <title> so the
+    // SSR title wins (client template title is the fallback default).
+    if (headAdditions.includes('<title>')) {
+      merged = merged.replace(/<title>[^<]*<\\/title>/, '')
+    }
+    merged = merged.replace('</head>', headAdditions + '\\n</head>')
+  }
   return merged
 }
 
