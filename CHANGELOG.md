@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.1.6] - 2026-03-20
+
+- fix: update CLI usage instructions to include --package flag for create-cer-app (457114d)
+
 ## [v0.1.5] - 2026-03-20
 
 - fix: use vite plugin for light dom jit css fix: update incorrect docs fix: fix the plugin config (c32cf6a)
