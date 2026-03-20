@@ -17,7 +17,62 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
+  validate:
+    name: Lint, test, build & e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js version from .nvmrc
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          registry-url: 'https://registry.npmjs.org/'
+
+      - name: Cache node modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Cypress system dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            libgtk2.0-0t64 libgtk-3-0t64 libgbm-dev libnotify-dev \
+            libnss3 libxss1 libasound2t64 libxtst6 xauth xvfb
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build library
+        run: npm run build
+
+      - name: E2E tests (SSR)
+        run: xvfb-run --auto-servernum npm run e2e:ssr
+
+      - name: E2E tests (SSG)
+        run: xvfb-run --auto-servernum npm run e2e:ssg
+
+      - name: E2E tests (SPA)
+        run: xvfb-run --auto-servernum npm run e2e:spa
+
   release:
+    name: Version & publish
+    needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -25,7 +80,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Fetch all history and tags
+          fetch-depth: 0
 
       # Resolve the latest tag once so all subsequent steps share the same baseline.
       - name: Resolve baseline tag
@@ -77,10 +132,6 @@ jobs:
       - name: Install dependencies
         if: steps.should_release.outputs.value == 'true'
         run: npm ci
-
-      - name: Run tests
-        if: steps.should_release.outputs.value == 'true'
-        run: npm test
 
       - name: Build library
         if: steps.should_release.outputs.value == 'true'

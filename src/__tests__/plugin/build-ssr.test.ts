@@ -6,11 +6,16 @@ import { resolve } from 'pathe'
 // The `buildSSR` function itself invokes Vite's `build` API which we don't
 // need to exercise in unit tests (it's an integration concern).
 vi.mock('vite', () => ({ build: vi.fn().mockResolvedValue(undefined) }))
+vi.mock('../../plugin/generated-dir.js', () => ({
+  writeGeneratedDir: vi.fn(),
+  getGeneratedDir: vi.fn().mockReturnValue('/project/.cer'),
+  GENERATED_DIR_NAME: '.cer',
+}))
 // Partial mock: keep the real readFileSync/existsSync but allow overrides in
 // individual describe blocks if needed.
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs')>()
-  return { ...actual, existsSync: vi.fn().mockReturnValue(true) }
+  return { ...actual, existsSync: vi.fn().mockReturnValue(true), renameSync: vi.fn() }
 })
 
 import type { ResolvedCerConfig } from '../../plugin/dev-server.js'
@@ -202,24 +207,33 @@ describe('buildSSR — resolveClientEntry fallbacks', () => {
   })
 
   it('uses index.html when it exists', async () => {
-    existsSyncMock.mockReturnValue(true) // index.html exists
+    existsSyncMock.mockImplementation((p: unknown) => String(p).endsWith('index.html'))
     await buildSSR(makeConfig())
-    const clientInput = (buildMock.mock.calls[0][0] as any).build.rollupOptions.input
-    expect(clientInput).toMatch(/index\.html$/)
+    const clientInput = (buildMock.mock.calls[0][0] as Record<string, unknown>)
+    expect(((clientInput.build as Record<string, unknown>).rollupOptions as Record<string, unknown>).input).toMatch(/(?<!\.cer\/)index\.html$/)
   })
 
-  it('falls back to entry-client.ts when index.html is absent', async () => {
+  it('falls back to .cer/index.html when root index.html is absent', async () => {
+    existsSyncMock.mockImplementation((p: unknown) =>
+      String(p).endsWith('.cer/index.html'),
+    )
+    await buildSSR(makeConfig())
+    const clientInput = (buildMock.mock.calls[0][0] as Record<string, unknown>)
+    expect(((clientInput.build as Record<string, unknown>).rollupOptions as Record<string, unknown>).input).toMatch(/\.cer\/index\.html$/)
+  })
+
+  it('falls back to entry-client.ts when no index.html exists', async () => {
     existsSyncMock.mockImplementation((p: unknown) => String(p).endsWith('entry-client.ts'))
     await buildSSR(makeConfig())
-    const clientInput = (buildMock.mock.calls[0][0] as any).build.rollupOptions.input
-    expect(clientInput).toMatch(/entry-client\.ts$/)
+    const clientInput = (buildMock.mock.calls[0][0] as Record<string, unknown>)
+    expect(((clientInput.build as Record<string, unknown>).rollupOptions as Record<string, unknown>).input).toMatch(/entry-client\.ts$/)
   })
 
-  it('falls back to app.ts when neither index.html nor entry-client.ts exist', async () => {
+  it('falls back to app.ts when nothing else exists', async () => {
     existsSyncMock.mockReturnValue(false)
     await buildSSR(makeConfig())
-    const clientInput = (buildMock.mock.calls[0][0] as any).build.rollupOptions.input
-    expect(clientInput).toMatch(/app\.ts$/)
+    const clientInput = (buildMock.mock.calls[0][0] as Record<string, unknown>)
+    expect(((clientInput.build as Record<string, unknown>).rollupOptions as Record<string, unknown>).input).toMatch(/app\.ts$/)
   })
 })
 

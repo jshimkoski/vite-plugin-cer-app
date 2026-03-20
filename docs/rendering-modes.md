@@ -63,9 +63,9 @@ The server renders HTML for each request. Uses Declarative Shadow DOM (DSD) to e
 3. API route handlers run if the URL matches `/api/`
 4. For HTML requests, the router matches the URL to a page
 5. The page's `loader` is called (if present)
-6. The component tree is rendered to HTML via `createStreamingSSRHandler`
+6. The component tree is rendered to HTML with Declarative Shadow DOM via `renderToStringWithJITCSSDSD`
 7. `useHead()` calls are collected and injected before `</head>`
-8. The response is streamed or sent in full
+8. The rendered HTML is merged with the Vite client bundle shell and sent as a full response
 
 ### Build output
 

@@ -10,7 +10,7 @@ Routes are automatically derived from files in the `app/pages/` directory. No ma
 |---|---|---|
 | `app/pages/index.ts` | `/` | `page-index` |
 | `app/pages/about.ts` | `/about` | `page-about` |
-| `app/pages/blog/index.ts` | `/blog` | `page-blog-index` |
+| `app/pages/blog/index.ts` | `/blog` | `page-blog` |
 | `app/pages/blog/[slug].ts` | `/blog/:slug` | `page-blog-slug` |
 | `app/pages/users/[id]/edit.ts` | `/users/:id/edit` | `page-users-id-edit` |
 | `app/pages/404.ts` | `/:all*` (catch-all) | `page-404` |

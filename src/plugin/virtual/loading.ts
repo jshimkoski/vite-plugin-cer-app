@@ -1,6 +1,5 @@
 import { existsSync } from 'node:fs'
 import { join } from 'pathe'
-import { scanDirectory } from '../scanner.js'
 
 /**
  * Generates the virtual:cer-loading module code.

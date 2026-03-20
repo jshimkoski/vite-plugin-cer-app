@@ -1,4 +1,4 @@
-import { basename, dirname, join, relative } from 'pathe'
+import { basename, relative } from 'pathe'
 
 export interface RouteEntry {
   filePath: string

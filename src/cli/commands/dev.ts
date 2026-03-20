@@ -3,7 +3,7 @@ import { createServer } from 'vite'
 import { resolve } from 'pathe'
 import { pathToFileURL } from 'node:url'
 import { existsSync } from 'node:fs'
-import { cerApp, resolveConfig } from '../../plugin/index.js'
+import { cerApp } from '../../plugin/index.js'
 import type { CerAppConfig } from '../../types/config.js'
 
 /**
@@ -28,7 +28,7 @@ async function loadCerConfig(root: string): Promise<CerAppConfig> {
   try {
     // Use Vite's build to transpile TS config at runtime
     const { build } = await import('vite')
-    const result = await build({
+    await build({
       build: {
         lib: {
           entry: filePath,

@@ -88,7 +88,7 @@ Controls SSR rendering behavior.
 ```ts
 ssr: {
   dsd: true,       // Emit Declarative Shadow DOM
-  streaming: false // Use streaming renderer (createStreamingSSRHandler)
+  streaming: false // Reserved for future use
 }
 ```
 
@@ -104,7 +104,7 @@ When `true`, renders components with [Declarative Shadow DOM](https://developer.
 **Type:** `boolean`
 **Default:** `false`
 
-When `true`, uses the streaming SSR renderer (`createStreamingSSRHandler`) to progressively flush HTML to the client. When `false`, collects the full HTML string before sending.
+Reserved for future use. Currently, the SSR renderer always collects the full HTML string before sending the response.
 
 ---
 

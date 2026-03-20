@@ -1,27 +1,46 @@
-import { writeFileSync } from 'node:fs'
-import { readFileSync, existsSync } from 'node:fs'
+import { writeFileSync, mkdirSync, existsSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join, relative } from 'pathe'
 import { scanDirectory } from './scanner.js'
+import { GENERATED_DIR_NAME } from './generated-dir.js'
 
 /**
- * Writes `cer-tsconfig.json` to the project root containing path aliases for
- * the `~/` prefix. Users extend it from their `tsconfig.json`:
- *   { "extends": "./cer-tsconfig.json" }
+ * Writes `.cer/tsconfig.json` containing path aliases for the `~/` prefix
+ * plus include/exclude entries so the consumer's `tsconfig.json` only needs:
+ *   { "extends": "./.cer/tsconfig.json" }
  */
 export function writeTsconfigPaths(root: string, srcDir: string): void {
-  const rel = './' + relative(root, srcDir).replace(/\\/g, '/')
-  const paths: Record<string, string[]> = {
-    '~/*': [`${rel}/*`],
-    '~/pages/*': [`${rel}/pages/*`],
-    '~/layouts/*': [`${rel}/layouts/*`],
-    '~/components/*': [`${rel}/components/*`],
-    '~/composables/*': [`${rel}/composables/*`],
-    '~/plugins/*': [`${rel}/plugins/*`],
-    '~/middleware/*': [`${rel}/middleware/*`],
-    '~/assets/*': [`${rel}/assets/*`],
+  const cerDir = join(root, GENERATED_DIR_NAME)
+  if (!existsSync(cerDir)) {
+    mkdirSync(cerDir, { recursive: true })
   }
-  const content = JSON.stringify({ compilerOptions: { paths } }, null, 2) + '\n'
-  writeFileSync(join(root, 'cer-tsconfig.json'), content, 'utf-8')
+
+  // Paths are relative to .cer/ inside the project root, so prefix with ../
+  const srcRel = '../' + relative(root, srcDir).replace(/\\/g, '/')
+  const paths: Record<string, string[]> = {
+    '~/*': [`${srcRel}/*`],
+    '~/pages/*': [`${srcRel}/pages/*`],
+    '~/layouts/*': [`${srcRel}/layouts/*`],
+    '~/components/*': [`${srcRel}/components/*`],
+    '~/composables/*': [`${srcRel}/composables/*`],
+    '~/plugins/*': [`${srcRel}/plugins/*`],
+    '~/middleware/*': [`${srcRel}/middleware/*`],
+    '~/assets/*': [`${srcRel}/assets/*`],
+  }
+
+  const tsconfig = {
+    compilerOptions: { paths },
+    include: [
+      '../app/**/*.ts',
+      '../server/**/*.ts',
+      './**/*.ts',
+      './**/*.d.ts',
+    ],
+    exclude: ['../node_modules', '../dist'],
+  }
+
+  const content = JSON.stringify(tsconfig, null, 2) + '\n'
+  writeFileSync(join(cerDir, 'tsconfig.json'), content, 'utf-8')
 }
 
 const RUNTIME_GLOBALS = [
@@ -199,16 +218,21 @@ export async function generateVirtualModuleDts(
 }
 
 /**
- * Writes both `cer-auto-imports.d.ts` and `cer-env.d.ts` to the project root.
+ * Writes `auto-imports.d.ts` and `env.d.ts` to `.cer/` inside the project root.
  */
 export async function writeAutoImportDts(
   root: string,
   composablesDir: string,
   composableExports?: Map<string, string>,
 ): Promise<void> {
+  const cerDir = join(root, GENERATED_DIR_NAME)
+  if (!existsSync(cerDir)) {
+    mkdirSync(cerDir, { recursive: true })
+  }
+
   const scanned = composableExports ?? await scanComposableExports(composablesDir)
   const autoImportsContent = await generateAutoImportDts(root, composablesDir, scanned)
   const envContent = await generateVirtualModuleDts(root, composablesDir, scanned)
-  writeFileSync(join(root, 'cer-auto-imports.d.ts'), autoImportsContent, 'utf-8')
-  writeFileSync(join(root, 'cer-env.d.ts'), envContent, 'utf-8')
+  writeFileSync(join(cerDir, 'auto-imports.d.ts'), autoImportsContent, 'utf-8')
+  writeFileSync(join(cerDir, 'env.d.ts'), envContent, 'utf-8')
 }

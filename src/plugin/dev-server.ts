@@ -186,11 +186,12 @@ export function configureCerDevServer(
 
         // Try to find a handler for the HTTP method. Exports may be GET/POST (uppercase)
         // or get/post (lowercase); try both plus a 'default' fallback.
+        type RouteHandlerFn = (req: typeof augmentedReq, res: typeof augmentedRes) => void | Promise<void>
         const handlerKey = method.toLowerCase()
         const handler =
-          (route.handlers[handlerKey] as Function | undefined) ??
-          (route.handlers[method.toUpperCase()] as Function | undefined) ??
-          (route.handlers['default'] as Function | undefined)
+          (route.handlers[handlerKey] as RouteHandlerFn | undefined) ??
+          (route.handlers[method.toUpperCase()] as RouteHandlerFn | undefined) ??
+          (route.handlers['default'] as RouteHandlerFn | undefined)
 
         if (typeof handler === 'function') {
           try {

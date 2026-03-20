@@ -1,22 +1,23 @@
 import { build, type UserConfig } from 'vite'
 import { join, resolve } from 'pathe'
-import { existsSync } from 'node:fs'
+import { existsSync, renameSync } from 'node:fs'
 import type { ResolvedCerConfig } from './dev-server.js'
+import { getGeneratedDir, writeGeneratedDir } from './generated-dir.js'
 
 /**
  * Resolves the client build entry point for an SSR/SSG build.
  *
  * Priority order:
- * 1. `index.html` at the project root — preferred because Vite writes a
- *    processed `index.html` to `dist/client/` with correct asset references,
- *    which `renderPath` then uses as the shell template for SSG pages.
- * 2. `app/entry-client.ts` — fallback for projects that handle HTML injection
- *    themselves (e.g. a custom Express server).
- * 3. `app/app.ts` — last resort (same bundle, no DSD hydration preamble).
+ * 1. `index.html` at the project root — consumer-provided HTML shell.
+ * 2. `.cer/index.html` — auto-generated HTML shell (Nuxt-style magic).
+ * 3. `app/entry-client.ts` — fallback for projects that manage HTML externally.
+ * 4. `app/app.ts` — last resort (same bundle, no DSD hydration preamble).
  */
-function resolveClientEntry(config: ResolvedCerConfig): string {
+export function resolveClientEntry(config: ResolvedCerConfig): string {
   const indexHtml = resolve(config.root, 'index.html')
   if (existsSync(indexHtml)) return indexHtml
+  const cerIndexHtml = join(getGeneratedDir(config.root), 'index.html')
+  if (existsSync(cerIndexHtml)) return cerIndexHtml
   const entryClient = resolve(config.srcDir, 'entry-client.ts')
   if (existsSync(entryClient)) return entryClient
   return resolve(config.srcDir, 'app.ts')
@@ -225,6 +226,10 @@ export async function buildSSR(
   const clientOutDir = join(config.root, 'dist/client')
   const serverOutDir = join(config.root, 'dist/server')
 
+  // Write .cer/ generated files BEFORE resolving the client entry so that
+  // .cer/index.html is on disk when resolveClientEntry checks for it.
+  writeGeneratedDir(config)
+
   // Resolve the client entry — index.html is preferred so Vite writes a
   // processed index.html to dist/client/ for use as the SSG shell template.
   const clientEntry = resolveClientEntry(config)
@@ -243,6 +248,15 @@ export async function buildSSR(
       },
     },
   })
+
+  // If the client entry was .cer/index.html, Vite outputs it as
+  // dist/client/.cer/index.html (preserving relative path). The SSR server
+  // template expects dist/client/index.html, so rename it into place.
+  const generatedHtmlOut = join(clientOutDir, '.cer/index.html')
+  const rootHtmlOut = join(clientOutDir, 'index.html')
+  if (existsSync(generatedHtmlOut) && !existsSync(rootHtmlOut)) {
+    renameSync(generatedHtmlOut, rootHtmlOut)
+  }
 
   // Generate server entry source inline via a virtual plugin
   const serverEntryCode = generateServerEntryCode()

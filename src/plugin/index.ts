@@ -1,11 +1,13 @@
 import { resolve, join } from 'pathe'
-import type { Plugin, ViteDevServer, ModuleNode } from 'vite'
+import { existsSync, readFileSync } from 'node:fs'
+import type { Plugin, ViteDevServer } from 'vite'
 import type { CerAppConfig } from '../types/config.js'
 import type { ResolvedCerConfig } from './dev-server.js'
 import { cerPlugin } from '@jasonshimmy/custom-elements-runtime/vite-plugin'
 import { autoImportTransform } from './transforms/auto-import.js'
 import { scanComposableExports, writeAutoImportDts, writeTsconfigPaths } from './dts-generator.js'
 import { configureCerDevServer } from './dev-server.js'
+import { writeGeneratedDir, getGeneratedDir } from './generated-dir.js'
 import { generateRoutesCode } from './virtual/routes.js'
 import { generateLayoutsCode } from './virtual/layouts.js'
 import { generateComponentsCode } from './virtual/components.js'
@@ -256,10 +258,37 @@ export function cerApp(userConfig: CerAppConfig = {}): Plugin[] {
         // config might not be set yet; resolve with cwd
         config = resolveConfig(userConfig, process.cwd())
       }
+
+      // Write .cer/ generated files (app.ts fallback, index.html, .gitignore)
+      writeGeneratedDir(config)
+
       // Scan composables and write .d.ts + tsconfig paths on dev server start
       composableExports = await scanComposableExports(config.composablesDir)
       await writeAutoImportDts(config.root, config.composablesDir, composableExports)
       writeTsconfigPaths(config.root, config.srcDir)
+
+      // Serve a generated index.html for HTML requests when the consumer has
+      // not provided one. This runs BEFORE configureCerDevServer so that the
+      // Vite HTML pipeline (HMR injection, module preprocessing) is applied.
+      const userHtml = resolve(config.root, 'index.html')
+      if (!existsSync(userHtml)) {
+        const cerHtmlPath = join(getGeneratedDir(config.root), 'index.html')
+        server.middlewares.use(async (req, res, next) => {
+          const url = (req as { url?: string }).url ?? '/'
+          const isHtmlRequest =
+            url === '/' ||
+            url === '/index.html' ||
+            (!url.includes('.') && !url.startsWith('/api/'))
+          if (isHtmlRequest && existsSync(cerHtmlPath)) {
+            const rawHtml = readFileSync(cerHtmlPath, 'utf-8')
+            const transformed = await server.transformIndexHtml(url, rawHtml)
+            res.setHeader('Content-Type', 'text/html; charset=utf-8')
+            res.end(transformed)
+            return
+          }
+          next()
+        })
+      }
 
       // Watch app/ and server/ directories for file changes
       const watchDirs = [
@@ -302,6 +331,8 @@ export function cerApp(userConfig: CerAppConfig = {}): Plugin[] {
       if (!config) {
         config = resolveConfig(userConfig, process.cwd())
       }
+      // Write .cer/ generated files before the build begins
+      writeGeneratedDir(config)
       // Scan composables and generate type declarations + tsconfig paths
       composableExports = await scanComposableExports(config.composablesDir)
       await writeAutoImportDts(config.root, config.composablesDir, composableExports)

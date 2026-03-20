@@ -107,9 +107,10 @@ export function previewCommand(): Command {
         console.log('[cer-app] Starting SSR preview server...')
 
         // Load the server bundle
+        type SsrHandlerFn = (req: IncomingMessage, res: ServerResponse) => void | Promise<void>
         let serverMod: {
-          handler?: Function
-          default?: Function
+          handler?: SsrHandlerFn
+          default?: SsrHandlerFn
           apiRoutes?: Array<{ path: string; handlers: Record<string, unknown> }>
         }
         try {
@@ -151,10 +152,11 @@ export function previewCommand(): Command {
                 }
                 augRes.status = function (code) { this.statusCode = code; return this }
 
+                type ApiHandlerFn = (req: typeof augReq, res: typeof augRes) => void | Promise<void>
                 const handlerFn =
-                  (route.handlers[method.toLowerCase()] as Function | undefined) ??
-                  (route.handlers[method.toUpperCase()] as Function | undefined) ??
-                  (route.handlers['default'] as Function | undefined)
+                  (route.handlers[method.toLowerCase()] as ApiHandlerFn | undefined) ??
+                  (route.handlers[method.toUpperCase()] as ApiHandlerFn | undefined) ??
+                  (route.handlers['default'] as ApiHandlerFn | undefined)
 
                 if (typeof handlerFn === 'function') {
                   try {

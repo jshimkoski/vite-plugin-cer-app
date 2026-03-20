@@ -1,11 +1,12 @@
 import { Command } from 'commander'
 import { build } from 'vite'
-import { resolve } from 'pathe'
+import { resolve, join } from 'pathe'
 import { pathToFileURL } from 'node:url'
-import { existsSync } from 'node:fs'
+import { existsSync, renameSync } from 'node:fs'
 import { cerApp, resolveConfig } from '../../plugin/index.js'
-import { buildSSR } from '../../plugin/build-ssr.js'
+import { buildSSR, resolveClientEntry } from '../../plugin/build-ssr.js'
 import { buildSSG } from '../../plugin/build-ssg.js'
+import { writeGeneratedDir } from '../../plugin/generated-dir.js'
 import type { CerAppConfig } from '../../types/config.js'
 
 async function loadCerConfig(root: string): Promise<CerAppConfig> {
@@ -73,15 +74,28 @@ export function buildCommand(): Command {
 
       switch (config.mode) {
         case 'spa': {
-          // Standard Vite build — single-page app
+          // Write .cer/ files BEFORE resolveClientEntry checks for .cer/index.html.
+          writeGeneratedDir(config)
+          const spaEntry = resolveClientEntry(config)
+          const spaOutDir = resolve(root, 'dist')
           await build({
             root,
             plugins: cerApp(userConfig),
             build: {
-              outDir: resolve(root, 'dist'),
+              outDir: spaOutDir,
+              rollupOptions: { input: spaEntry },
             },
           })
+          // If the entry was .cer/index.html, Vite outputs it as dist/.cer/index.html.
+          // Rename it to dist/index.html so the preview server can find it.
+          const generatedHtmlOut = join(spaOutDir, '.cer/index.html')
+          const rootHtmlOut = join(spaOutDir, 'index.html')
+          if (existsSync(generatedHtmlOut) && !existsSync(rootHtmlOut)) {
+            renameSync(generatedHtmlOut, rootHtmlOut)
+          }
           console.log('[cer-app] SPA build complete.')
+          // Force exit: Vite HTML builds may keep Node timers alive.
+          process.exit(0)
           break
         }
 

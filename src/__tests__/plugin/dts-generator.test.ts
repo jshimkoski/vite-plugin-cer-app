@@ -6,10 +6,12 @@ vi.mock('node:fs', async (importOriginal) => {
     ...actual,
     existsSync: vi.fn().mockReturnValue(false),
     writeFileSync: vi.fn(),
+    mkdirSync: vi.fn(),
     readFileSync: vi.fn().mockReturnValue(''),
   }
 })
 vi.mock('../../plugin/scanner.js', () => ({ scanDirectory: vi.fn().mockResolvedValue([]) }))
+vi.mock('../../plugin/generated-dir.js', () => ({ GENERATED_DIR_NAME: '.cer' }))
 
 import { existsSync, writeFileSync, readFileSync } from 'node:fs'
 import { scanDirectory } from '../../plugin/scanner.js'
@@ -32,10 +34,10 @@ beforeEach(() => {
 })
 
 describe('writeTsconfigPaths', () => {
-  it('writes cer-tsconfig.json to the root directory', () => {
+  it('writes tsconfig.json to the .cer directory', () => {
     writeTsconfigPaths(ROOT, `${ROOT}/app`)
     expect(writeFileSync).toHaveBeenCalledWith(
-      `${ROOT}/cer-tsconfig.json`,
+      `${ROOT}/.cer/tsconfig.json`,
       expect.any(String),
       'utf-8',
     )
@@ -64,6 +66,13 @@ describe('writeTsconfigPaths', () => {
     const content = vi.mocked(writeFileSync).mock.calls[0][1] as string
     const json = JSON.parse(content)
     expect(json).toHaveProperty('compilerOptions.paths')
+  })
+
+  it('includes project source directories in include array', () => {
+    writeTsconfigPaths(ROOT, `${ROOT}/app`)
+    const content = vi.mocked(writeFileSync).mock.calls[0][1] as string
+    const json = JSON.parse(content) as { include?: string[] }
+    expect(Array.isArray(json.include)).toBe(true)
   })
 })
 
@@ -227,16 +236,16 @@ describe('generateVirtualModuleDts', () => {
 })
 
 describe('writeAutoImportDts', () => {
-  it('writes cer-auto-imports.d.ts to root', async () => {
+  it('writes auto-imports.d.ts to .cer/', async () => {
     await writeAutoImportDts(ROOT, COMPOSABLES_DIR)
     const paths = vi.mocked(writeFileSync).mock.calls.map(([p]) => String(p))
-    expect(paths.some(p => p.includes('cer-auto-imports.d.ts'))).toBe(true)
+    expect(paths.some(p => p.includes('.cer/auto-imports.d.ts'))).toBe(true)
   })
 
-  it('writes cer-env.d.ts to root', async () => {
+  it('writes env.d.ts to .cer/', async () => {
     await writeAutoImportDts(ROOT, COMPOSABLES_DIR)
     const paths = vi.mocked(writeFileSync).mock.calls.map(([p]) => String(p))
-    expect(paths.some(p => p.includes('cer-env.d.ts'))).toBe(true)
+    expect(paths.some(p => p.includes('.cer/env.d.ts'))).toBe(true)
   })
 
   it('writes exactly two files', async () => {

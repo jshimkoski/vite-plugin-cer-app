@@ -3,6 +3,10 @@ import { vi, describe, it, expect, beforeEach } from 'vitest'
 vi.mock('@jasonshimmy/custom-elements-runtime/vite-plugin', () => ({
   cerPlugin: vi.fn().mockReturnValue([{ name: 'cer-runtime-plugin' }]),
 }))
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>()
+  return { ...actual, existsSync: vi.fn().mockReturnValue(true), readFileSync: vi.fn().mockReturnValue('') }
+})
 vi.mock('../../plugin/dev-server.js', () => ({
   configureCerDevServer: vi.fn().mockResolvedValue(undefined),
 }))
@@ -14,6 +18,11 @@ vi.mock('../../plugin/dts-generator.js', () => ({
   scanComposableExports: vi.fn().mockResolvedValue(new Map()),
   writeAutoImportDts: vi.fn().mockResolvedValue(undefined),
   writeTsconfigPaths: vi.fn(),
+}))
+vi.mock('../../plugin/generated-dir.js', () => ({
+  writeGeneratedDir: vi.fn(),
+  getGeneratedDir: vi.fn().mockReturnValue('/project/.cer'),
+  GENERATED_DIR_NAME: '.cer',
 }))
 vi.mock('../../plugin/virtual/routes.js', () => ({ generateRoutesCode: vi.fn().mockResolvedValue('// routes') }))
 vi.mock('../../plugin/virtual/layouts.js', () => ({ generateLayoutsCode: vi.fn().mockResolvedValue('// layouts') }))
@@ -263,6 +272,16 @@ describe('cerApp plugin — transform hook', () => {
 })
 
 describe('cerApp plugin — buildStart hook', () => {
+  it('calls writeGeneratedDir on build start', async () => {
+    const { writeGeneratedDir } = await import('../../plugin/generated-dir.js')
+    vi.mocked(writeGeneratedDir).mockClear()
+    const plugin = getCerPlugin()
+    plugin.config({ root: '/project' }, { command: 'build', mode: 'production' })
+    plugin.configResolved(FAKE_RESOLVED)
+    await plugin.buildStart()
+    expect(writeGeneratedDir).toHaveBeenCalledTimes(1)
+  })
+
   it('calls scanComposableExports on build start', async () => {
     const { scanComposableExports } = await import('../../plugin/dts-generator.js')
     vi.mocked(scanComposableExports).mockClear()
@@ -295,6 +314,22 @@ describe('cerApp plugin — buildStart hook', () => {
 })
 
 describe('cerApp plugin — configureServer hook', () => {
+  it('calls writeGeneratedDir on server configure', async () => {
+    const { writeGeneratedDir } = await import('../../plugin/generated-dir.js')
+    vi.mocked(writeGeneratedDir).mockClear()
+    const plugin = getCerPlugin()
+    plugin.config({ root: '/project' }, { command: 'serve', mode: 'development' })
+    plugin.configResolved(FAKE_RESOLVED)
+    const mockServer = {
+      watcher: { on: vi.fn() },
+      moduleGraph: { getModuleById: vi.fn().mockReturnValue(null), invalidateModule: vi.fn() },
+      ws: { send: vi.fn() },
+      middlewares: { use: vi.fn() },
+    }
+    await plugin.configureServer(mockServer)
+    expect(writeGeneratedDir).toHaveBeenCalledTimes(1)
+  })
+
   it('calls scanComposableExports on server configure', async () => {
     const { scanComposableExports } = await import('../../plugin/dts-generator.js')
     vi.mocked(scanComposableExports).mockClear()

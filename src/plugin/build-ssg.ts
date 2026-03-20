@@ -1,7 +1,7 @@
 import { writeFile, mkdir } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join } from 'pathe'
-import { createServer, build, type UserConfig } from 'vite'
+import { createServer, type UserConfig } from 'vite'
 import type { ResolvedCerConfig } from './dev-server.js'
 import { buildSSR } from './build-ssr.js'
 import { buildRouteEntry } from './path-utils.js'
@@ -138,7 +138,7 @@ async function renderPath(
       setHeader: () => {},
       end: (body: string) => resolve(body),
     }
-    ;(handlerFn as Function)(mockReq, mockRes).catch(reject)
+    ;(handlerFn as (req: unknown, res: unknown) => Promise<void>)(mockReq, mockRes).catch(reject)
   })
 }
 
