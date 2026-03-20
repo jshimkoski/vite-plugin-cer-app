@@ -11,7 +11,7 @@
 ## Option A — Scaffold with `create-cer-app` (recommended)
 
 ```sh
-npx create-cer-app my-app
+npx --package @jasonshimmy/vite-plugin-cer-app create-cer-app my-app
 ```
 
 The interactive prompt asks for a project name and rendering mode:
@@ -39,7 +39,7 @@ Project created! To get started:
 You can also skip the prompts with flags:
 
 ```sh
-npx create-cer-app my-app --mode ssr
+npx --package @jasonshimmy/vite-plugin-cer-app create-cer-app my-app --mode ssr
 ```
 
 ---

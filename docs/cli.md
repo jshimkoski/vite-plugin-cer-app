@@ -148,9 +148,11 @@ dist/
 
 Scaffolds a new project from a template.
 
-```sh
-create-cer-app [project-name] [options]
-```
+> **Note:** Because the scaffolder is bundled inside `@jasonshimmy/vite-plugin-cer-app` rather than published as a standalone `create-cer-app` package, you must use the `--package` flag with `npx`:
+>
+> ```sh
+> npx --package @jasonshimmy/vite-plugin-cer-app create-cer-app [project-name] [options]
+> ```
 
 | Argument / Option | Description |
 |---|---|
@@ -161,10 +163,10 @@ create-cer-app [project-name] [options]
 **Examples:**
 
 ```sh
-create-cer-app                          # interactive prompts
-create-cer-app my-app                   # prompts for mode
-create-cer-app my-app --mode ssr        # no prompts
-create-cer-app my-blog --mode ssg --dir ./sites/blog
+npx --package @jasonshimmy/vite-plugin-cer-app create-cer-app                          # interactive prompts
+npx --package @jasonshimmy/vite-plugin-cer-app create-cer-app my-app                   # prompts for mode
+npx --package @jasonshimmy/vite-plugin-cer-app create-cer-app my-app --mode ssr        # no prompts
+npx --package @jasonshimmy/vite-plugin-cer-app create-cer-app my-blog --mode ssg --dir ./sites/blog
 ```
 
 **Scaffolded files (all modes):**
@@ -231,5 +233,5 @@ npm run preview
 ```sh
 npx cer-app dev
 npx cer-app build
-npx create-cer-app my-app
+npx --package @jasonshimmy/vite-plugin-cer-app create-cer-app my-app
 ```

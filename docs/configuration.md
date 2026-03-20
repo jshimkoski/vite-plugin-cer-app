@@ -217,8 +217,10 @@ When `runtime: true`, the following are injected if used and not already importe
 ```ts
 import { component, html, css, ref, computed, watch, watchEffect,
          useProps, useEmit, useOnConnected, useOnDisconnected,
-         useOnAttributeChanged, useOnError, useStyle, useExpose,
-         useSlots, provide, inject, createComposable, nextTick
+         useOnAttributeChanged, useOnError, useStyle, useDesignTokens,
+         useGlobalStyle, useExpose, useSlots, provide, inject,
+         createComposable, nextTick, defineModel, getCurrentComponentContext,
+         isReactiveState, unsafeHTML, decodeEntities, useTeleport
 } from '@jasonshimmy/custom-elements-runtime'
 ```
 

@@ -44,7 +44,7 @@
     "create-cer-app": "./dist/cli/create/index.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && cp -r src/cli/create/templates dist/cli/create/templates",
     "dev": "tsc -p tsconfig.build.json --watch",
     "test": "vitest run",
     "test:watch": "vitest",

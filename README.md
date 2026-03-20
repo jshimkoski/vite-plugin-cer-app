@@ -58,17 +58,20 @@ export default defineConfig({
 The fastest path is scaffolding a new project:
 
 ```sh
-npx create-cer-app my-app
+npx --package @jasonshimmy/vite-plugin-cer-app create-cer-app my-app
 # → choose spa / ssr / ssg
 cd my-app
 npm install
 npm run dev
 ```
 
-Or install the CLI globally:
+> **Note:** The `--package` flag is required because `create-cer-app` is bundled inside `@jasonshimmy/vite-plugin-cer-app` rather than published as a standalone package.
+
+Or install the CLI globally to skip the flag entirely:
 
 ```sh
 npm install -g @jasonshimmy/vite-plugin-cer-app
+create-cer-app my-app
 cer-app dev
 ```
 
