@@ -14,16 +14,6 @@ export function getGeneratedDir(root: string): string {
 }
 
 /**
- * Returns the app entry file path to use for builds and the dev server.
- * Prefers the consumer's `app/app.ts` when it exists; falls back to `.cer/app.ts`.
- */
-export function resolveAppEntry(config: ResolvedCerConfig): string {
-  const userEntry = join(config.srcDir, 'app.ts')
-  if (existsSync(userEntry)) return userEntry
-  return join(getGeneratedDir(config.root), 'app.ts')
-}
-
-/**
  * Returns the HTML entry path to use for builds.
  * Prefers the consumer's root-level `index.html` when it exists;
  * falls back to `.cer/index.html`.
@@ -35,13 +25,10 @@ export function resolveHtmlEntry(config: ResolvedCerConfig): string {
 }
 
 /**
- * Generates the content for a default `index.html`.
- * The script src points to the consumer's `app/app.ts` if it exists,
- * otherwise to the generated `.cer/app.ts`.
+ * Generates the content for the default `.cer/index.html`.
+ * Always points to the generated `/.cer/app.ts` entry.
  */
-export function generateDefaultHtml(config: ResolvedCerConfig): string {
-  const userEntry = join(config.srcDir, 'app.ts')
-  const scriptSrc = existsSync(userEntry) ? '/app/app.ts' : '/.cer/app.ts'
+export function generateDefaultHtml(): string {
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -51,34 +38,61 @@ export function generateDefaultHtml(config: ResolvedCerConfig): string {
   </head>
   <body>
     <cer-layout-view></cer-layout-view>
-    <script type="module" src="${scriptSrc}"></script>
+    <script type="module" src="/.cer/app.ts"></script>
   </body>
 </html>
 `
 }
 
+const GITIGNORE_DEFAULTS = `# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# CER App generated directory
+.cer/
+
+# Environment variables
+.env.local
+.env.*.local
+
+# Editor
+.vscode/
+.idea/
+*.suo
+*.sw?
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+`
+
 /**
- * Ensures `.cer/` is listed in the project's `.gitignore`.
- * Creates `.gitignore` if it does not exist.
+ * Ensures `.cer/`, `node_modules/`, `dist/`, and other common entries are
+ * listed in the project's `.gitignore`. Creates `.gitignore` if it does not exist.
  */
 function ensureGitignore(root: string): void {
   const gitignorePath = join(root, '.gitignore')
-  const entry = `${GENERATED_DIR_NAME}/`
+  const cerEntry = `${GENERATED_DIR_NAME}/`
 
   if (existsSync(gitignorePath)) {
     const content = readFileSync(gitignorePath, 'utf-8')
-    if (!content.includes(entry) && !content.includes(`${GENERATED_DIR_NAME}\n`)) {
-      appendFileSync(gitignorePath, `\n# CER App generated directory\n${entry}\n`)
+    if (!content.includes(cerEntry) && !content.includes(`${GENERATED_DIR_NAME}\n`)) {
+      appendFileSync(gitignorePath, `\n# CER App generated directory\n${cerEntry}\n`)
     }
   } else {
-    writeFileSync(gitignorePath, `# CER App generated directory\n${entry}\n`)
+    writeFileSync(gitignorePath, GITIGNORE_DEFAULTS)
   }
 }
 
 /**
  * Writes all generated files to `.cer/`:
- * - `.cer/app.ts`       — default entry (only when `app/app.ts` does not exist)
- * - `.cer/index.html`   — default HTML shell
+ * - `.cer/app.ts`        — framework entry (always regenerated)
+ * - `.cer/index.html`    — default HTML shell (always regenerated)
  * - `.cer/tsconfig.json` — written by dts-generator via writeTsconfigPaths
  *
  * Also ensures `.cer/` is listed in `.gitignore`.
@@ -89,14 +103,13 @@ export function writeGeneratedDir(config: ResolvedCerConfig): void {
     mkdirSync(dir, { recursive: true })
   }
 
-  // Write default app.ts only when the consumer has not provided one.
-  const userEntry = join(config.srcDir, 'app.ts')
-  if (!existsSync(userEntry)) {
-    writeFileSync(join(dir, 'app.ts'), APP_ENTRY_TEMPLATE, 'utf-8')
-  }
+  // Always write the generated app.ts — this is the framework entry point and
+  // is never user-owned. Regenerating it on every dev/build ensures consumers
+  // automatically get the latest bootstrap code on plugin update (Nuxt-style).
+  writeFileSync(join(dir, 'app.ts'), APP_ENTRY_TEMPLATE, 'utf-8')
 
   // Always write the default index.html so builds and the dev server can use it.
-  writeFileSync(join(dir, 'index.html'), generateDefaultHtml(config), 'utf-8')
+  writeFileSync(join(dir, 'index.html'), generateDefaultHtml(), 'utf-8')
 
   ensureGitignore(config.root)
 }

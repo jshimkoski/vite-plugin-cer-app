@@ -13,7 +13,6 @@ export default defineConfig({
 
   ssr: {
     dsd: true,
-    streaming: false,
   },
 
   ssg: {
@@ -87,8 +86,7 @@ Controls SSR rendering behavior.
 
 ```ts
 ssr: {
-  dsd: true,       // Emit Declarative Shadow DOM
-  streaming: false // Reserved for future use
+  dsd: true, // Emit Declarative Shadow DOM
 }
 ```
 
@@ -98,13 +96,6 @@ ssr: {
 **Default:** `true`
 
 When `true`, renders components with [Declarative Shadow DOM](https://developer.chrome.com/docs/css-ui/declarative-shadow-dom) markup. This eliminates Flash of Unstyled Content (FOUC) because styles are embedded directly in the HTML.
-
-### `ssr.streaming`
-
-**Type:** `boolean`
-**Default:** `false`
-
-Reserved for future use. Currently, the SSR renderer always collects the full HTML string before sending the response.
 
 ---
 
@@ -247,7 +238,7 @@ export default defineConfig({
   plugins: [
     cerApp({
       mode: 'ssr',
-      ssr: { dsd: true, streaming: true },
+      ssr: { dsd: true },
     }),
   ],
 })

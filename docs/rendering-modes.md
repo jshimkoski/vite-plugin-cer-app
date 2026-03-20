@@ -93,8 +93,7 @@ export default handler
 export default defineConfig({
   mode: 'ssr',
   ssr: {
-    dsd: true,        // Declarative Shadow DOM (eliminates FOUC)
-    streaming: false, // true = stream response; false = buffer full HTML
+    dsd: true, // Declarative Shadow DOM (eliminates FOUC)
   },
 })
 ```
@@ -242,7 +241,7 @@ Any CDN or static host. Upload the entire `dist/` directory (excluding `dist/ser
 | Dynamic routes | Yes | Yes | Requires `ssg.paths` |
 | API routes | Separate deploy | Same process | Separate deploy |
 | `useHead()` SSR injection | No | Yes | Yes |
-| Streaming | No | Optional | No |
+| Streaming | No | No | No |
 
 ---
 

@@ -48,7 +48,7 @@ function makeConfig(overrides: Partial<ResolvedCerConfig> = {}): ResolvedCerConf
     serverApiDir: '/project/server/api',
     serverMiddlewareDir: '/project/server/middleware',
     port: 3000,
-    ssr: { dsd: true, streaming: false },
+    ssr: { dsd: true },
     ssg: { routes: 'auto', concurrency: 2, fallback: false },
     router: {},
     jitCss: { content: [], extendedColors: false },

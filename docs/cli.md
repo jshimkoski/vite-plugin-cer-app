@@ -187,7 +187,7 @@ my-app/
 | Mode | `cer.config.ts` | `package.json` scripts |
 |---|---|---|
 | SPA | `mode: 'spa'` | `dev`, `build`, `preview` |
-| SSR | `mode: 'ssr'`, `ssr.streaming: true` | `dev`, `build`, `preview --ssr` |
+| SSR | `mode: 'ssr'`, `ssr.dsd: true` | `dev`, `build`, `preview --ssr` |
 | SSG | `mode: 'ssg'`, `ssg.routes: 'auto'` | `dev`, `build`, `preview`, `generate` |
 
 ---

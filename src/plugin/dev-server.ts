@@ -15,7 +15,7 @@ export interface ResolvedCerConfig {
   serverApiDir: string
   serverMiddlewareDir: string
   port: number
-  ssr: { dsd: boolean; streaming: boolean }
+  ssr: { dsd: boolean }
   ssg: { routes: 'auto' | string[]; concurrency: number; fallback: boolean }
   router: { base?: string; scrollToFragment?: boolean | object }
   jitCss: { content: string[]; extendedColors: boolean }

@@ -84,11 +84,6 @@ describe('resolveConfig', () => {
     expect(cfg.ssr.dsd).toBe(false)
   })
 
-  it('defaults ssr.streaming to false', () => {
-    const cfg = resolveConfig({}, ROOT)
-    expect(cfg.ssr.streaming).toBe(false)
-  })
-
   it('defaults ssg.routes to "auto"', () => {
     const cfg = resolveConfig({}, ROOT)
     expect(cfg.ssg.routes).toBe('auto')

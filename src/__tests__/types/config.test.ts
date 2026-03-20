@@ -12,7 +12,7 @@ describe('defineConfig', () => {
   })
 
   it('preserves nested ssr config', () => {
-    const config = { ssr: { dsd: false, streaming: true } }
+    const config = { ssr: { dsd: false } }
     expect(defineConfig(config)).toEqual(config)
   })
 

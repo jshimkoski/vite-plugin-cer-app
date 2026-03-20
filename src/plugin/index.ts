@@ -62,7 +62,6 @@ export function resolveConfig(userConfig: CerAppConfig, root: string = process.c
     port: userConfig.port ?? 3000,
     ssr: {
       dsd: userConfig.ssr?.dsd ?? true,
-      streaming: userConfig.ssr?.streaming ?? false,
     },
     ssg: {
       routes: userConfig.ssg?.routes ?? 'auto',

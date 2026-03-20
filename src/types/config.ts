@@ -13,7 +13,6 @@ export interface JitCssConfig {
 
 export interface SsrConfig {
   dsd?: boolean
-  streaming?: boolean
 }
 
 export interface AutoImportsConfig {

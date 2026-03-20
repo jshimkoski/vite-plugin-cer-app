@@ -4,7 +4,6 @@ export default defineConfig({
   mode: 'ssr',
   ssr: {
     dsd: true,
-    streaming: true,
   },
   autoImports: { components: true, composables: true, directives: true, runtime: true },
 })

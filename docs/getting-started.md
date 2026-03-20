@@ -128,110 +128,12 @@ component('layout-default', () => {
   </head>
   <body>
     <cer-layout-view></cer-layout-view>
-    <script type="module" src="/app/app.ts"></script>
+    <script type="module" src="/.cer/app.ts"></script>
   </body>
 </html>
 ```
 
-### 7. Create `app/app.ts` (auto-generated if absent)
-
-The framework generates this file when you scaffold a new project. It bootstraps the router, registers all auto-discovered components, runs plugins, and mounts the app:
-
-```ts
-// app/app.ts
-import '@jasonshimmy/custom-elements-runtime/css'
-import 'virtual:cer-jit-css'
-import 'virtual:cer-components'
-import routes from 'virtual:cer-routes'
-import layouts from 'virtual:cer-layouts'
-import plugins from 'virtual:cer-plugins'
-import { hasLoading, loadingTag } from 'virtual:cer-loading'
-import { hasError, errorTag } from 'virtual:cer-error'
-import {
-  component, ref, provide,
-  useOnConnected, useOnDisconnected,
-  registerBuiltinComponents,
-} from '@jasonshimmy/custom-elements-runtime'
-import { initRouter } from '@jasonshimmy/custom-elements-runtime/router'
-import { enableJITCSS } from '@jasonshimmy/custom-elements-runtime/jit-css'
-
-registerBuiltinComponents()
-enableJITCSS()
-
-const router = initRouter({ routes })
-
-const isNavigating = ref(false)
-const currentError = ref(null)
-;(globalThis as any).resetError = () => {
-  currentError.value = null
-  router.replace(router.getCurrent().path)
-}
-
-const _push = router.push.bind(router)
-const _replace = router.replace.bind(router)
-router.push = async (path) => {
-  isNavigating.value = true; currentError.value = null
-  try { await _push(path) } catch (err) { currentError.value = err instanceof Error ? err.message : String(err) } finally { isNavigating.value = false }
-}
-router.replace = async (path) => {
-  isNavigating.value = true; currentError.value = null
-  try { await _replace(path) } catch (err) { currentError.value = err instanceof Error ? err.message : String(err) } finally { isNavigating.value = false }
-}
-
-// _pluginProvides is populated by plugin setup and forwarded into the component
-// context tree via provide() inside cer-layout-view so inject() works in all modes.
-// Also exposed on globalThis for the SSG timing edge case — see docs/plugins.md.
-const _pluginProvides = new Map<string, unknown>()
-;(globalThis as any).__cerPluginProvides = _pluginProvides
-
-component('cer-layout-view', () => {
-  for (const [key, value] of _pluginProvides) { provide(key, value) }
-
-  const current = ref(router.getCurrent())
-  let unsub: (() => void) | undefined
-  useOnConnected(() => { unsub = router.subscribe((s) => { current.value = s }) })
-  useOnDisconnected(() => { unsub?.(); unsub = undefined })
-
-  if (currentError.value !== null) {
-    if (hasError && errorTag) return { tag: errorTag, props: { attrs: { error: String(currentError.value) } }, children: [] }
-    return { tag: 'div', props: { attrs: { style: 'padding:2rem;font-family:monospace' } }, children: String(currentError.value) }
-  }
-  if (isNavigating.value && hasLoading && loadingTag) return { tag: loadingTag, props: {}, children: [] }
-
-  const matched = router.matchRoute(current.value.path)
-  const layoutName = (matched?.route as any)?.meta?.layout ?? 'default'
-  const layoutTag = (layouts as Record<string, string>)[layoutName]
-  const routerView = { tag: 'router-view', props: {}, children: [] }
-  return layoutTag ? { tag: layoutTag, props: {}, children: [routerView] } : routerView
-})
-
-// Plugins run AFTER cer-layout-view is defined so provide() calls from plugins
-// are forwarded into the component tree on the very first render.
-for (const plugin of plugins ?? []) {
-  if (plugin && typeof plugin.setup === 'function') {
-    await plugin.setup({ router, provide: (key, value) => { _pluginProvides.set(key, value) }, config: {} })
-  }
-}
-
-// Pre-load the current page's route chunk AFTER plugins run.
-// This ensures cer-layout-view's first render (and its provide() calls) completes
-// before page component modules are imported and their renders are scheduled.
-if (typeof window !== 'undefined') {
-  const _initMatch = router.matchRoute(window.location.pathname)
-  if (_initMatch?.route?.load) {
-    try { await _initMatch.route.load() } catch { /* non-fatal */ }
-  }
-}
-
-if (typeof window !== 'undefined') {
-  await _replace(window.location.pathname + window.location.search + window.location.hash)
-  delete (globalThis as any).__CER_DATA__
-}
-
-export { router }
-```
-
-> **Note:** Do not move the plugin loop before `component('cer-layout-view', …)`. The layout component must be defined first so that when plugins call `app.provide()`, the values are available to the component tree from the very first render. See [Plugins](plugins.md) for details.
+> **Note:** The framework bootstrap lives in `.cer/app.ts` and is regenerated automatically on every dev server start and build. You never edit or own this file — updates to the plugin propagate to it immediately, just like Nuxt's `.nuxt/` directory.
 
 ---
 

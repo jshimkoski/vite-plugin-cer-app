@@ -17,7 +17,6 @@ import { existsSync, writeFileSync, mkdirSync, readFileSync, appendFileSync } fr
 import {
   GENERATED_DIR_NAME,
   getGeneratedDir,
-  resolveAppEntry,
   resolveHtmlEntry,
   generateDefaultHtml,
   writeGeneratedDir,
@@ -49,18 +48,6 @@ describe('getGeneratedDir', () => {
   })
 })
 
-describe('resolveAppEntry', () => {
-  it('returns user app/app.ts when it exists', () => {
-    vi.mocked(existsSync).mockReturnValue(true)
-    expect(resolveAppEntry(mockConfig)).toBe(`${ROOT}/app/app.ts`)
-  })
-
-  it('returns .cer/app.ts when user app/app.ts is absent', () => {
-    vi.mocked(existsSync).mockReturnValue(false)
-    expect(resolveAppEntry(mockConfig)).toBe(`${ROOT}/.cer/app.ts`)
-  })
-})
-
 describe('resolveHtmlEntry', () => {
   it('returns user index.html when it exists', () => {
     vi.mocked(existsSync).mockReturnValue(true)
@@ -74,26 +61,19 @@ describe('resolveHtmlEntry', () => {
 })
 
 describe('generateDefaultHtml', () => {
-  it('references /app/app.ts when user entry exists', () => {
-    vi.mocked(existsSync).mockReturnValue(true)
-    const html = generateDefaultHtml(mockConfig)
-    expect(html).toContain('/app/app.ts')
-    expect(html).not.toContain('/.cer/app.ts')
-  })
-
-  it('references /.cer/app.ts when user entry is absent', () => {
-    vi.mocked(existsSync).mockReturnValue(false)
-    const html = generateDefaultHtml(mockConfig)
+  it('always references /.cer/app.ts', () => {
+    const html = generateDefaultHtml()
     expect(html).toContain('/.cer/app.ts')
+    expect(html).not.toContain('/app/app.ts')
   })
 
   it('includes <cer-layout-view> mount point', () => {
-    const html = generateDefaultHtml(mockConfig)
+    const html = generateDefaultHtml()
     expect(html).toContain('<cer-layout-view>')
   })
 
   it('is valid HTML with doctype', () => {
-    const html = generateDefaultHtml(mockConfig)
+    const html = generateDefaultHtml()
     expect(html).toContain('<!DOCTYPE html>')
   })
 })
@@ -112,28 +92,17 @@ describe('writeGeneratedDir', () => {
     expect(mkdirSync).not.toHaveBeenCalled()
   })
 
-  it('writes .cer/app.ts when app/app.ts does not exist', () => {
-    // Only the .cer dir check needs to return true to skip mkdirSync — but we
-    // want the user entry check to return false. Use a counter.
-    let callCount = 0
-    vi.mocked(existsSync).mockImplementation(() => {
-      callCount++
-      // First call: .cer/ dir → true (already exists, skip mkdir)
-      // Second call: app/app.ts → false (absent, write template)
-      // Subsequent calls: false (no .gitignore)
-      return callCount === 1
-    })
+  it('always writes .cer/app.ts', () => {
     writeGeneratedDir(mockConfig)
     const paths = vi.mocked(writeFileSync).mock.calls.map(([p]) => String(p))
     expect(paths.some(p => p.endsWith('/.cer/app.ts'))).toBe(true)
   })
 
-  it('skips writing .cer/app.ts when app/app.ts exists', () => {
-    // existsSync always returns true — dir exists, user entry exists
+  it('always writes .cer/app.ts even when .cer/ dir already exists', () => {
     vi.mocked(existsSync).mockReturnValue(true)
     writeGeneratedDir(mockConfig)
     const paths = vi.mocked(writeFileSync).mock.calls.map(([p]) => String(p))
-    expect(paths.some(p => p.endsWith('/.cer/app.ts'))).toBe(false)
+    expect(paths.some(p => p.endsWith('/.cer/app.ts'))).toBe(true)
   })
 
   it('always writes .cer/index.html', () => {

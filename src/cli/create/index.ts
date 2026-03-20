@@ -179,6 +179,10 @@ async function generateInlineTemplate(
 ): Promise<void> {
   await mkdir(join(targetDir, 'app/pages'), { recursive: true })
   await mkdir(join(targetDir, 'app/layouts'), { recursive: true })
+  await mkdir(join(targetDir, 'app/components'), { recursive: true })
+  await mkdir(join(targetDir, 'app/composables'), { recursive: true })
+  await mkdir(join(targetDir, 'app/plugins'), { recursive: true })
+  await mkdir(join(targetDir, 'app/middleware'), { recursive: true })
 
   // package.json
   await writeFile(
@@ -215,13 +219,6 @@ async function generateInlineTemplate(
     'utf-8',
   )
 
-  // app/app.ts
-  await writeFile(
-    join(targetDir, 'app/app.ts'),
-    `import '@jasonshimmy/custom-elements-runtime/css'\nimport 'virtual:cer-jit-css'\nimport 'virtual:cer-components'\nimport routes from 'virtual:cer-routes'\nimport layouts from 'virtual:cer-layouts'\nimport plugins from 'virtual:cer-plugins'\nimport { hasLoading, loadingTag } from 'virtual:cer-loading'\nimport { hasError, errorTag } from 'virtual:cer-error'\nimport { component, ref, provide, useOnConnected, useOnDisconnected, registerBuiltinComponents } from '@jasonshimmy/custom-elements-runtime'\nimport { initRouter } from '@jasonshimmy/custom-elements-runtime/router'\nimport { enableJITCSS } from '@jasonshimmy/custom-elements-runtime/jit-css'\n\nregisterBuiltinComponents()\nenableJITCSS()\n\nconst router = initRouter({ routes })\n\nconst isNavigating = ref(false)\nconst currentError = ref(null)\n;(globalThis as any).resetError = () => { currentError.value = null; router.replace(router.getCurrent().path) }\nconst _push = router.push.bind(router)\nconst _replace = router.replace.bind(router)\nrouter.push = async (path) => { isNavigating.value = true; currentError.value = null; try { await _push(path) } catch (err) { currentError.value = err instanceof Error ? err.message : String(err) } finally { isNavigating.value = false } }\nrouter.replace = async (path) => { isNavigating.value = true; currentError.value = null; try { await _replace(path) } catch (err) { currentError.value = err instanceof Error ? err.message : String(err) } finally { isNavigating.value = false } }\n\nconst _pluginProvides = new Map()\n;(globalThis as any).__cerPluginProvides = _pluginProvides\n\ncomponent('cer-layout-view', () => {\n  for (const [key, value] of _pluginProvides) { provide(key, value) }\n  const current = ref(router.getCurrent())\n  let unsub: (() => void) | undefined\n  useOnConnected(() => { unsub = router.subscribe((s: typeof current.value) => { current.value = s }) })\n  useOnDisconnected(() => { unsub?.(); unsub = undefined })\n  if (currentError.value !== null) {\n    if (hasError && errorTag) return { tag: errorTag, props: { attrs: { error: String(currentError.value) } }, children: [] }\n    return { tag: 'div', props: { attrs: { style: 'padding:2rem;font-family:monospace' } }, children: [String(currentError.value)] }\n  }\n  if (isNavigating.value && hasLoading && loadingTag) return { tag: loadingTag, props: {}, children: [] }\n  const matched = router.matchRoute(current.value.path)\n  const layoutName = (matched?.route as any)?.meta?.layout ?? 'default'\n  const layoutTag = (layouts as Record<string, string>)[layoutName]\n  const routerView = { tag: 'router-view', props: {}, children: [] }\n  return layoutTag ? { tag: layoutTag, props: {}, children: [routerView] } : routerView\n})\n\nfor (const plugin of plugins ?? []) {\n  if (plugin && typeof plugin.setup === 'function') {\n    await plugin.setup({ router, provide: (key: string, value: unknown) => { _pluginProvides.set(key, value) }, config: {} })\n  }\n}\n\nif (typeof window !== 'undefined') {\n  const _initMatch = router.matchRoute(window.location.pathname)\n  if (_initMatch?.route?.load) {\n    try { await _initMatch.route.load() } catch { /* non-fatal */ }\n  }\n}\n\nif (typeof window !== 'undefined') {\n  await _replace(window.location.pathname + window.location.search + window.location.hash)\n  delete (globalThis as any).__CER_DATA__\n}\n\nexport { router }\n`,
-    'utf-8',
-  )
-
   // app/pages/index.ts
   await writeFile(
     join(targetDir, 'app/pages/index.ts'),
@@ -236,10 +233,17 @@ async function generateInlineTemplate(
     'utf-8',
   )
 
+  // .gitignore
+  await writeFile(
+    join(targetDir, '.gitignore'),
+    `# Dependencies\nnode_modules/\n\n# Build output\ndist/\n\n# CER App generated directory\n.cer/\n\n# Environment variables\n.env.local\n.env.*.local\n\n# Editor\n.vscode/\n.idea/\n*.suo\n*.sw?\n\n# OS\n.DS_Store\nThumbs.db\n\n# Logs\n*.log\n`,
+    'utf-8',
+  )
+
   // index.html
   await writeFile(
     join(targetDir, 'index.html'),
-    `<!DOCTYPE html>\n<html lang="en">\n  <head>\n    <meta charset="UTF-8">\n    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n    <title>${projectName}</title>\n  </head>\n  <body>\n    <cer-layout-view></cer-layout-view>\n    <script type="module" src="/app/app.ts"></script>\n  </body>\n</html>\n`,
+    `<!DOCTYPE html>\n<html lang="en">\n  <head>\n    <meta charset="UTF-8">\n    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n    <title>${projectName}</title>\n  </head>\n  <body>\n    <cer-layout-view></cer-layout-view>\n    <script type="module" src="/.cer/app.ts"></script>\n  </body>\n</html>\n`,
     'utf-8',
   )
 }

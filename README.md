@@ -107,6 +107,8 @@ my-app/
 └── cer.config.ts               # Framework config
 ```
 
+> `.cer/` is auto-generated on every dev/build and gitignored. The framework bootstrap (`app.ts`) lives there and is never user-owned — plugin updates propagate automatically.
+
 ---
 
 ## Pages
