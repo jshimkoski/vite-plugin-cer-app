@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.1.5] - 2026-03-20
+
+- fix: use vite plugin for light dom jit css fix: update incorrect docs fix: fix the plugin config (c32cf6a)
+
 ## [v0.1.4] - 2026-03-20
 
 - fix: fixed many issues across the plugin fix: added e2e tests to ensure functionality works across build types fix:improve documentation (fb24d84)
