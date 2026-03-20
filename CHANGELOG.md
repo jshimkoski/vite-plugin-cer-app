@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.4.0] - 2026-03-20
+
+- feat: implement useInject composable for consistent value injection across SPA, SSR, and SSG fix: cer app hidden directory issue (f614e92)
+
 ## [v0.3.0] - 2026-03-20
 
 - feat: add default .gitignore templates for SPA, SSR, and SSG projects fix: remove unused streaming ssr option fix: generated .cer directory to get out of the way of the user (8656788)
