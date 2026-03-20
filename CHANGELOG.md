@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.1.4] - 2026-03-20
+
+- fix: fixed many issues across the plugin fix: added e2e tests to ensure functionality works across build types fix:improve documentation (fb24d84)
+
 ## [v0.1.3] - 2026-03-19
 
 - fix: FOUC in ssr and ssg (e4fb53d)
