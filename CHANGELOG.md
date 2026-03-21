@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.4.6] - 2026-03-21
+
+- fix: merge extraneous templates (7a859bd)
+
 ## [v0.4.5] - 2026-03-21
 
 - fix: remove the dsd config option since we always want it on anyway. (3698886)
