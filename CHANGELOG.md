@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.8.0] - 2026-03-21
+
+- feat: add middleware support and enhance runtime configuration (78ef4d2)
+
 ## [v0.7.0] - 2026-03-21
 
 - feat: add per-route render strategies and error handling in ISR (d76fb89)
