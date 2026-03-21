@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.4.5] - 2026-03-21
+
+- fix: remove the dsd config option since we always want it on anyway. (3698886)
+
 ## [v0.4.4] - 2026-03-21
 
 - fix: bootstrap .cer/tsconfig.json during config loading for improved resolution (f8bda65)
