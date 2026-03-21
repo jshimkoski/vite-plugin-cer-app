@@ -78,7 +78,7 @@ export const loader = async () => {
 
 ---
 
-### 8.3 Preview server hardening 📋
+### 8.3 Preview server hardening ✅
 
 **Problem:** The preview server (`cer-app preview`) is used in CI and staging
 but lacks basic production safeguards.
@@ -185,7 +185,7 @@ export function defineMiddleware(fn: MiddlewareFn): MiddlewareFn { return fn }
 
 ---
 
-### 9.2 `useCookie()` composable 📋
+### 9.2 `useCookie()` composable ✅
 
 **Problem:** Session-based auth requires manual `document.cookie` parsing on
 the client and `req.headers.cookie` parsing in loaders. No isomorphic helper
@@ -254,7 +254,7 @@ Convention: `app/i18n/en.json` + `app/i18n/fr.json`. Auto-injected
 `useI18n()` composable that reads the active locale from a cookie/query param.
 `cer-app i18n extract` CLI command for string extraction.
 
-### 11.3 `useSeoMeta()` 📋
+### 11.3 `useSeoMeta()` ✅
 
 Thin wrapper around `useHead()` covering OpenGraph, Twitter cards, and
 canonical URL. No new infrastructure needed — all forwarded to `<head>`.
@@ -267,12 +267,12 @@ canonical URL. No new infrastructure needed — all forwarded to `<head>`.
 |---|------|----------|--------|
 | 8.1 | Path traversal fix in preview server | 🔴 Critical | ✅ |
 | 8.2 | `runtimeConfig.private` (server-only secrets) | 🔴 Critical | ✅ |
-| 8.3 | Preview server hardening (headers, timeouts, graceful shutdown) | 🟡 High | 📋 |
+| 8.3 | Preview server hardening (headers, timeouts, graceful shutdown) | 🟡 High | ✅ |
 | 9.1 | Client-side route middleware (navigation guards) | 🟡 High | ✅ |
-| 9.2 | `useCookie()` composable | 🟡 High | 📋 |
+| 9.2 | `useCookie()` composable | 🟡 High | ✅ |
 | 10.1 | Cloudflare Workers adapter | 🟢 Medium | 🔜 |
 | 10.2 | Vercel adapter | 🟢 Medium | 🔜 |
 | 10.3 | Netlify adapter | 🟢 Medium | 🔜 |
 | 11.1 | DevTools overlay | 🟢 Medium | ❌ |
 | 11.2 | i18n | 🟢 Medium | 🔜 |
-| 11.3 | `useSeoMeta()` | 🟢 Medium | 📋 |
+| 11.3 | `useSeoMeta()` | 🟢 Medium | ✅ |

@@ -265,6 +265,29 @@ describe('autoImportTransform — framework composable injection', () => {
     const count = result.split(`from ${FRAMEWORK_PKG}`).length - 1
     expect(count).toBe(1)
   })
+
+  it('injects useSeoMeta import when useSeoMeta is used', () => {
+    const code = "component('page-home', () => { useSeoMeta({ title: 'Home', description: 'Welcome' }); return html`<h1>Home</h1>` })"
+    const result = autoImportTransform(code, '/project/app/pages/index.ts', opts)!
+    expect(result).toContain(`from ${FRAMEWORK_PKG}`)
+    expect(result).toContain('useSeoMeta')
+  })
+
+  it('injects useCookie import when useCookie is used', () => {
+    const code = "component('page-profile', () => { const session = useCookie('session'); return html`<div></div>` })"
+    const result = autoImportTransform(code, '/project/app/pages/profile.ts', opts)!
+    expect(result).toContain(`from ${FRAMEWORK_PKG}`)
+    expect(result).toContain('useCookie')
+  })
+
+  it('injects useSeoMeta and useCookie alongside other framework composables in a single import', () => {
+    const code = "component('page-shop', () => { useSeoMeta({ title: 'Shop' }); const cart = useCookie('cart'); return html`<div></div>` })"
+    const result = autoImportTransform(code, '/project/app/pages/shop.ts', opts)!
+    expect(result).toContain('useSeoMeta')
+    expect(result).toContain('useCookie')
+    const count = result.split(`from ${FRAMEWORK_PKG}`).length - 1
+    expect(count).toBe(1)
+  })
 })
 
 // ─── Composable import injection ─────────────────────────────────────────────

@@ -68,6 +68,12 @@ const _cerDataStore = new AsyncLocalStorage()
 // Expose the store so the usePageData() composable can read it server-side.
 ;(globalThis).__CER_DATA_STORE__ = _cerDataStore
 
+// Async-local storage for request-scoped req/res access.
+// Allows isomorphic composables (e.g. useCookie) to read/write HTTP headers
+// without prop-drilling the request context through the component tree.
+const _cerReqStore = new AsyncLocalStorage()
+;(globalThis).__CER_REQ_STORE__ = _cerReqStore
+
 // Load the Vite-built client index.html (dist/client/index.html) so every SSR
 // response includes the client-side scripts needed for hydration and routing.
 // The server bundle lives at dist/server/server.js, so ../client resolves correctly.
@@ -192,6 +198,7 @@ const _prepareRequest = async (req) => {
 }
 
 export const handler = async (req, res) => {
+  await _cerReqStore.run({ req, res }, async () => {
   await _cerDataStore.run(null, async () => {
     const { vnode, router, head, status } = await _prepareRequest(req)
     if (status != null) res.statusCode = status
@@ -250,6 +257,7 @@ export const handler = async (req, res) => {
 
     // Inject DSD polyfill immediately before </body>, then close the document.
     res.end(DSD_POLYFILL_SCRIPT + fromBodyClose)
+  })
   })
 }
 

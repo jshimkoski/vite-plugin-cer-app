@@ -61,6 +61,25 @@ function getMimeType(filePath: string): string {
 }
 
 /**
+ * Returns the appropriate Cache-Control header value for a file.
+ * Vite content-hashes assets placed in the /assets/ directory, so they
+ * can be cached indefinitely. Everything else (HTML, etc.) must not be cached.
+ */
+function getCacheControl(filePath: string): string {
+  if (filePath.includes('/assets/')) return 'public, max-age=31536000, immutable'
+  return 'no-cache'
+}
+
+/**
+ * Sets standard security headers on every response.
+ */
+function setSecurityHeaders(res: ServerResponse): void {
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('X-Frame-Options', 'DENY')
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+}
+
+/**
  * Serves a static file from the dist directory.
  * Returns true if the file was served, false otherwise.
  */
@@ -95,9 +114,34 @@ function serveStaticFile(
   }
 
   res.setHeader('Content-Type', getMimeType(filePath))
-  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Cache-Control', getCacheControl(filePath))
+  setSecurityHeaders(res)
   createReadStream(filePath).pipe(res)
   return true
+}
+
+/**
+ * Registers SIGTERM/SIGINT handlers that gracefully drain the server before exiting.
+ * Waits up to 10 seconds for in-flight requests to complete, then force-exits.
+ */
+function registerGracefulShutdown(server: ReturnType<typeof createHttpServer>): void {
+  function shutdown(signal: string): void {
+    console.log(`[cer-app] Received ${signal}, shutting down gracefully...`)
+    server.close(() => {
+      console.log('[cer-app] Server closed.')
+      process.exit(0)
+    })
+    // Force exit if connections haven't drained within 10 seconds.
+    const t = setTimeout(() => {
+      console.error('[cer-app] Forced shutdown after 10 s — connections did not drain.')
+      process.exit(1)
+    }, 10_000)
+    // Allow the Node.js event loop to exit before the timeout fires if all other work is done.
+    t.unref()
+  }
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'))
+  process.on('SIGINT', () => shutdown('SIGINT'))
 }
 
 export function previewCommand(): Command {
@@ -157,6 +201,11 @@ export function previewCommand(): Command {
         const isrCache = new Map<string, IsrCacheEntry>()
 
         const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
+          setSecurityHeaders(res)
+          // Default: HTML and API responses must not be cached. Asset paths below
+          // override this with getCacheControl() for content-hashed files.
+          res.setHeader('Cache-Control', 'no-cache')
+
           const url = req.url ?? '/'
           const urlPath = url.split('?')[0]
           const method = req.method ?? 'GET'
@@ -316,9 +365,16 @@ export function previewCommand(): Command {
           }
         })
 
+        // Protect against slow-send attacks: abort requests that stall during
+        // header delivery or that take too long to complete.
+        server.headersTimeout = 10_000   // 10 s to receive all request headers
+        server.requestTimeout = 30_000   // 30 s for the full request/response cycle
+
         server.listen(port, options.host, () => {
           console.log(`[cer-app] SSR preview running at http://${options.host}:${port}`)
         })
+
+        registerGracefulShutdown(server)
       } else {
         // Static file server (SPA / SSG)
         console.log('[cer-app] Starting static preview server...')
@@ -329,6 +385,9 @@ export function previewCommand(): Command {
         }
 
         const server = createHttpServer((req: IncomingMessage, res: ServerResponse) => {
+          setSecurityHeaders(res)
+          res.setHeader('Cache-Control', 'no-cache')
+
           const urlPath = (req.url ?? '/').split('?')[0]
           // SSG builds put assets in dist/client/ while HTML lives in dist/.
           // For requests with a non-HTML file extension, check dist/client/ first
@@ -342,7 +401,7 @@ export function previewCommand(): Command {
               existsSync(assetPath) && !statSync(assetPath).isDirectory()
             ) {
               res.setHeader('Content-Type', getMimeType(assetPath))
-              res.setHeader('Cache-Control', 'no-cache')
+              res.setHeader('Cache-Control', getCacheControl(assetPath))
               createReadStream(assetPath).pipe(res)
               return
             }
@@ -354,12 +413,14 @@ export function previewCommand(): Command {
           }
         })
 
+        server.headersTimeout = 10_000
+        server.requestTimeout = 30_000
+
         server.listen(port, options.host, () => {
           console.log(`[cer-app] Static preview running at http://${options.host}:${port}`)
         })
-      }
 
-      process.on('SIGTERM', () => process.exit(0))
-      process.on('SIGINT', () => process.exit(0))
+        registerGracefulShutdown(server)
+      }
     })
 }

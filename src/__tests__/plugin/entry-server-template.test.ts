@@ -195,4 +195,25 @@ describe('entry-server-template (ENTRY_SERVER_TEMPLATE content)', () => {
     expect(src).toContain('export const isrHandler')
     expect(src).toContain('createIsrHandler(routes, handler)')
   })
+
+  // ─── useCookie req/res store ──────────────────────────────────────────────────
+
+  it('creates _cerReqStore AsyncLocalStorage for request-scoped cookie access', () => {
+    expect(src).toContain('_cerReqStore')
+    expect(src).toContain('__CER_REQ_STORE__')
+  })
+
+  it('exposes _cerReqStore on globalThis as __CER_REQ_STORE__', () => {
+    expect(src).toContain('__CER_REQ_STORE__ = _cerReqStore')
+  })
+
+  it('wraps handler body in _cerReqStore.run({ req, res }, ...) so useCookie can access req/res', () => {
+    expect(src).toContain('_cerReqStore.run({ req, res }')
+    // req/res store wraps the data store — it must appear before _cerDataStore.run
+    const reqStoreIdx = src.indexOf('_cerReqStore.run(')
+    const dataStoreIdx = src.indexOf('_cerDataStore.run(')
+    expect(reqStoreIdx).toBeGreaterThan(-1)
+    expect(dataStoreIdx).toBeGreaterThan(-1)
+    expect(reqStoreIdx).toBeLessThan(dataStoreIdx)
+  })
 })

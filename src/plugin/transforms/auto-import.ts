@@ -11,9 +11,9 @@ const RUNTIME_IMPORTS = `import { component, html, css, ref, computed, watch, wa
 
 const DIRECTIVE_IMPORTS = `import { when, each, match, anchorBlock } from '@jasonshimmy/custom-elements-runtime/directives';`
 
-const FRAMEWORK_IMPORTS = `import { useHead, usePageData, useInject, useRuntimeConfig, defineMiddleware } from '@jasonshimmy/vite-plugin-cer-app/composables';`
+const FRAMEWORK_IMPORTS = `import { useHead, usePageData, useInject, useRuntimeConfig, defineMiddleware, useSeoMeta, useCookie } from '@jasonshimmy/vite-plugin-cer-app/composables';`
 
-const FRAMEWORK_IDENTIFIERS = ['useHead', 'usePageData', 'useInject', 'useRuntimeConfig', 'defineMiddleware']
+const FRAMEWORK_IDENTIFIERS = ['useHead', 'usePageData', 'useInject', 'useRuntimeConfig', 'defineMiddleware', 'useSeoMeta', 'useCookie']
 
 const RUNTIME_IDENTIFIERS = [
   'component',

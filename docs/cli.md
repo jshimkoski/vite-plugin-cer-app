@@ -111,6 +111,10 @@ cer-app preview --port 8080
 - Otherwise, starts a static file server with SPA fallback (serves `index.html` for unknown paths)
 - Returns 404 for paths not found in `dist/` (static mode only)
 - **Path traversal protection:** all file requests are validated against the `dist/` root — requests attempting to escape it (e.g. `GET /../../../../etc/passwd`) receive a `400` response
+- **Security headers:** every response includes `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and `Referrer-Policy: strict-origin-when-cross-origin`
+- **Smart Cache-Control:** Vite content-hashes assets placed in `/assets/` — these are served with `Cache-Control: public, max-age=31536000, immutable`. All other files (HTML, etc.) use `Cache-Control: no-cache` so browsers always revalidate
+- **Graceful shutdown:** on `SIGTERM` or `SIGINT`, the server stops accepting new connections and waits for in-flight requests to finish before exiting. A 10-second timeout triggers a forced exit if connections do not drain
+- **Request timeouts:** `headersTimeout` (10 s) aborts connections that stall while sending headers; `requestTimeout` (30 s) limits the total time allowed per request/response cycle, protecting against slow-client attacks
 
 ---
 

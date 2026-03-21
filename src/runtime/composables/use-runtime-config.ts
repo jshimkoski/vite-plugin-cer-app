@@ -78,9 +78,19 @@ export function resolvePrivateConfig(
   env: Record<string, string | undefined> = process.env as Record<string, string | undefined>,
 ): Record<string, string> {
   return Object.fromEntries(
-    Object.entries(defaults).map(([key, defaultValue]) => [
-      key,
-      env[key] ?? env[toUpperSnakeCase(key)] ?? defaultValue,
-    ]),
+    Object.entries(defaults).map(([key, defaultValue]) => {
+      const envKey = toUpperSnakeCase(key)
+      const resolved = env[key] ?? env[envKey] ?? defaultValue
+      // Warn when no env var was found and the declared default is an empty string.
+      // An empty-string default is the conventional way to declare a required secret
+      // (the key exists for typing purposes but has no safe default value).
+      if (resolved === '' && env[key] === undefined && env[envKey] === undefined) {
+        console.warn(
+          `[cer-app] runtimeConfig.private: "${key}" is an empty string — ` +
+          `set ${envKey} in the environment to provide a value.`,
+        )
+      }
+      return [key, resolved]
+    }),
   )
 }

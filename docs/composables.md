@@ -181,10 +181,143 @@ export const loader = async () => {
 
 **Only use `runtimeConfig.public` for values safe to expose to the browser.** Use `runtimeConfig.private` for secrets — they are never sent to the client.
 
+Keys declared in `runtimeConfig.private` with an empty-string default are treated as **required** secrets. If the corresponding environment variable is not set at server startup, a warning is logged:
+
+```
+[cer-app] runtimeConfig.private: "dbUrl" is an empty string — set DB_URL in the environment to provide a value.
+```
+
+If the default is a non-empty string it is used as a genuine fallback — no warning is emitted.
+
 If you need it outside auto-imported directories:
 
 ```ts
 import { useRuntimeConfig } from '@jasonshimmy/vite-plugin-cer-app/composables'
+```
+
+---
+
+### `useSeoMeta(input)`
+
+Thin wrapper over `useHead()` for the most common SEO tags — Open Graph, Twitter Card, meta description, and canonical URL. Works in SPA, SSR, and SSG modes.
+
+```ts
+// app/pages/about.ts
+component('page-about', () => {
+  useSeoMeta({
+    title: 'About Us',
+    description: 'Learn more about our team.',
+    ogTitle: 'About Us — My Site',
+    ogDescription: 'Learn more about our team.',
+    ogImage: 'https://example.com/og/about.png',
+    ogUrl: 'https://example.com/about',
+    ogType: 'website',
+    ogSiteName: 'My Site',
+    twitterCard: 'summary_large_image',
+    twitterSite: '@mysite',
+    canonical: 'https://example.com/about',
+  })
+  return html`<h1>About Us</h1>`
+})
+```
+
+Only properties you set are emitted — passing `undefined` (or omitting a property entirely) skips that tag.
+
+#### `SeoMetaInput` fields
+
+| Field | Tag emitted |
+|---|---|
+| `title` | `<title>` |
+| `description` | `<meta name="description">` |
+| `ogTitle` | `<meta property="og:title">` |
+| `ogDescription` | `<meta property="og:description">` |
+| `ogImage` | `<meta property="og:image">` |
+| `ogUrl` | `<meta property="og:url">` |
+| `ogType` | `<meta property="og:type">` |
+| `ogSiteName` | `<meta property="og:site_name">` |
+| `twitterCard` | `<meta name="twitter:card">` |
+| `twitterTitle` | `<meta name="twitter:title">` |
+| `twitterDescription` | `<meta name="twitter:description">` |
+| `twitterImage` | `<meta name="twitter:image">` |
+| `twitterSite` | `<meta name="twitter:site">` |
+| `canonical` | `<link rel="canonical">` |
+
+If you need it outside auto-imported directories:
+
+```ts
+import { useSeoMeta } from '@jasonshimmy/vite-plugin-cer-app/composables'
+```
+
+TypeScript types:
+
+```ts
+import type { SeoMetaInput } from '@jasonshimmy/vite-plugin-cer-app/types'
+```
+
+---
+
+### `useCookie(name, options?)`
+
+Isomorphic cookie composable. Reads and writes cookies transparently on both server and client:
+
+- **Server (SSR/SSG):** reads `req.headers.cookie`; writes `Set-Cookie` response headers via `res.setHeader`.
+- **Client:** reads and writes `document.cookie`.
+
+```ts
+// app/pages/profile.ts
+component('page-profile', () => {
+  const session = useCookie('session')
+
+  // Read
+  console.log(session.value)   // 'abc123' | undefined
+
+  // Write
+  session.set('abc123', { httpOnly: true, sameSite: 'Strict' })
+
+  // Remove
+  session.remove()
+
+  return html`<p>Session: ${session.value ?? 'none'}</p>`
+})
+```
+
+#### `CookieRef`
+
+| Member | Type | Description |
+|---|---|---|
+| `value` | `string \| undefined` | Current cookie value (read at call time) |
+| `set(value, options?)` | `void` | Write the cookie |
+| `remove(options?)` | `void` | Delete the cookie (sets `Max-Age=0`) |
+
+#### `CookieOptions`
+
+| Option | Type | Description |
+|---|---|---|
+| `path` | `string` | Cookie path (defaults to `/` when setting/removing) |
+| `domain` | `string` | Cookie domain |
+| `maxAge` | `number` | Max age in seconds |
+| `expires` | `Date` | Expiry date |
+| `httpOnly` | `boolean` | Set `HttpOnly` flag |
+| `secure` | `boolean` | Set `Secure` flag |
+| `sameSite` | `'Strict' \| 'Lax' \| 'None'` | `SameSite` attribute |
+
+Default options can be passed as the second argument to `useCookie` — they are merged with options passed to `set()`/`remove()`:
+
+```ts
+const auth = useCookie('auth', { httpOnly: true, secure: true, sameSite: 'Strict' })
+auth.set('tok')   // inherits httpOnly, secure, sameSite automatically
+```
+
+If you need it outside auto-imported directories:
+
+```ts
+import { useCookie } from '@jasonshimmy/vite-plugin-cer-app/composables'
+```
+
+TypeScript types:
+
+```ts
+import type { CookieOptions, CookieRef } from '@jasonshimmy/vite-plugin-cer-app/types'
 ```
 
 ---

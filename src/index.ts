@@ -8,6 +8,8 @@ export type { HydrateStrategy, SsgPathsContext, PageSsgConfig, PageMeta, PageLoa
 export type { ApiRequest, ApiResponse, ApiHandler, ApiContext } from './types/api.js'
 export type { AppContext, AppPlugin } from './types/plugin.js'
 export type { MiddlewareFn, GuardResult, ServerMiddleware } from './types/middleware.js'
+export type { SeoMetaInput } from './runtime/composables/use-seo-meta.js'
+export type { CookieOptions, CookieRef } from './runtime/composables/use-cookie.js'
 
 // Re-export resolved config type for use in build scripts
 export type { ResolvedCerConfig } from './plugin/dev-server.js'

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { useRuntimeConfig, initRuntimeConfig, resolvePrivateConfig } from '../../runtime/composables/use-runtime-config.js'
 
 beforeEach(() => {
@@ -116,5 +116,28 @@ describe('resolvePrivateConfig', () => {
     const result = resolvePrivateConfig({ camelCase: 'def' }, { CAMEL_CASE: 'val' })
     expect(Object.keys(result)).toEqual(['camelCase'])
     expect(result.camelCase).toBe('val')
+  })
+
+  it('emits a console.warn when a key has an empty-string default and no env var is set', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    resolvePrivateConfig({ dbUrl: '' }, {})
+    expect(warn).toHaveBeenCalledOnce()
+    expect(warn.mock.calls[0][0]).toContain('dbUrl')
+    expect(warn.mock.calls[0][0]).toContain('DB_URL')
+    warn.mockRestore()
+  })
+
+  it('does NOT warn when the env var supplies a value for an empty-default key', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    resolvePrivateConfig({ dbUrl: '' }, { DB_URL: 'postgres://prod' })
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('does NOT warn when the declared default is non-empty and no env var is set', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    resolvePrivateConfig({ apiToken: 'fallback-token' }, {})
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
   })
 })
