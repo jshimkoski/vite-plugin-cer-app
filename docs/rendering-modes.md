@@ -223,19 +223,60 @@ Any CDN or static host. Upload the entire `dist/` directory (excluding `dist/ser
 
 ---
 
+## ISR — Incremental Static Regeneration
+
+ISR is a per-route cache layer in the SSR preview server. Pages with `meta.ssg.revalidate` set are rendered once, cached, and re-rendered in the background when the TTL expires (stale-while-revalidate).
+
+### How it works
+
+1. **First request (HIT after fresh render):** Cache miss — render via SSR, store in memory cache with TTL, then serve from the newly-populated cache. `X-Cache: HIT` is set.
+2. **Within TTL (HIT):** Serve directly from cache. `X-Cache: HIT` header is set.
+3. **After TTL expires (STALE):** Serve the stale cached HTML immediately with `X-Cache: STALE`. Kick off a background re-render. When the re-render completes, update the cache.
+4. **While revalidating:** Continue serving stale HTML to new requests.
+
+### Configuration
+
+Add `revalidate` (seconds) to `meta.ssg` in any page:
+
+```ts
+// app/pages/blog/[slug].ts
+export const meta = {
+  ssg: {
+    revalidate: 60,   // cache for 60 s; re-render in background after expiry
+    paths: async () => {
+      const posts = await fetchPosts()
+      return posts.map(p => ({ params: { slug: p.slug } }))
+    },
+  },
+}
+```
+
+### Use cases
+
+| TTL | Use case |
+|---|---|
+| `revalidate: 0` | TTL expires immediately — first request is HIT; every subsequent request is STALE with a background re-render |
+| `revalidate: 60` | News articles, dashboards |
+| `revalidate: 3600` | Product pages, documentation |
+| `revalidate: 86400` | Marketing pages, rarely-changing content |
+
+### Availability
+
+ISR is currently active in the built-in **preview server** (`cer-app preview`). When integrating the server bundle into Express / Hono / Fastify in production, implement the same stale-while-revalidate pattern using `route.meta?.ssg?.revalidate` from the exported `routes` array.
+
+---
+
 ## Comparing modes
 
-| Feature | SPA | SSR | SSG |
-|---|---|---|---|
-| Initial HTML | Empty shell | Full HTML | Full HTML |
-| SEO | Poor | Excellent | Excellent |
-| TTFB | Fast | Depends on server | Very fast (CDN) |
-| Server required | No | Yes | No |
-| Data freshness | Real-time | Real-time | Build-time |
-| Dynamic routes | Yes | Yes | Requires `ssg.paths` |
-| API routes | Separate deploy | Same process | Separate deploy |
-| `useHead()` SSR injection | No | Yes | Yes |
-| Streaming | No | No | No |
+| Feature | SPA | SSR | SSG | ISR |
+|---|---|---|---|---|
+| Initial HTML | Empty shell | Full HTML | Full HTML | Full HTML |
+| SEO | Poor | Excellent | Excellent | Excellent |
+| TTFB | Fast | Depends on server | Very fast (CDN) | Very fast after first render |
+| Server required | No | Yes | No | Yes |
+| Data freshness | Real-time | Real-time | Build-time | Configurable TTL |
+| Dynamic routes | Yes | Yes | Requires `ssg.paths` | Yes |
+| API routes | Separate deploy | Same process | Separate deploy | Same process |
 
 ---
 

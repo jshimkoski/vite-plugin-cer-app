@@ -233,6 +233,22 @@ describe('autoImportTransform — framework composable injection', () => {
     const result = autoImportTransform(code, '/project/app/loading.ts', opts)!
     expect(result).toContain('usePageData')
   })
+
+  it('injects useRuntimeConfig import when useRuntimeConfig is used', () => {
+    const code = "component('page-dashboard', () => { const cfg = useRuntimeConfig(); return html`<div></div>` })"
+    const result = autoImportTransform(code, '/project/app/pages/dashboard.ts', opts)!
+    expect(result).toContain(`from ${FRAMEWORK_PKG}`)
+    expect(result).toContain('useRuntimeConfig')
+  })
+
+  it('injects useRuntimeConfig alongside other framework composables', () => {
+    const code = "component('page-x', () => { useHead({ title: 'x' }); const cfg = useRuntimeConfig(); return html`<div></div>` })"
+    const result = autoImportTransform(code, '/project/app/pages/x.ts', opts)!
+    expect(result).toContain('useHead')
+    expect(result).toContain('useRuntimeConfig')
+    const count = result.split(`from ${FRAMEWORK_PKG}`).length - 1
+    expect(count).toBe(1)
+  })
 })
 
 // ─── Composable import injection ─────────────────────────────────────────────

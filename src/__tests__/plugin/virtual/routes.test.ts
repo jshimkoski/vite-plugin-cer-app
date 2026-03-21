@@ -200,3 +200,198 @@ describe('generateRoutesCode — 404.ts convention', () => {
     expect(idIdx).toBeLessThan(allIdx)
   })
 })
+
+// ─── _layout.ts filtering ─────────────────────────────────────────────────────
+
+describe('generateRoutesCode — _layout.ts filtering', () => {
+  beforeEach(() => {
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(scanDirectory).mockResolvedValue([])
+    vi.mocked(readFile).mockResolvedValue('' as never)
+  })
+
+  it('excludes _layout.ts files from the generated routes', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([
+      `${PAGES}/admin/index.ts`,
+      `${PAGES}/admin/_layout.ts`,
+    ])
+    const code = await generateRoutesCode(PAGES)
+    expect(code).not.toContain('_layout')
+    expect(code).toContain('/admin')
+  })
+
+  it('generates a route for non-underscore files in the same directory', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([
+      `${PAGES}/admin/users.ts`,
+      `${PAGES}/admin/_layout.ts`,
+    ])
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('/admin/users')
+    expect(code).not.toContain('_layout')
+  })
+})
+
+// ─── meta.revalidate ─────────────────────────────────────────────────────────
+
+describe('generateRoutesCode — meta.ssg.revalidate', () => {
+  beforeEach(() => {
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(scanDirectory).mockResolvedValue([])
+    vi.mocked(readFile).mockResolvedValue('' as never)
+  })
+
+  it('emits meta.ssg.revalidate when declared in page source', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/blog.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `export const meta = { ssg: { revalidate: 60 } }` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('ssg: { revalidate: 60 }')
+  })
+
+  it('emits larger revalidate values correctly', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/products.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `export const meta = { ssg: { revalidate: 3600 } }` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('ssg: { revalidate: 3600 }')
+  })
+
+  it('omits ssg meta when no revalidate is declared', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/about.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `component('page-about', () => html\`<h1>About</h1>\`)` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).not.toContain('revalidate')
+  })
+
+  it('can combine revalidate with layout in meta', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/blog.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `export const meta = { layout: 'minimal', ssg: { revalidate: 120 } }` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('layout: "minimal"')
+    expect(code).toContain('ssg: { revalidate: 120 }')
+  })
+})
+
+// ─── meta.transition ─────────────────────────────────────────────────────────
+
+describe('generateRoutesCode — meta.transition', () => {
+  beforeEach(() => {
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(scanDirectory).mockResolvedValue([])
+    vi.mocked(readFile).mockResolvedValue('' as never)
+  })
+
+  it('emits meta.transition string when declared', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/about.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `export const meta = { transition: 'fade' }` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('transition: "fade"')
+  })
+
+  it('emits meta.transition true (boolean) when declared', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/about.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `export const meta = { transition: true }` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('transition: true')
+  })
+
+  it('omits transition meta when not declared', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/about.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `component('page-about', () => html\`<h1>About</h1>\`)` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).not.toContain('transition')
+  })
+
+  it('emits meta.transition false (boolean) when declared', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/about.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `export const meta = { transition: false }` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('transition: false')
+  })
+
+  it('can combine transition with middleware', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/dashboard.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `export const meta = { transition: 'slide', middleware: ['auth'] }` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('transition: "slide"')
+    expect(code).toContain('beforeEnter')
+    expect(code).toContain('"auth"')
+  })
+})
+
+// ─── nested layouts (layoutChain) ────────────────────────────────────────────
+
+describe('generateRoutesCode — layoutChain (nested layouts)', () => {
+  beforeEach(() => {
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(scanDirectory).mockResolvedValue([])
+    vi.mocked(readFile).mockResolvedValue('' as never)
+  })
+
+  it('emits meta.layoutChain when a _layout.ts exists in ancestor directory', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/admin/users.ts`])
+    vi.mocked(readFile).mockImplementation(async (path: unknown) => {
+      if (String(path).endsWith('_layout.ts')) return 'export default \'minimal\''
+      return ''
+    })
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('layoutChain:')
+    expect(code).toContain('"default"')
+    expect(code).toContain('"minimal"')
+  })
+
+  it('uses outerLayout from page meta when layoutChain is emitted', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/admin/users.ts`])
+    vi.mocked(readFile).mockImplementation(async (path: unknown) => {
+      const p = String(path)
+      if (p.endsWith('_layout.ts')) return 'export default \'sidebar\''
+      // page source has its own layout
+      return `export const meta = { layout: 'clean' }`
+    })
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('layoutChain:')
+    expect(code).toContain('"clean"')
+    expect(code).toContain('"sidebar"')
+    // Should not emit a plain meta.layout — the chain replaces it
+    expect(code).not.toContain('layout: "clean"')
+  })
+
+  it('omits layoutChain for top-level pages with no _layout.ts', async () => {
+    vi.mocked(existsSync).mockImplementation((p: unknown) => {
+      // Return false for any _layout.ts path so no chain is resolved
+      if (String(p).endsWith('_layout.ts')) return false
+      return true
+    })
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/about.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `export const meta = { layout: 'default' }` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).not.toContain('layoutChain')
+    expect(code).toContain('layout: "default"')
+  })
+
+  it('omits layoutChain for top-level pages even when existsSync returns true', async () => {
+    // top-level page has no subdirectory segments, so resolveLayoutChain returns null immediately
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/index.ts`])
+    vi.mocked(readFile).mockResolvedValue('' as never)
+    const code = await generateRoutesCode(PAGES)
+    expect(code).not.toContain('layoutChain')
+  })
+})

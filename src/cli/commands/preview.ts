@@ -3,6 +3,15 @@ import { createServer as createHttpServer, type IncomingMessage, type ServerResp
 import { createReadStream, existsSync, statSync } from 'node:fs'
 import { resolve, join, extname } from 'pathe'
 import { pathToFileURL } from 'node:url'
+import {
+  type IsrCacheEntry,
+  type SsrHandlerFn,
+  findRevalidate,
+  renderForIsr,
+  serveFromIsrCache,
+} from './preview-isr.js'
+
+// ─── API route matching ───────────────────────────────────────────────────────
 
 /**
  * Matches an API route pattern (e.g. '/api/items/:id') against a URL path.
@@ -107,7 +116,6 @@ export function previewCommand(): Command {
         console.log('[cer-app] Starting SSR preview server...')
 
         // Load the server bundle
-        type SsrHandlerFn = (req: IncomingMessage, res: ServerResponse) => void | Promise<void>
         let serverMod: {
           handler?: SsrHandlerFn
           default?: SsrHandlerFn
@@ -129,6 +137,15 @@ export function previewCommand(): Command {
         // API route array exported by the server bundle: [{ path, handlers }]
         const apiRoutes: Array<{ path: string; handlers: Record<string, unknown> }> =
           Array.isArray(serverMod.apiRoutes) ? serverMod.apiRoutes : []
+
+        // Page routes exported by the server bundle (used for ISR revalidate lookup).
+        const pageRoutes: Array<{ path: string; meta?: Record<string, unknown> }> =
+          Array.isArray((serverMod as { routes?: unknown }).routes)
+            ? (serverMod as { routes: Array<{ path: string; meta?: Record<string, unknown> }> }).routes
+            : []
+
+        // ISR cache: path → cached render entry.
+        const isrCache = new Map<string, IsrCacheEntry>()
 
         const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
           const url = req.url ?? '/'
@@ -183,7 +200,59 @@ export function previewCommand(): Command {
             if (served) return
           }
 
-          // Fall through to SSR handler
+          // ISR: check whether this route has a revalidate TTL.
+          const revalidate = findRevalidate(pageRoutes, urlPath)
+          if (revalidate !== null) {
+            const cached = isrCache.get(urlPath)
+            const now = Date.now()
+
+            if (cached) {
+              const ageSeconds = (now - cached.builtAt) / 1000
+              if (ageSeconds < cached.revalidate) {
+                // Fresh — serve from cache.
+                serveFromIsrCache(cached, res, 'HIT')
+                return
+              }
+              // Stale — serve stale immediately, revalidate in background.
+              if (!cached.revalidating) {
+                cached.revalidating = true
+                serveFromIsrCache(cached, res, 'STALE')
+                const revalidateTimeout = setTimeout(() => {
+                  if (cached) cached.revalidating = false
+                }, 30_000)
+                renderForIsr(urlPath, handler, revalidate).then((entry) => {
+                  clearTimeout(revalidateTimeout)
+                  if (entry) isrCache.set(urlPath, entry)
+                  else if (cached) cached.revalidating = false
+                }).catch(() => {
+                  clearTimeout(revalidateTimeout)
+                  if (cached) cached.revalidating = false
+                })
+                return
+              }
+              // Already revalidating — serve stale without spawning another render.
+              serveFromIsrCache(cached, res, 'STALE')
+              return
+            }
+
+            // Cache miss — render, cache, then serve.
+            try {
+              const entry = await renderForIsr(urlPath, handler, revalidate)
+              if (entry) {
+                isrCache.set(urlPath, entry)
+                serveFromIsrCache(entry, res, 'HIT')
+              } else {
+                await handler(req, res)
+              }
+            } catch (err) {
+              console.error('[cer-app] ISR render error:', err)
+              res.statusCode = 500
+              res.end('Internal Server Error')
+            }
+            return
+          }
+
+          // Non-ISR: fall through to SSR handler directly.
           try {
             await handler(req, res)
           } catch (err) {

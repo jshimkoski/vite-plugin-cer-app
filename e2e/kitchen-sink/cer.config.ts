@@ -2,4 +2,9 @@
 export default {
   ssg: { routes: 'auto', concurrency: 2 },
   autoImports: { runtime: true, components: true, composables: true },
+  runtimeConfig: {
+    public: {
+      appName: 'Kitchen Sink',
+    },
+  },
 }

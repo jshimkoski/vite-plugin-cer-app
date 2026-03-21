@@ -92,7 +92,7 @@ All documentation written in the docs directory should be:
   - Implement guard clauses to handle preconditions and invalid states early.
   - Use custom error types for consistent error handling.
 
-## Key Conventions
+## Key Conventions - NON-NEGOTIABLE
 
 - NEVER GUESS OR ASSUME! Always make informed decisions based on available data in a project.
 - Always use strongly typed TypeScript.
@@ -106,7 +106,9 @@ All documentation written in the docs directory should be:
 - Always write tests for your code.
 - Always follow best practices in coding, security, and performance.
 - Always validate assumptions with actual data.
-- ALWAYS validate code with `npm run validate`.
+- ALWAYS add new unit and e2e/integration tests for any new functionality.
+- ALWAYS document new functionality in the project's documentation files.
+- ALWAYS have the user validate all changes with `npm run validate` and report results back to you.
 - A change can only be considered complete when it meets all the above criteria and has been thoroughly tested and reviewed. THIS IS NON-NEGOTIABLE.
 
 ## Methodology

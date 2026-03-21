@@ -19,6 +19,7 @@ export interface ResolvedCerConfig {
   router: { base?: string; scrollToFragment?: boolean | object }
   jitCss: { content: string[]; extendedColors: boolean }
   autoImports: { components: boolean; composables: boolean; directives: boolean; runtime: boolean }
+  runtimeConfig: { public: Record<string, unknown> }
 }
 
 /**

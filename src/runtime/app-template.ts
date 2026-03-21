@@ -16,6 +16,7 @@ import layouts from 'virtual:cer-layouts'
 import plugins from 'virtual:cer-plugins'
 import { hasLoading, loadingTag } from 'virtual:cer-loading'
 import { hasError, errorTag } from 'virtual:cer-error'
+import { runtimeConfig } from 'virtual:cer-app-config'
 import {
   component,
   ref,
@@ -26,9 +27,11 @@ import {
 } from '@jasonshimmy/custom-elements-runtime'
 import { initRouter } from '@jasonshimmy/custom-elements-runtime/router'
 import { enableJITCSS } from '@jasonshimmy/custom-elements-runtime/jit-css'
+import { initRuntimeConfig } from '@jasonshimmy/vite-plugin-cer-app/composables'
 
 registerBuiltinComponents()
 enableJITCSS()
+initRuntimeConfig(runtimeConfig)
 
 const router = initRouter({ routes })
 
@@ -112,12 +115,21 @@ component('cer-layout-view', () => {
 
   const matched = router.matchRoute(current.value.path)
   const routeMeta = matched?.route?.meta
-  const layoutName = routeMeta?.layout ?? 'default'
-  const layoutTag = layouts[layoutName]
   const routerView = { tag: 'router-view', props: {}, children: [] }
 
-  if (layoutTag) return { tag: layoutTag, props: {}, children: [routerView] }
-  return routerView
+  // Support nested layout chains: meta.layoutChain = ['default', 'admin']
+  // renders <layout-default><layout-admin><router-view/></layout-admin></layout-default>
+  const chain = routeMeta?.layoutChain
+    ? routeMeta.layoutChain
+    : [routeMeta?.layout ?? 'default']
+
+  // Build nested vnodes from innermost to outermost.
+  let vnode = routerView
+  for (let i = chain.length - 1; i >= 0; i--) {
+    const tag = layouts[chain[i]]
+    if (tag) vnode = { tag, props: {}, children: [vnode] }
+  }
+  return vnode
 })
 
 for (const plugin of plugins) {

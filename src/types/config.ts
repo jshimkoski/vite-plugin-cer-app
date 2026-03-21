@@ -18,6 +18,26 @@ export interface AutoImportsConfig {
   runtime?: boolean
 }
 
+export interface RuntimePublicConfig {
+  [key: string]: unknown
+}
+
+export interface RuntimeConfig {
+  /**
+   * Public runtime config — available on both server and client via
+   * `useRuntimeConfig().public`. Values are serialized into the virtual module
+   * at build time, so only use static/env-var values here.
+   *
+   * @example
+   * runtimeConfig: {
+   *   public: {
+   *     apiBase: process.env.VITE_API_BASE ?? 'https://api.example.com',
+   *   }
+   * }
+   */
+  public?: RuntimePublicConfig
+}
+
 export interface CerAppConfig {
   mode?: 'spa' | 'ssr' | 'ssg'
   srcDir?: string // defaults to 'app'
@@ -26,6 +46,12 @@ export interface CerAppConfig {
   jitCss?: JitCssConfig
   autoImports?: AutoImportsConfig
   port?: number
+  /**
+   * Runtime configuration accessible via `useRuntimeConfig()`.
+   * Only `public` values are exposed to the client; keep secrets
+   * out of `public`.
+   */
+  runtimeConfig?: RuntimeConfig
 }
 
 export function defineConfig(config: CerAppConfig): CerAppConfig {

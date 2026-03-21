@@ -76,7 +76,7 @@ const RUNTIME_GLOBALS = [
 
 const DIRECTIVE_GLOBALS = ['when', 'each', 'match', 'anchorBlock']
 
-const FRAMEWORK_GLOBALS = ['useHead', 'usePageData', 'useInject']
+const FRAMEWORK_GLOBALS = ['useHead', 'usePageData', 'useInject', 'useRuntimeConfig']
 
 /**
  * Scans a composables directory and returns a map of export name → file path.
@@ -211,6 +211,13 @@ export async function generateVirtualModuleDts(
   lines.push(`declare module 'virtual:cer-error' {`)
   lines.push(`  export const hasError: boolean`)
   lines.push(`  export const errorTag: string | null`)
+  lines.push(`}`)
+  lines.push('')
+  lines.push(`declare module 'virtual:cer-app-config' {`)
+  lines.push(`  import type { RuntimePublicConfig } from '@jasonshimmy/vite-plugin-cer-app/types'`)
+  lines.push(`  export const appConfig: { mode: string; router: Record<string, unknown>; ssg: Record<string, unknown> }`)
+  lines.push(`  export const runtimeConfig: { public: RuntimePublicConfig }`)
+  lines.push(`  export default appConfig`)
   lines.push(`}`)
   lines.push('')
 

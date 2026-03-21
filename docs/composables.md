@@ -141,3 +141,39 @@ import { useInject } from '@jasonshimmy/vite-plugin-cer-app/composables'
 ```
 
 > **Note:** Prefer `useInject` over the raw `inject()` primitive whenever reading plugin-provided values. Raw `inject()` works in SPA mode but returns `undefined` in SSR and SSG because the server renders components without `<cer-layout-view>`'s provide context.
+
+### `useRuntimeConfig()`
+
+Returns the `public` runtime configuration object set in `cer.config.ts` under `runtimeConfig.public`. Available in all rendering modes (SPA, SSR, SSG) and on both server and client.
+
+```ts
+// cer.config.ts
+export default defineConfig({
+  runtimeConfig: {
+    public: {
+      apiBase: process.env.VITE_API_BASE ?? '/api',
+      featureFlags: { darkMode: true },
+    },
+  },
+})
+```
+
+```ts
+// app/pages/index.ts — auto-imported, no import statement needed
+component('page-index', () => {
+  const { public: cfg } = useRuntimeConfig()
+  // cfg.apiBase → '/api'
+
+  return html`<p>API base: ${cfg.apiBase}</p>`
+})
+```
+
+The config is initialized at app boot (both client and server) by calling `initRuntimeConfig(runtimeConfig)` with the value from `virtual:cer-app-config`. You only need `useRuntimeConfig()` to read it.
+
+**Only use `runtimeConfig.public` for values safe to expose to the browser.** Secrets, tokens, and private keys must stay in server-only code (loaders, API handlers, server middleware).
+
+If you need it outside auto-imported directories:
+
+```ts
+import { useRuntimeConfig } from '@jasonshimmy/vite-plugin-cer-app/composables'
+```

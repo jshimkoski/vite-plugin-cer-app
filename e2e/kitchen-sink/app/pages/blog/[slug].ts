@@ -46,6 +46,7 @@ export const loader = async ({ params }: { params: { slug: string } }) => {
 
 export const meta = {
   ssg: {
+    revalidate: 60,
     paths: async () => [
       { params: { slug: 'first-post' } },
       { params: { slug: 'second-post' } },

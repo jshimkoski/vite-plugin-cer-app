@@ -140,4 +140,19 @@ describe('resolveConfig', () => {
     const cfg = resolveConfig({}, ROOT)
     expect(cfg.root).toBe(ROOT)
   })
+
+  it('defaults runtimeConfig.public to an empty object', () => {
+    const cfg = resolveConfig({}, ROOT)
+    expect(cfg.runtimeConfig.public).toEqual({})
+  })
+
+  it('passes runtimeConfig.public values through', () => {
+    const cfg = resolveConfig({ runtimeConfig: { public: { apiBase: '/api', version: '1' } } }, ROOT)
+    expect(cfg.runtimeConfig.public).toEqual({ apiBase: '/api', version: '1' })
+  })
+
+  it('preserves runtimeConfig.public when other runtimeConfig fields are omitted', () => {
+    const cfg = resolveConfig({ runtimeConfig: { public: { foo: 42 } } }, ROOT)
+    expect(cfg.runtimeConfig.public.foo).toBe(42)
+  })
 })

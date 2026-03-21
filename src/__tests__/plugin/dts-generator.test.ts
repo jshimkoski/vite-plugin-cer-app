@@ -168,6 +168,11 @@ describe('generateAutoImportDts', () => {
     expect(dts).toContain("const useInject: typeof import('@jasonshimmy/vite-plugin-cer-app/composables')['useInject']")
   })
 
+  it('declares useRuntimeConfig as a framework global', async () => {
+    const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain("const useRuntimeConfig: typeof import('@jasonshimmy/vite-plugin-cer-app/composables')['useRuntimeConfig']")
+  })
+
   it('declares when directive as a global', async () => {
     const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
     expect(dts).toContain("const when: typeof import('@jasonshimmy/custom-elements-runtime/directives')['when']")
@@ -231,6 +236,21 @@ describe('generateVirtualModuleDts', () => {
     expect(dts).toContain("declare module 'virtual:cer-error'")
     expect(dts).toContain('hasError')
     expect(dts).toContain('errorTag')
+  })
+
+  it('declares virtual:cer-app-config module', async () => {
+    const dts = await generateVirtualModuleDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain("declare module 'virtual:cer-app-config'")
+  })
+
+  it('declares runtimeConfig export in virtual:cer-app-config', async () => {
+    const dts = await generateVirtualModuleDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain('runtimeConfig')
+  })
+
+  it('declares RuntimePublicConfig in virtual:cer-app-config', async () => {
+    const dts = await generateVirtualModuleDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain('RuntimePublicConfig')
   })
 
   it('includes user composable re-exports in virtual:cer-composables', async () => {

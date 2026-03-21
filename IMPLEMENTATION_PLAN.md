@@ -271,7 +271,7 @@ handler and the SSG pipeline. Deferred to sprint 2.
 
 ## Phase 6 — Production Features (sprint 2–3)
 
-### 6.1 ISR — Incremental Static Regeneration 🔜
+### 6.1 ISR — Incremental Static Regeneration ✅
 
 **Problem:** `ssg.fallback: true` is in the config but not implemented.
 Without ISR, large sites must either SSR every request or rebuild on every
@@ -292,7 +292,7 @@ Requires a `revalidate` option per route (via `meta.ssg.revalidate: 60`).
 
 ---
 
-### 6.2 Nested layouts 🔜
+### 6.2 Nested layouts ✅
 
 **Problem:** All pages share a single layout level. A `/admin/*` section with
 its own sidebar inside the root layout requires copy-pasting layout structure
@@ -328,7 +328,7 @@ Build pipeline splits pages by strategy and applies the right renderer to each.
 
 ---
 
-### 6.4 Link prefetching 🔜
+### 6.4 Link prefetching ✅
 
 **Problem:** `<router-link>` doesn't prefetch route chunks on hover/visible.
 
@@ -342,11 +342,52 @@ This is a runtime change, not a plugin change.
 
 ---
 
-### 6.5 Route transitions ❌
+### 6.5 Route transitions ✅
 
 The runtime already has `transition-group-handler.ts` and `transition-utils.ts`.
-The framework just needs a convention for configuring them via `meta.transition`.
-Deferred until layout wrapping is stable.
+`meta.transition` is now extracted at build time and available on `route.meta`.
+
+**Convention:** `export const meta = { transition: 'fade' }` in any page file.
+Set to `true` for the default `'page'` transition name.
+
+**Files:**
+- `src/types/page.ts` — added `transition?: string | boolean` to `PageMeta`
+- `src/plugin/virtual/routes.ts` — added `extractTransition()`, included in meta
+
+---
+
+## Phase 6b — Public env vars / runtimeConfig ✅
+
+**Problem:** No typed, centralized place to expose env vars to both server and
+client. Users had to use `import.meta.env.VITE_*` directly everywhere.
+
+**Design:** Add `runtimeConfig.public` to `CerAppConfig`. Values are serialized
+into `virtual:cer-app-config` at build time and accessible via `useRuntimeConfig()`.
+
+```ts
+// cer.config.ts
+export default defineConfig({
+  runtimeConfig: {
+    public: {
+      apiBase: process.env.VITE_API_BASE ?? '/api',
+    },
+  },
+})
+
+// any page or composable
+const config = useRuntimeConfig()
+fetch(config.public.apiBase + '/posts')
+```
+
+**Files:**
+- `src/types/config.ts` — added `RuntimeConfig`, `RuntimePublicConfig`, `runtimeConfig` to `CerAppConfig`
+- `src/plugin/dev-server.ts` — added `runtimeConfig` to `ResolvedCerConfig`
+- `src/plugin/index.ts` — `resolveConfig` + `generateAppConfigModule` emit `runtimeConfig`
+- `src/runtime/composables/use-runtime-config.ts` — new `useRuntimeConfig()` + `initRuntimeConfig()`
+- `src/runtime/composables/index.ts` — re-export
+- `src/runtime/app-template.ts` — calls `initRuntimeConfig(runtimeConfig)` on boot
+- `src/runtime/entry-server-template.ts` — same on server boot
+- `src/plugin/dts-generator.ts` — `useRuntimeConfig` global + `virtual:cer-app-config` module decl
 
 ---
 
@@ -381,11 +422,12 @@ Cloudflare Workers / Deno Deploy adapter. Requires replacing Node's
 | 3.2 | Error page — `app/error.ts` | 1 | ✅ |
 | 4.1 | TypeScript path aliases | 1 | ✅ |
 | 5.1 | Data loader hydration | 2 | ✅ |
-| 6.1 | ISR | 2–3 | 🔜 |
-| 6.2 | Nested layouts | 2–3 | 🔜 |
+| 6.1 | ISR | 2–3 | ✅ |
+| 6.2 | Nested layouts | 2–3 | ✅ |
 | 6.3 | Per-route render strategy | 3 | 🔜 |
-| 6.4 | Link prefetching | 3 | 🔜 |
-| 6.5 | Route transitions | 3 | ❌ |
+| 6.4 | Link prefetching | 3 | ✅ |
+| 6.5 | Route transitions | 3 | ✅ |
+| 6b | runtimeConfig / public env vars | 2 | ✅ |
 | 7.1 | DevTools | 4+ | ❌ |
 | 7.2 | i18n | 4+ | ❌ |
 | 7.3 | Edge runtime | 4+ | ❌ |

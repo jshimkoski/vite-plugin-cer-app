@@ -198,7 +198,57 @@ When `directives: true`, the following are injected if used and not already impo
 import { when, each, match, anchorBlock } from '@jasonshimmy/custom-elements-runtime/directives'
 ```
 
+The following framework composables are **always** auto-imported when used, regardless of the `runtime` flag — they come from the plugin package:
+
+```ts
+import { useHead, usePageData, useInject, useRuntimeConfig } from '@jasonshimmy/vite-plugin-cer-app/composables'
+```
+
 Set any flag to `false` to opt out and manage imports manually.
+
+---
+
+## `runtimeConfig` options
+
+Expose typed, centralized public configuration to both server and client code via `useRuntimeConfig()`.
+
+```ts
+export default defineConfig({
+  runtimeConfig: {
+    public: {
+      apiBase: process.env.VITE_API_BASE ?? 'https://api.example.com',
+      appVersion: '1.0.0',
+    },
+  },
+})
+```
+
+### `runtimeConfig.public`
+
+**Type:** `Record<string, unknown>`
+**Default:** `{}`
+
+Values placed here are serialized into `virtual:cer-app-config` at build time and accessible on both server and client via `useRuntimeConfig().public`.
+
+> **Security:** Only put values here that are safe to expose to the browser. Do not put secrets, tokens, or private keys in `public`. Those should be read directly from `process.env` inside server-only code (loaders, server middleware, API handlers).
+
+> **Serialization:** Values must be JSON-serializable (strings, numbers, booleans, plain objects, arrays). Functions, class instances, `undefined`, and circular references are not supported and will be lost or throw during the build.
+
+```ts
+// Any page, layout, component, or composable
+component('page-index', () => {
+  const config = useRuntimeConfig()
+  // config.public.apiBase → 'https://api.example.com'
+
+  return html`<p>API: ${config.public.apiBase}</p>`
+})
+```
+
+**TypeScript:** Import `RuntimePublicConfig` to type your public config if needed:
+
+```ts
+import type { RuntimePublicConfig } from '@jasonshimmy/vite-plugin-cer-app/types'
+```
 
 ---
 
@@ -234,5 +284,7 @@ import type {
   SsgConfig,
   JitCssConfig,
   AutoImportsConfig,
+  RuntimeConfig,
+  RuntimePublicConfig,
 } from '@jasonshimmy/vite-plugin-cer-app/types'
 ```

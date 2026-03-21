@@ -21,13 +21,15 @@ import routes from 'virtual:cer-routes'
 import layouts from 'virtual:cer-layouts'
 import plugins from 'virtual:cer-plugins'
 import apiRoutes from 'virtual:cer-server-api'
+import { runtimeConfig } from 'virtual:cer-app-config'
 import { registerBuiltinComponents } from '@jasonshimmy/custom-elements-runtime'
 import { registerEntityMap, renderToStringWithJITCSSDSD, DSD_POLYFILL_SCRIPT } from '@jasonshimmy/custom-elements-runtime/ssr'
 import entitiesJson from '@jasonshimmy/custom-elements-runtime/entities.json'
 import { initRouter } from '@jasonshimmy/custom-elements-runtime/router'
-import { beginHeadCollection, endHeadCollection, serializeHeadTags } from '@jasonshimmy/vite-plugin-cer-app/composables'
+import { beginHeadCollection, endHeadCollection, serializeHeadTags, initRuntimeConfig } from '@jasonshimmy/vite-plugin-cer-app/composables'
 
 registerBuiltinComponents()
+initRuntimeConfig(runtimeConfig)
 
 // Pre-load the full HTML entity map so named entities like &mdash; decode
 // correctly during SSR. Without this the bundled runtime falls back to a
@@ -130,8 +132,6 @@ const _prepareRequest = async (req) => {
   const router = initRouter({ routes, initialUrl: req.url ?? '/' })
   const current = router.getCurrent()
   const { route, params } = router.matchRoute(current.path)
-  const layoutName = route?.meta?.layout ?? 'default'
-  const layoutTag = layouts[layoutName]
 
   // Pre-load the page module so we can embed the component tag directly.
   // This avoids the async router-view (which injects content via script tags
@@ -160,9 +160,17 @@ const _prepareRequest = async (req) => {
     }
   }
 
-  const vnode = layoutTag
-    ? { tag: layoutTag, props: {}, children: [pageVnode] }
-    : pageVnode
+  // Resolve layout chain: nested layouts (meta.layoutChain) or single layout.
+  const chain = route?.meta?.layoutChain
+    ? route.meta.layoutChain
+    : [route?.meta?.layout ?? 'default']
+
+  // Wrap pageVnode in the layout chain from innermost to outermost.
+  let vnode = pageVnode
+  for (let i = chain.length - 1; i >= 0; i--) {
+    const tag = layouts[chain[i]]
+    if (tag) vnode = { tag, props: {}, children: [vnode] }
+  }
 
   return { vnode, router, head }
 }

@@ -172,6 +172,72 @@ export const meta = {
 }
 ```
 
+### `meta.ssg.revalidate`
+
+**Type:** `number` (seconds)
+
+Enables Incremental Static Regeneration (ISR) for the route. When set, the preview server caches the rendered HTML and serves it until the TTL expires. After expiry, stale HTML is served immediately while a fresh render runs in the background (stale-while-revalidate).
+
+```ts
+// app/pages/blog/[slug].ts
+export const meta = {
+  ssg: {
+    revalidate: 60,  // re-render at most once per minute
+    paths: async () => { /* ... */ },
+  },
+}
+```
+
+See [Rendering Modes — ISR](rendering-modes.md#isr--incremental-static-regeneration) for full details.
+
+### `meta.transition`
+
+**Type:** `string | boolean`
+
+Attaches transition metadata to the route. The value is extracted at build time and emitted as `meta.transition` on the route object — the framework does **not** apply any CSS or DOM changes automatically.
+
+```ts
+// app/pages/about.ts
+export const meta = {
+  transition: 'fade',   // stored as route.meta.transition at runtime
+}
+```
+
+Read the value in your navigation handler or layout to implement transitions yourself:
+
+```ts
+import routes from 'virtual:cer-routes'
+const about = routes.find(r => r.path === '/about')
+// about.meta.transition → 'fade'
+```
+
+Example — apply a CSS class during navigation using a plugin:
+
+```ts
+// app/plugins/transitions.ts
+export default {
+  setup({ router }) {
+    router.beforeEach((to) => {
+      const name = to.meta?.transition
+      if (name) document.documentElement.setAttribute('data-transition', String(name))
+      else document.documentElement.removeAttribute('data-transition')
+    })
+  },
+}
+```
+
+```css
+[data-transition="fade"] cer-layout-view {
+  animation: fadeIn 0.2s ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0 }
+  to   { opacity: 1 }
+}
+```
+
+Set to `false` to explicitly mark a page as having no transition (useful when a catch-all or default would otherwise apply one).
+
 ---
 
 ## Route sorting

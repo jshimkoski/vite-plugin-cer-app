@@ -2,3 +2,4 @@ export { useHead, beginHeadCollection, endHeadCollection, serializeHeadTags } fr
 export type { HeadInput } from './use-head.js'
 export { usePageData } from './use-page-data.js'
 export { useInject } from './use-inject.js'
+export { useRuntimeConfig, initRuntimeConfig } from './use-runtime-config.js'

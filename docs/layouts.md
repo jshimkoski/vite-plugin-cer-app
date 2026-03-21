@@ -110,3 +110,85 @@ import layouts from 'virtual:cer-layouts'
 ## Layout switching and DOM preservation
 
 When navigating between pages with different layouts, the framework uses `<cer-keep-alive>` to preserve the layout DOM and avoid unnecessary teardown/remount cycles. This means transitions between pages sharing the same layout are smooth with no layout flash.
+
+---
+
+## 🪆 Nested layouts
+
+Place a `_layout.ts` file inside any page subdirectory to add an inner layout that wraps pages in that subtree. The outer layout (from `meta.layout` or the default) wraps the inner layout, which wraps `<router-view>`.
+
+### File convention
+
+```
+app/
+  layouts/
+    default.ts      # outer layout — full shell (header, footer)
+    minimal.ts      # outer layout — bare minimum
+    sidebar.ts      # inner layout — adds a sidebar panel
+  pages/
+    index.ts        # uses 'default' layout only
+    admin/
+      _layout.ts    # ← inner layout override for all /admin/* pages
+      index.ts      # layout chain: ['default', 'sidebar']
+      users.ts      # layout chain: ['default', 'sidebar']
+      settings.ts   # layout chain: ['default', 'sidebar']
+```
+
+### `_layout.ts` syntax
+
+Export the inner layout name as a default string:
+
+```ts
+// app/pages/admin/_layout.ts
+export default 'sidebar'
+```
+
+The value must match a filename (without extension) in `app/layouts/`.
+
+### Rendered structure
+
+For a page at `app/pages/admin/users.ts` with the above setup:
+
+```html
+<layout-default>
+  <layout-sidebar>
+    <router-view></router-view>
+  </layout-sidebar>
+</layout-default>
+```
+
+Each layout receives the inner content via `<slot>`.
+
+### Overriding the outer layout
+
+If a page in a nested subtree needs a different outer layout, declare it in `meta.layout` as usual:
+
+```ts
+// app/pages/admin/login.ts
+export const meta = {
+  layout: 'minimal',   // overrides outer; chain = ['minimal', 'sidebar']
+}
+```
+
+### Multiple nesting levels
+
+Nesting is resolved recursively. Each ancestor directory that contains a `_layout.ts` contributes one level to the chain:
+
+```
+app/pages/
+  admin/
+    _layout.ts      → 'sidebar'
+    settings/
+      _layout.ts    → 'settings-tabs'
+      profile.ts    # chain: ['default', 'sidebar', 'settings-tabs']
+```
+
+### `meta.layoutChain` in routes
+
+The framework emits the resolved chain as `meta.layoutChain` on the route object at build time. You can read it at runtime:
+
+```ts
+import routes from 'virtual:cer-routes'
+const adminUsers = routes.find(r => r.path === '/admin/users')
+// adminUsers.meta.layoutChain → ['default', 'sidebar']
+```
