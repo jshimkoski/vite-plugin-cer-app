@@ -6,8 +6,5 @@ export default defineConfig({
     routes: 'auto',
     concurrency: 4,
   },
-  ssr: {
-    dsd: true,
-  },
   autoImports: { components: true, composables: true, directives: true, runtime: true },
 })

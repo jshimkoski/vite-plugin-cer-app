@@ -11,11 +11,6 @@ describe('defineConfig', () => {
     expect(defineConfig({})).toEqual({})
   })
 
-  it('preserves nested ssr config', () => {
-    const config = { ssr: { dsd: false } }
-    expect(defineConfig(config)).toEqual(config)
-  })
-
   it('preserves nested ssg config', () => {
     const config = { ssg: { routes: ['/a', '/b'], concurrency: 2 } }
     expect(defineConfig(config)).toEqual(config)

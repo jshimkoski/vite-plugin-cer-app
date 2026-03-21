@@ -92,9 +92,6 @@ export default handler
 ```ts
 export default defineConfig({
   mode: 'ssr',
-  ssr: {
-    dsd: true, // Declarative Shadow DOM (eliminates FOUC)
-  },
 })
 ```
 
@@ -187,9 +184,6 @@ export default defineConfig({
     routes: 'auto',    // or explicit: ['/about', '/blog/hello-world']
     concurrency: 4,    // parallel renders
     fallback: false,   // serve 404 for unenumerated routes
-  },
-  ssr: {
-    dsd: true,         // embed styles in static HTML
   },
 })
 ```

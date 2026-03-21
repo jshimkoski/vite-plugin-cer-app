@@ -11,10 +11,6 @@ export interface JitCssConfig {
   extendedColors?: boolean
 }
 
-export interface SsrConfig {
-  dsd?: boolean
-}
-
 export interface AutoImportsConfig {
   components?: boolean
   composables?: boolean
@@ -28,7 +24,6 @@ export interface CerAppConfig {
   ssg?: SsgConfig
   router?: Pick<RouterConfig, 'base' | 'scrollToFragment'>
   jitCss?: JitCssConfig
-  ssr?: SsrConfig
   autoImports?: AutoImportsConfig
   port?: number
 }

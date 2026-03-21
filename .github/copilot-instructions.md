@@ -105,6 +105,8 @@ All documentation written in the docs directory should be:
 - Keep code maintainable and scalable.
 - Always write tests for your code.
 - Always follow best practices in coding, security, and performance.
+- Always validate assumptions with actual data.
+- ALWAYS validate code with `npm run validate`.
 - A change can only be considered complete when it meets all the above criteria and has been thoroughly tested and reviewed. THIS IS NON-NEGOTIABLE.
 
 ## Methodology

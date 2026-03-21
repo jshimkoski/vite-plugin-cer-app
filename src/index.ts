@@ -3,7 +3,7 @@ export { cerApp } from './plugin/index.js'
 export { defineConfig } from './types/config.js'
 
 // Re-export all types
-export type { CerAppConfig, SsgConfig, JitCssConfig, SsrConfig, AutoImportsConfig } from './types/config.js'
+export type { CerAppConfig, SsgConfig, JitCssConfig, AutoImportsConfig } from './types/config.js'
 export type { HydrateStrategy, SsgPathsContext, PageSsgConfig, PageMeta, PageLoaderContext, PageLoader } from './types/page.js'
 export type { ApiRequest, ApiResponse, ApiHandler, ApiContext } from './types/api.js'
 export type { AppContext, AppPlugin } from './types/plugin.js'

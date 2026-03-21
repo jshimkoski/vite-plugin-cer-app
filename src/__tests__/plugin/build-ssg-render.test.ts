@@ -54,7 +54,6 @@ function makeConfig(overrides: Partial<ResolvedCerConfig> = {}): ResolvedCerConf
     srcDir: join(tmpRoot, 'app'),
     pagesDir: join(tmpRoot, 'app', 'pages'),
     mode: 'ssg',
-    ssr: { dsd: true },
     ssg: { routes: ['/'], concurrency: 1 },
     ...overrides,
   } as unknown as ResolvedCerConfig

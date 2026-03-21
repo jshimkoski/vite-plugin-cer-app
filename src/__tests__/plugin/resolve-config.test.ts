@@ -74,16 +74,6 @@ describe('resolveConfig', () => {
     expect(cfg.port).toBe(4000)
   })
 
-  it('defaults ssr.dsd to true', () => {
-    const cfg = resolveConfig({}, ROOT)
-    expect(cfg.ssr.dsd).toBe(true)
-  })
-
-  it('respects explicit ssr.dsd=false', () => {
-    const cfg = resolveConfig({ ssr: { dsd: false } }, ROOT)
-    expect(cfg.ssr.dsd).toBe(false)
-  })
-
   it('defaults ssg.routes to "auto"', () => {
     const cfg = resolveConfig({}, ROOT)
     expect(cfg.ssg.routes).toBe('auto')

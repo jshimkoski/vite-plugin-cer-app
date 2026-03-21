@@ -28,7 +28,6 @@ function makeConfig(overrides: Partial<ResolvedCerConfig> = {}): ResolvedCerConf
     srcDir: '/project/app',
     pagesDir: '/project/app/pages',
     mode: 'ssg',
-    ssr: { dsd: true },
     ssg: { concurrency: 4 },
     ...overrides,
   } as unknown as ResolvedCerConfig

@@ -11,10 +11,6 @@ export default defineConfig({
   srcDir: 'app',
   port: 3000,
 
-  ssr: {
-    dsd: true,
-  },
-
   ssg: {
     routes: 'auto',
     concurrency: 4,
@@ -77,25 +73,6 @@ srcDir: 'src/app'  // → pages at src/app/pages/, etc.
 **Default:** `3000`
 
 Dev server port. Overridden by the `--port` CLI flag.
-
----
-
-## `ssr` options
-
-Controls SSR rendering behavior.
-
-```ts
-ssr: {
-  dsd: true, // Emit Declarative Shadow DOM
-}
-```
-
-### `ssr.dsd`
-
-**Type:** `boolean`
-**Default:** `true`
-
-When `true`, renders components with [Declarative Shadow DOM](https://developer.chrome.com/docs/css-ui/declarative-shadow-dom) markup. This eliminates Flash of Unstyled Content (FOUC) because styles are embedded directly in the HTML.
 
 ---
 
@@ -238,7 +215,6 @@ export default defineConfig({
   plugins: [
     cerApp({
       mode: 'ssr',
-      ssr: { dsd: true },
     }),
   ],
 })
@@ -257,7 +233,6 @@ import type {
   CerAppConfig,
   SsgConfig,
   JitCssConfig,
-  SsrConfig,
   AutoImportsConfig,
 } from '@jasonshimmy/vite-plugin-cer-app/types'
 ```
