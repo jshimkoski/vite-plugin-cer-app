@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.6.0] - 2026-03-21
+
+- feat(ssr): switch server entry from renderToStringWithJITCSSDSD to renderToStreamWithJITCSSDSD for true incremental streaming (cca67d8)
+
 ## [v0.5.0] - 2026-03-21
 
 - feat: add runtime configuration support and ISR enhancements (847cd25)
