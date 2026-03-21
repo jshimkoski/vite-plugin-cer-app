@@ -1,10 +1,7 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'pathe'
 
-// We test the server entry code generation by importing just that function.
-// The `buildSSR` function itself invokes Vite's `build` API which we don't
-// need to exercise in unit tests (it's an integration concern).
+// We test the SSR build pipeline by exercising buildSSR and its helpers.
+// Template content is tested in entry-server-template.test.ts.
 vi.mock('vite', () => ({ build: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('../../plugin/generated-dir.js', () => ({
   writeGeneratedDir: vi.fn(),
@@ -20,8 +17,6 @@ vi.mock('node:fs', async (importOriginal) => {
 
 import type { ResolvedCerConfig } from '../../plugin/dev-server.js'
 
-// Build a minimal ResolvedCerConfig so we can call generateServerEntryCode
-// without spinning up a real Vite build.
 function makeConfig(overrides: Partial<ResolvedCerConfig> = {}): ResolvedCerConfig {
   return {
     root: '/project',
@@ -31,118 +26,6 @@ function makeConfig(overrides: Partial<ResolvedCerConfig> = {}): ResolvedCerConf
     ...overrides,
   } as unknown as ResolvedCerConfig
 }
-
-describe('build-ssr generateServerEntryCode (template content)', () => {
-  // Read the source of build-ssr.ts to assert it contains the expected
-  // generated code strings.  This is intentionally coarse-grained:
-  // we check that the template emits the right imports, exports, and
-  // structural elements rather than testing every character.
-  const src = readFileSync(
-    resolve(import.meta.dirname, '../../plugin/build-ssr.ts'),
-    'utf-8',
-  )
-
-  it('template imports registerBuiltinComponents from custom-elements-runtime', () => {
-    expect(src).toContain('registerBuiltinComponents')
-  })
-
-  it('template imports renderToStringWithJITCSS from ssr subpath', () => {
-    expect(src).toContain('renderToStringWithJITCSS')
-    expect(src).toContain('custom-elements-runtime/ssr')
-  })
-
-  it('template imports initRouter from router subpath', () => {
-    expect(src).toContain('initRouter')
-    expect(src).toContain('custom-elements-runtime/router')
-  })
-
-  it('template loads client index.html for merging', () => {
-    expect(src).toContain('_clientTemplate')
-    expect(src).toContain('../client/index.html')
-  })
-
-  it('template defines _mergeWithClientTemplate helper', () => {
-    expect(src).toContain('_mergeWithClientTemplate')
-  })
-
-  it('template defines _prepareRequest async function', () => {
-    expect(src).toContain('_prepareRequest')
-  })
-
-  it('template exports handler as both named and default export', () => {
-    expect(src).toContain('export const handler')
-    expect(src).toContain('export default handler')
-  })
-
-  it('template exports apiRoutes, plugins, and layouts', () => {
-    expect(src).toContain('export { apiRoutes, plugins, layouts }')
-  })
-
-  it('template sets globalThis.__CER_DATA__ synchronously before render', () => {
-    expect(src).toContain('globalThis).__CER_DATA__ = loaderData')
-  })
-
-  it('template deletes __CER_DATA__ after render', () => {
-    expect(src).toContain('delete (globalThis).__CER_DATA__')
-  })
-
-  it('template uses renderToStringWithJITCSSDSD (dsd always on)', () => {
-    expect(src).toContain('renderToStringWithJITCSSDSD')
-  })
-
-  it('template passes dsdPolyfill: false to suppress inline polyfill', () => {
-    expect(src).toContain('dsdPolyfill: false')
-  })
-
-  it('template calls registerEntityMap with entities.json', () => {
-    expect(src).toContain('registerEntityMap(entitiesJson)')
-    expect(src).toContain('entities.json')
-  })
-
-  it('template imports DSD_POLYFILL_SCRIPT and injects before </body>', () => {
-    expect(src).toContain('DSD_POLYFILL_SCRIPT')
-    expect(src).toContain("finalHtml.replace('</body>'")
-  })
-
-  it('template merges SSR html with client template when available', () => {
-    expect(src).toContain('_clientTemplate')
-    expect(src).toContain('_mergeWithClientTemplate(ssrHtml, _clientTemplate)')
-  })
-
-  it('template reads virtual:cer-routes', () => {
-    expect(src).toContain('virtual:cer-routes')
-  })
-
-  it('template reads virtual:cer-layouts', () => {
-    expect(src).toContain('virtual:cer-layouts')
-  })
-
-  it('template reads virtual:cer-plugins', () => {
-    expect(src).toContain('virtual:cer-plugins')
-  })
-
-  it('template reads virtual:cer-server-api', () => {
-    expect(src).toContain('virtual:cer-server-api')
-  })
-
-  it('template reads virtual:cer-components', () => {
-    expect(src).toContain('virtual:cer-components')
-  })
-
-  it('sets Content-Type header on response', () => {
-    expect(src).toContain('text/html; charset=utf-8')
-  })
-
-  it('template initializes plugins and sets globalThis.__cerPluginProvides', () => {
-    expect(src).toContain('__cerPluginProvides')
-    expect(src).toContain('_pluginProvides')
-    expect(src).toContain('_pluginsReady')
-  })
-
-  it('template awaits _pluginsReady before handling each request', () => {
-    expect(src).toContain('await _pluginsReady')
-  })
-})
 
 describe('buildSSR', () => {
   let buildMock: ReturnType<typeof vi.fn>
@@ -285,7 +168,7 @@ describe('buildSSR — virtual server-entry plugin', () => {
     const plugin = await getServerPlugin()
     const source = plugin.load('\0virtual:cer-server-entry')
     expect(typeof source).toBe('string')
-    expect(source).toContain('AUTO-GENERATED server entry')
+    expect(source).toContain('AUTO-GENERATED by @jasonshimmy/vite-plugin-cer-app')
   })
 
   it('load returns undefined for other ids', async () => {

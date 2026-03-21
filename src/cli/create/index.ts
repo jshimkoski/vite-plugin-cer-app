@@ -111,10 +111,17 @@ async function writeTemplateFiles(
 }
 
 /**
- * Returns the path to the template directory for the given mode.
+ * Returns the path to the shared template directory (files common to all modes).
+ */
+function getSharedTemplateDir(): string {
+  return join(__dirname, 'templates', 'shared')
+}
+
+/**
+ * Returns the path to the mode-specific template directory.
  * Resolves relative to the compiled dist output.
  */
-function getTemplateDir(mode: AppMode): string {
+function getModeTemplateDir(mode: AppMode): string {
   // When running from compiled dist/, templates are in create/templates/
   // This file is at dist/cli/create/index.js, so templates are at dist/cli/create/templates/
   return join(__dirname, 'templates', mode)
@@ -148,15 +155,22 @@ async function main(): Promise<void> {
         }
       }
 
-      // Load template files
-      const templateDir = getTemplateDir(mode)
+      // Load template files: shared first, then mode-specific (mode overrides shared)
+      const sharedDir = getSharedTemplateDir()
+      const modeDir = getModeTemplateDir(mode)
 
-      if (!existsSync(templateDir)) {
+      if (!existsSync(sharedDir) && !existsSync(modeDir)) {
         // Fallback: generate minimal template inline
-        console.warn(`[create-cer-app] Template directory not found at ${templateDir}, using inline template.`)
+        console.warn(`[create-cer-app] Template directory not found at ${modeDir}, using inline template.`)
         await generateInlineTemplate(targetDir, projectName, mode)
       } else {
-        const files = await readTemplateFiles(templateDir)
+        const files = new Map<string, string>()
+        if (existsSync(sharedDir)) {
+          for (const [k, v] of await readTemplateFiles(sharedDir)) files.set(k, v)
+        }
+        if (existsSync(modeDir)) {
+          for (const [k, v] of await readTemplateFiles(modeDir)) files.set(k, v)
+        }
         await writeTemplateFiles(files, targetDir, { projectName })
       }
 

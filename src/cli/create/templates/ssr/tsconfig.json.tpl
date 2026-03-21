@@ -1,3 +1,0 @@
-{
-  "extends": "./.cer/tsconfig.json"
-}

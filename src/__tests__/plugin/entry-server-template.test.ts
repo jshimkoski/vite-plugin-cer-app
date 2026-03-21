@@ -8,17 +8,120 @@ const src = readFileSync(
 )
 
 describe('entry-server-template (ENTRY_SERVER_TEMPLATE content)', () => {
-  it('template imports plugins from virtual:cer-plugins', () => {
+  it('imports virtual:cer-components', () => {
+    expect(src).toContain('virtual:cer-components')
+  })
+
+  it('imports virtual:cer-routes', () => {
+    expect(src).toContain('virtual:cer-routes')
+  })
+
+  it('imports virtual:cer-layouts', () => {
+    expect(src).toContain('virtual:cer-layouts')
+  })
+
+  it('imports virtual:cer-plugins', () => {
     expect(src).toContain('virtual:cer-plugins')
   })
 
-  it('template initializes plugins and sets globalThis.__cerPluginProvides', () => {
+  it('imports virtual:cer-server-api', () => {
+    expect(src).toContain('virtual:cer-server-api')
+  })
+
+  it('imports registerBuiltinComponents from custom-elements-runtime', () => {
+    expect(src).toContain('registerBuiltinComponents')
+    expect(src).toContain('@jasonshimmy/custom-elements-runtime')
+  })
+
+  it('imports renderToStringWithJITCSSDSD and DSD_POLYFILL_SCRIPT from ssr subpath', () => {
+    expect(src).toContain('renderToStringWithJITCSSDSD')
+    expect(src).toContain('DSD_POLYFILL_SCRIPT')
+    expect(src).toContain('custom-elements-runtime/ssr')
+  })
+
+  it('imports initRouter from router subpath', () => {
+    expect(src).toContain('initRouter')
+    expect(src).toContain('custom-elements-runtime/router')
+  })
+
+  it('imports beginHeadCollection, endHeadCollection, serializeHeadTags from composables', () => {
+    expect(src).toContain('beginHeadCollection')
+    expect(src).toContain('endHeadCollection')
+    expect(src).toContain('serializeHeadTags')
+    expect(src).toContain('vite-plugin-cer-app/composables')
+  })
+
+  it('uses AsyncLocalStorage for request-scoped data isolation', () => {
+    expect(src).toContain('AsyncLocalStorage')
+    expect(src).toContain('node:async_hooks')
+    expect(src).toContain('_cerDataStore')
+    expect(src).toContain('__CER_DATA_STORE__')
+  })
+
+  it('scopes each request in _cerDataStore.run()', () => {
+    expect(src).toContain('_cerDataStore.run(')
+  })
+
+  it('uses _cerDataStore.enterWith() to scope loader data', () => {
+    expect(src).toContain('_cerDataStore.enterWith(data)')
+  })
+
+  it('initializes plugins and sets globalThis.__cerPluginProvides', () => {
     expect(src).toContain('__cerPluginProvides')
     expect(src).toContain('_pluginProvides')
     expect(src).toContain('_pluginsReady')
   })
 
-  it('template awaits _pluginsReady before handling each request', () => {
+  it('awaits _pluginsReady before handling each request', () => {
     expect(src).toContain('await _pluginsReady')
+  })
+
+  it('calls registerEntityMap with entities.json', () => {
+    expect(src).toContain('registerEntityMap(entitiesJson)')
+    expect(src).toContain('entities.json')
+  })
+
+  it('loads client index.html for merging', () => {
+    expect(src).toContain('_clientTemplate')
+    expect(src).toContain('../client/index.html')
+  })
+
+  it('defines _mergeWithClientTemplate helper', () => {
+    expect(src).toContain('_mergeWithClientTemplate')
+  })
+
+  it('defines _prepareRequest async function', () => {
+    expect(src).toContain('_prepareRequest')
+  })
+
+  it('uses beginHeadCollection / endHeadCollection around the render', () => {
+    expect(src).toContain('beginHeadCollection()')
+    expect(src).toContain('endHeadCollection()')
+  })
+
+  it('passes dsdPolyfill: false to suppress inline polyfill', () => {
+    expect(src).toContain('dsdPolyfill: false')
+  })
+
+  it('injects DSD_POLYFILL_SCRIPT before </body>', () => {
+    expect(src).toContain("finalHtml.replace('</body>'")
+    expect(src).toContain('DSD_POLYFILL_SCRIPT')
+  })
+
+  it('merges SSR html with client template when available', () => {
+    expect(src).toContain('_mergeWithClientTemplate(ssrHtml, _clientTemplate)')
+  })
+
+  it('exports handler as both named and default export', () => {
+    expect(src).toContain('export const handler')
+    expect(src).toContain('export default handler')
+  })
+
+  it('exports apiRoutes, plugins, layouts, and routes', () => {
+    expect(src).toContain('export { apiRoutes, plugins, layouts, routes }')
+  })
+
+  it('sets Content-Type header on response', () => {
+    expect(src).toContain('text/html; charset=utf-8')
   })
 })
