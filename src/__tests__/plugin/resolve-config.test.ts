@@ -155,4 +155,22 @@ describe('resolveConfig', () => {
     const cfg = resolveConfig({ runtimeConfig: { public: { foo: 42 } } }, ROOT)
     expect(cfg.runtimeConfig.public.foo).toBe(42)
   })
+
+  it('defaults runtimeConfig.private to an empty object', () => {
+    const cfg = resolveConfig({}, ROOT)
+    expect(cfg.runtimeConfig.private).toEqual({})
+  })
+
+  it('passes runtimeConfig.private values through', () => {
+    const cfg = resolveConfig({ runtimeConfig: { private: { dbUrl: '', secretKey: '' } } }, ROOT)
+    expect(cfg.runtimeConfig.private).toEqual({ dbUrl: '', secretKey: '' })
+  })
+
+  it('preserves both public and private when both are supplied', () => {
+    const cfg = resolveConfig({
+      runtimeConfig: { public: { apiBase: '/api' }, private: { token: '' } },
+    }, ROOT)
+    expect(cfg.runtimeConfig.public).toEqual({ apiBase: '/api' })
+    expect(cfg.runtimeConfig.private).toEqual({ token: '' })
+  })
 })

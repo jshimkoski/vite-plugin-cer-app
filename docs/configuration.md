@@ -210,7 +210,7 @@ Set any flag to `false` to opt out and manage imports manually.
 
 ## `runtimeConfig` options
 
-Expose typed, centralized public configuration to both server and client code via `useRuntimeConfig()`.
+Expose typed, centralized configuration to your app. Public values are available everywhere; private values are server-only secrets resolved from environment variables at startup.
 
 ```ts
 export default defineConfig({
@@ -218,6 +218,10 @@ export default defineConfig({
     public: {
       apiBase: process.env.VITE_API_BASE ?? 'https://api.example.com',
       appVersion: '1.0.0',
+    },
+    private: {
+      dbUrl: '',         // resolved from process.env.DB_URL at server startup
+      secretKey: '',     // resolved from process.env.SECRET_KEY at server startup
     },
   },
 })
@@ -230,9 +234,9 @@ export default defineConfig({
 
 Values placed here are serialized into `virtual:cer-app-config` at build time and accessible on both server and client via `useRuntimeConfig().public`.
 
-> **Security:** Only put values here that are safe to expose to the browser. Do not put secrets, tokens, or private keys in `public`. Those should be read directly from `process.env` inside server-only code (loaders, server middleware, API handlers).
+> **Security:** Only put values here that are safe to expose to the browser. Do not put secrets, tokens, or private keys in `public`.
 
-> **Serialization:** Values must be JSON-serializable (strings, numbers, booleans, plain objects, arrays). Functions, class instances, `undefined`, and circular references are not supported and will be lost or throw during the build.
+> **Serialization:** Values must be JSON-serializable (strings, numbers, booleans, plain objects, arrays). Functions, class instances, `undefined`, and circular references are not supported.
 
 ```ts
 // Any page, layout, component, or composable
@@ -248,6 +252,52 @@ component('page-index', () => {
 
 ```ts
 import type { RuntimePublicConfig } from '@jasonshimmy/vite-plugin-cer-app/types'
+```
+
+---
+
+### `runtimeConfig.private`
+
+**Type:** `Record<string, string>`
+**Default:** `{}`
+
+Server-only secrets. Declare keys with empty-string defaults in `cer.config.ts` for typing purposes. **Private values are never included in the client bundle.**
+
+**Environment variable resolution order** (at server startup, for each declared key):
+
+1. `process.env[key]` — exact case (e.g. `process.env.dbUrl`)
+2. `process.env[UPPER_SNAKE_CASE(key)]` — conventional env var form (e.g. `process.env.DB_URL`)
+3. The declared default value — used as a last-resort fallback
+
+camelCase keys are automatically converted: `dbUrl` → `DB_URL`, `secretKey` → `SECRET_KEY`.
+
+```ts
+// cer.config.ts
+export default defineConfig({
+  runtimeConfig: {
+    private: {
+      dbUrl: '',       // resolved from process.env.dbUrl or process.env.DB_URL
+      secretKey: '',   // resolved from process.env.secretKey or process.env.SECRET_KEY
+    },
+  },
+})
+```
+
+```ts
+// app/pages/data.ts — loader (server-only)
+export const loader = async () => {
+  const { private: priv } = useRuntimeConfig()
+  const rows = await db.query(priv!.dbUrl)
+  return { rows }
+}
+```
+
+> `useRuntimeConfig().private` is `undefined` on the client. Only access it in server-only contexts (loaders, server middleware, API handlers).
+
+**TypeScript:** Import `RuntimePrivateConfig` to type your private config:
+
+```ts
+import type { RuntimePrivateConfig } from '@jasonshimmy/vite-plugin-cer-app/types'
 ```
 
 ---

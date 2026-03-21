@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import {
+  isPathBounded,
   matchRoutePattern,
   findRevalidate,
   findRenderMode,
@@ -8,6 +9,35 @@ import {
   serveFromIsrCache,
   type IsrCacheEntry,
 } from '../../cli/commands/preview-isr.js'
+
+// ─── isPathBounded ────────────────────────────────────────────────────────────
+
+describe('isPathBounded', () => {
+  it('allows normal file paths inside the root', () => {
+    expect(isPathBounded('/dist', '/index.html')).toBe(true)
+  })
+
+  it('allows nested paths inside the root', () => {
+    expect(isPathBounded('/dist', '/assets/app.js')).toBe(true)
+  })
+
+  it('allows the root path itself', () => {
+    expect(isPathBounded('/dist', '/')).toBe(true)
+  })
+
+  it('blocks simple path traversal (../ escape)', () => {
+    expect(isPathBounded('/dist', '/../../../../etc/passwd')).toBe(false)
+  })
+
+  it('blocks a path that escapes by one level', () => {
+    expect(isPathBounded('/dist', '/../secret')).toBe(false)
+  })
+
+  it('does not confuse a sibling directory for the root', () => {
+    // /dist-other starts with /dist but is NOT inside /dist
+    expect(isPathBounded('/dist', '/../dist-other/file')).toBe(false)
+  })
+})
 
 // ─── matchRoutePattern ────────────────────────────────────────────────────────
 

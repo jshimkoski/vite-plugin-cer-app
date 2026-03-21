@@ -245,6 +245,36 @@ describe('cerApp plugin — load hook', () => {
     expect(result).toContain('appConfig')
     expect(result).toContain('ssg')
   })
+
+  it('excludes _runtimePrivateDefaults from the client bundle', async () => {
+    const plugin = getCerPlugin({ runtimeConfig: { private: { dbUrl: '', secretKey: '' } } })
+    plugin.config({ root: '/project' }, { command: 'serve', mode: 'development' })
+    plugin.configResolved(FAKE_RESOLVED)
+    // Client load (ssr: false / omitted)
+    const clientResult = await plugin.load('\0virtual:cer-app-config') as string
+    expect(clientResult).not.toContain('_runtimePrivateDefaults')
+    expect(clientResult).not.toContain('dbUrl')
+  })
+
+  it('includes _runtimePrivateDefaults in the SSR bundle', async () => {
+    const plugin = getCerPlugin({ runtimeConfig: { private: { dbUrl: '', secretKey: '' } } })
+    plugin.config({ root: '/project' }, { command: 'serve', mode: 'development' })
+    plugin.configResolved(FAKE_RESOLVED)
+    // SSR load (ssr: true)
+    const ssrResult = await plugin.load('\0virtual:cer-app-config', { ssr: true }) as string
+    expect(ssrResult).toContain('_runtimePrivateDefaults')
+    expect(ssrResult).toContain('dbUrl')
+  })
+
+  it('caches SSR and client virtual:cer-app-config separately', async () => {
+    const plugin = getCerPlugin({ runtimeConfig: { private: { token: '' } } })
+    plugin.config({ root: '/project' }, { command: 'serve', mode: 'development' })
+    plugin.configResolved(FAKE_RESOLVED)
+    const client = await plugin.load('\0virtual:cer-app-config') as string
+    const ssr = await plugin.load('\0virtual:cer-app-config', { ssr: true }) as string
+    expect(client).not.toContain('_runtimePrivateDefaults')
+    expect(ssr).toContain('_runtimePrivateDefaults')
+  })
 })
 
 describe('cerApp plugin — transform hook', () => {
@@ -362,6 +392,26 @@ describe('cerApp plugin — buildStart hook', () => {
     plugin.configResolved(FAKE_RESOLVED)
     await plugin.buildStart()
     expect(writeTsconfigPaths).toHaveBeenCalledTimes(1)
+  })
+
+  it('warms virtual:cer-app-config cache under :client key so load() hits it', async () => {
+    // After buildStart(), a subsequent client load (ssr: false) should be served
+    // from cache (generateAppConfigModule is not a public mock, so we verify by
+    // ensuring the load hook returns a non-null result without triggering the
+    // real generator — which is mocked at module level to a fixed string '// mock'
+    // for other modules; appConfig is not mocked, so it generates real code).
+    const plugin = getCerPlugin({ runtimeConfig: { private: { token: '' } } })
+    plugin.config({ root: '/project' }, { command: 'build', mode: 'production' })
+    plugin.configResolved(FAKE_RESOLVED)
+    await plugin.buildStart()
+
+    // Client load should return a result that does NOT include _runtimePrivateDefaults
+    const result = await plugin.load('\0virtual:cer-app-config') as string
+    expect(result).not.toContain('_runtimePrivateDefaults')
+
+    // SSR load (different cache key) should include _runtimePrivateDefaults
+    const ssrResult = await plugin.load('\0virtual:cer-app-config', { ssr: true }) as string
+    expect(ssrResult).toContain('_runtimePrivateDefaults')
   })
 })
 

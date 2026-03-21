@@ -21,17 +21,21 @@ import routes from 'virtual:cer-routes'
 import layouts from 'virtual:cer-layouts'
 import plugins from 'virtual:cer-plugins'
 import apiRoutes from 'virtual:cer-server-api'
-import { runtimeConfig } from 'virtual:cer-app-config'
+import { runtimeConfig, _runtimePrivateDefaults } from 'virtual:cer-app-config'
 import { registerBuiltinComponents } from '@jasonshimmy/custom-elements-runtime'
 import { registerEntityMap, renderToStreamWithJITCSSDSD, DSD_POLYFILL_SCRIPT } from '@jasonshimmy/custom-elements-runtime/ssr'
 import entitiesJson from '@jasonshimmy/custom-elements-runtime/entities.json'
 import { initRouter } from '@jasonshimmy/custom-elements-runtime/router'
-import { beginHeadCollection, endHeadCollection, serializeHeadTags, initRuntimeConfig } from '@jasonshimmy/vite-plugin-cer-app/composables'
+import { beginHeadCollection, endHeadCollection, serializeHeadTags, initRuntimeConfig, resolvePrivateConfig } from '@jasonshimmy/vite-plugin-cer-app/composables'
 import { errorTag } from 'virtual:cer-error'
 import { createIsrHandler } from '@jasonshimmy/vite-plugin-cer-app/isr'
 
 registerBuiltinComponents()
-initRuntimeConfig(runtimeConfig)
+
+// Resolve private config from environment variables at server startup.
+// Each key declared in runtimeConfig.private is looked up in process.env,
+// first as-is, then as ALL_CAPS. The declared default is used as fallback.
+initRuntimeConfig({ ...runtimeConfig, private: resolvePrivateConfig(_runtimePrivateDefaults ?? {}) })
 
 // Pre-load the full HTML entity map so named entities like &mdash; decode
 // correctly during SSR. Without this the bundled runtime falls back to a

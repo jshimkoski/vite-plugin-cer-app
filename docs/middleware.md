@@ -9,39 +9,35 @@ The framework has two kinds of middleware:
 
 ## Route middleware
 
-### Defining global middleware
+### Defining middleware
 
-Create a file in `app/middleware/`. It runs before every route navigation:
+Create a file in `app/middleware/`. Export a default `MiddlewareFn` using `defineMiddleware`:
 
 ```ts
 // app/middleware/auth.ts
-import type { RouteMiddleware } from '@jasonshimmy/vite-plugin-cer-app/types'
-
-const auth: RouteMiddleware = async (to, from, next) => {
+export default defineMiddleware(async (to, from) => {
   const session = await getSession()
-  if (!session) {
-    next('/login')   // redirect
-  } else {
-    next()           // allow navigation
-  }
-}
-
-export default auth
+  if (!session) return '/login'  // redirect
+  return true                    // allow navigation
+})
 ```
 
-### `RouteMiddleware` signature
+`defineMiddleware` is a no-op identity helper — it just provides TypeScript types without
+any runtime overhead. It is auto-imported, so you don't need to import it manually.
+
+### `MiddlewareFn` signature
 
 ```ts
-type NextFunction = (redirectTo?: string) => void
+type GuardResult = boolean | string | Promise<boolean | string>
 
-type RouteMiddleware = (
-  to: Route,
-  from: Route | null,
-  next: NextFunction,
-) => void | Promise<void>
+type MiddlewareFn = (to: RouteState, from: RouteState | null) => GuardResult
 ```
 
-Call `next()` to allow navigation, or `next('/path')` to redirect.
+| Return value | Effect |
+|---|---|
+| `true` | Allow navigation |
+| `false` | Block navigation (stay on current route) |
+| `string` | Redirect to that path |
 
 ---
 
@@ -56,18 +52,50 @@ export const meta = {
 }
 ```
 
-Named middleware runs in addition to any global middleware.
-
 ---
 
 ### Multiple middleware
+
+Middleware runs in the order listed. The first non-`true` result wins:
 
 ```ts
 // app/pages/admin.ts
 export const meta = {
   middleware: ['auth', 'admin-role'],
-  // Runs: auth → admin-role → page
+  // Runs: auth → admin-role → page render
 }
+```
+
+---
+
+### Execution order within a navigation
+
+1. `beforeEnter` fires on the matched route — runs all declared middleware in order
+2. Route state updates (component renders)
+3. `afterEnter` fires (analytics, logging)
+
+Redirect loop protection: the router stops after 10 consecutive redirects.
+
+---
+
+### Error handling
+
+If a middleware function throws (synchronously or asynchronously), navigation is **blocked** — the framework catches the error, logs it, and returns `false` to keep the user on the current route:
+
+```
+[cer-app] Middleware "auth" threw an error: Error: session store unavailable
+```
+
+This means a crashing middleware is always safe: the user stays put rather than landing on a broken page or being incorrectly redirected. Subsequent middleware in the same chain does not run.
+
+---
+
+### TypeScript types
+
+`MiddlewareFn` and `GuardResult` are exported from the package if you need them outside of auto-imported files:
+
+```ts
+import type { MiddlewareFn, GuardResult } from '@jasonshimmy/vite-plugin-cer-app/types'
 ```
 
 ---
@@ -77,7 +105,7 @@ export const meta = {
 All files in `app/middleware/` are registered and available by name. They are exported from `virtual:cer-middleware`:
 
 ```ts
-import middleware from 'virtual:cer-middleware'
+import { middleware } from 'virtual:cer-middleware'
 // { auth: [Function], 'admin-role': [Function], ... }
 ```
 

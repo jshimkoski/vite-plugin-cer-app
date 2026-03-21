@@ -1,13 +1,15 @@
 import type { RouteState } from '@jasonshimmy/custom-elements-runtime/router'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
-export type NextFunction = (redirectTo?: string) => void
+/**
+ * Return value from a route middleware function:
+ * - `true`   — allow navigation
+ * - `false`  — block navigation
+ * - `string` — redirect to that path
+ */
+export type GuardResult = boolean | string | Promise<boolean | string>
 
-export type RouteMiddleware = (
-  to: RouteState,
-  from: RouteState | null,
-  next: NextFunction,
-) => void | Promise<void>
+export type MiddlewareFn = (to: RouteState, from: RouteState | null) => GuardResult
 
 export type ServerMiddleware = (
   req: IncomingMessage,

@@ -22,6 +22,10 @@ export interface RuntimePublicConfig {
   [key: string]: unknown
 }
 
+export interface RuntimePrivateConfig {
+  [key: string]: string
+}
+
 export interface RuntimeConfig {
   /**
    * Public runtime config — available on both server and client via
@@ -36,6 +40,17 @@ export interface RuntimeConfig {
    * }
    */
   public?: RuntimePublicConfig
+  /**
+   * Server-only secrets — never serialized into the client bundle.
+   * Declare keys with empty-string defaults here; at server startup each key
+   * is resolved from `process.env[KEY]` (case-insensitive, ALL_CAPS preferred).
+   *
+   * @example
+   * runtimeConfig: {
+   *   private: { dbUrl: '', secretKey: '' },
+   * }
+   */
+  private?: RuntimePrivateConfig
 }
 
 export interface CerAppConfig {

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { useRuntimeConfig, initRuntimeConfig } from '../../runtime/composables/use-runtime-config.js'
+import { useRuntimeConfig, initRuntimeConfig, resolvePrivateConfig } from '../../runtime/composables/use-runtime-config.js'
 
 beforeEach(() => {
   // Reset global state between tests
@@ -55,5 +55,66 @@ describe('useRuntimeConfig', () => {
     initRuntimeConfig({ public: {} })
     const config = useRuntimeConfig()
     expect(config.public).toEqual({})
+  })
+
+  it('returns private config when initialized with it', () => {
+    initRuntimeConfig({ public: {}, private: { dbUrl: 'postgres://localhost', secretKey: 'abc' } })
+    const config = useRuntimeConfig()
+    expect(config.private).toEqual({ dbUrl: 'postgres://localhost', secretKey: 'abc' })
+  })
+
+  it('private is undefined when not supplied', () => {
+    initRuntimeConfig({ public: { apiBase: '/api' } })
+    const config = useRuntimeConfig()
+    expect(config.private).toBeUndefined()
+  })
+
+  it('returns empty private config when initialized with empty object', () => {
+    initRuntimeConfig({ public: {}, private: {} })
+    expect(useRuntimeConfig().private).toEqual({})
+  })
+})
+
+// ─── resolvePrivateConfig ─────────────────────────────────────────────────────
+
+describe('resolvePrivateConfig', () => {
+  it('resolves a key from the exact-case env var', () => {
+    const result = resolvePrivateConfig({ dbUrl: '' }, { dbUrl: 'postgres://localhost' })
+    expect(result.dbUrl).toBe('postgres://localhost')
+  })
+
+  it('resolves a key from the ALL_CAPS env var when exact case is absent', () => {
+    const result = resolvePrivateConfig({ dbUrl: '' }, { DB_URL: 'postgres://prod' })
+    expect(result.dbUrl).toBe('postgres://prod')
+  })
+
+  it('falls back to the declared default when neither env var is set', () => {
+    const result = resolvePrivateConfig({ dbUrl: 'default-db' }, {})
+    expect(result.dbUrl).toBe('default-db')
+  })
+
+  it('exact-case env var takes precedence over ALL_CAPS', () => {
+    const result = resolvePrivateConfig({ dbUrl: '' }, { dbUrl: 'exact', DB_URL: 'caps' })
+    expect(result.dbUrl).toBe('exact')
+  })
+
+  it('handles multiple keys independently', () => {
+    const result = resolvePrivateConfig(
+      { dbUrl: '', secretKey: '', apiToken: 'default-token' },
+      { dbUrl: 'pg://host', SECRET_KEY: 's3cr3t' },
+    )
+    expect(result.dbUrl).toBe('pg://host')
+    expect(result.secretKey).toBe('s3cr3t')
+    expect(result.apiToken).toBe('default-token')
+  })
+
+  it('returns an empty object when defaults is empty', () => {
+    expect(resolvePrivateConfig({}, { ANY: 'value' })).toEqual({})
+  })
+
+  it('preserves key names exactly as declared in output (does not rename keys)', () => {
+    const result = resolvePrivateConfig({ camelCase: 'def' }, { CAMEL_CASE: 'val' })
+    expect(Object.keys(result)).toEqual(['camelCase'])
+    expect(result.camelCase).toBe('val')
   })
 })

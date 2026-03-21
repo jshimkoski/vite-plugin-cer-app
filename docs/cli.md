@@ -110,6 +110,7 @@ cer-app preview --port 8080
 - Static assets from `dist/client/` are served first; HTML requests fall through to the SSR handler
 - Otherwise, starts a static file server with SPA fallback (serves `index.html` for unknown paths)
 - Returns 404 for paths not found in `dist/` (static mode only)
+- **Path traversal protection:** all file requests are validated against the `dist/` root — requests attempting to escape it (e.g. `GET /../../../../etc/passwd`) receive a `400` response
 
 ---
 

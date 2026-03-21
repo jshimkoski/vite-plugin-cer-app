@@ -5,6 +5,7 @@
  * from the HTTP server wiring in preview.ts.
  */
 
+import { resolve, join } from 'pathe'
 import { Readable } from 'node:stream'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
@@ -23,6 +24,19 @@ export interface IsrCacheEntry {
 export type IsrCacheStatus = 'HIT' | 'STALE' | 'MISS'
 
 export type SsrHandlerFn = (req: IncomingMessage, res: ServerResponse) => void | Promise<void>
+
+// ─── Path traversal guard ─────────────────────────────────────────────────────
+
+/**
+ * Returns `true` when `urlPath` joined onto `rootDir` resolves to a path that
+ * is strictly inside (or equal to) `rootDir`. A traversal attempt such as
+ * `../../../../etc/passwd` would resolve outside `rootDir` and return `false`.
+ */
+export function isPathBounded(rootDir: string, urlPath: string): boolean {
+  const safeRoot = resolve(rootDir)
+  const resolved = resolve(join(rootDir, urlPath))
+  return resolved === safeRoot || resolved.startsWith(safeRoot + '/')
+}
 
 // ─── Route pattern matching ───────────────────────────────────────────────────
 

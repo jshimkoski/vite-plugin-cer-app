@@ -7,7 +7,7 @@ export type { CerAppConfig, SsgConfig, JitCssConfig, AutoImportsConfig } from '.
 export type { HydrateStrategy, SsgPathsContext, PageSsgConfig, PageMeta, PageLoaderContext, PageLoader } from './types/page.js'
 export type { ApiRequest, ApiResponse, ApiHandler, ApiContext } from './types/api.js'
 export type { AppContext, AppPlugin } from './types/plugin.js'
-export type { NextFunction, RouteMiddleware, ServerMiddleware } from './types/middleware.js'
+export type { MiddlewareFn, GuardResult, ServerMiddleware } from './types/middleware.js'
 
 // Re-export resolved config type for use in build scripts
 export type { ResolvedCerConfig } from './plugin/dev-server.js'

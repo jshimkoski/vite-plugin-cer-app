@@ -55,6 +55,22 @@ describe('autoImportTransform — target directory gating', () => {
     )
     expect(result).not.toBeNull()
   })
+
+  it('transforms files in middleware/ (so defineMiddleware is auto-imported)', () => {
+    const result = autoImportTransform(
+      "export default defineMiddleware(() => true)",
+      '/project/app/middleware/auth.ts',
+      opts,
+    )
+    expect(result).not.toBeNull()
+    expect(result).toContain('defineMiddleware')
+  })
+
+  it('still returns null for composables/ (not in scope)', () => {
+    expect(
+      autoImportTransform("export default defineMiddleware(() => true)", '/project/app/composables/useTheme.ts', opts),
+    ).toBeNull()
+  })
 })
 
 // ─── No injection needed ─────────────────────────────────────────────────────

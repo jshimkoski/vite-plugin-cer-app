@@ -11,9 +11,9 @@ const RUNTIME_IMPORTS = `import { component, html, css, ref, computed, watch, wa
 
 const DIRECTIVE_IMPORTS = `import { when, each, match, anchorBlock } from '@jasonshimmy/custom-elements-runtime/directives';`
 
-const FRAMEWORK_IMPORTS = `import { useHead, usePageData, useInject, useRuntimeConfig } from '@jasonshimmy/vite-plugin-cer-app/composables';`
+const FRAMEWORK_IMPORTS = `import { useHead, usePageData, useInject, useRuntimeConfig, defineMiddleware } from '@jasonshimmy/vite-plugin-cer-app/composables';`
 
-const FRAMEWORK_IDENTIFIERS = ['useHead', 'usePageData', 'useInject', 'useRuntimeConfig']
+const FRAMEWORK_IDENTIFIERS = ['useHead', 'usePageData', 'useInject', 'useRuntimeConfig', 'defineMiddleware']
 
 const RUNTIME_IDENTIFIERS = [
   'component',
@@ -63,12 +63,13 @@ export function autoImportTransform(
   const normalizedId = normalize(id)
   const srcDir = normalize(opts.srcDir)
 
-  // Transform files inside app/pages/, app/layouts/, app/components/,
+  // Transform files inside app/pages/, app/layouts/, app/components/, app/middleware/
   // AND special convention files directly in app/ (loading.ts, error.ts, etc.)
   const isSubDir =
     normalizedId.startsWith(srcDir + '/pages/') ||
     normalizedId.startsWith(srcDir + '/layouts/') ||
-    normalizedId.startsWith(srcDir + '/components/')
+    normalizedId.startsWith(srcDir + '/components/') ||
+    normalizedId.startsWith(srcDir + '/middleware/')
   // Files directly in srcDir root (e.g. app/loading.ts, app/error.ts)
   const isRootConventionFile =
     normalizedId.startsWith(srcDir + '/') &&

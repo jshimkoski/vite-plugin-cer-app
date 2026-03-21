@@ -65,4 +65,19 @@ describe('generateMiddlewareCode', () => {
     expect(code).toContain('export const middleware')
     expect(code).toContain('export default middleware')
   })
+
+  it('prefixes identifier with underscore when filename starts with a digit', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${MIDDLEWARE}/2fa.ts`])
+    const code = await generateMiddlewareCode(MIDDLEWARE)
+    // Leading digit is not valid in a JS identifier — must be prefixed
+    expect(code).toContain('_m__2fa')
+    expect(code).toContain('"2fa"')
+  })
+
+  it('strips .js extension as well as .ts', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${MIDDLEWARE}/auth.js`])
+    const code = await generateMiddlewareCode(MIDDLEWARE)
+    expect(code).toContain('_m_auth')
+    expect(code).toContain('"auth": _m_auth')
+  })
 })

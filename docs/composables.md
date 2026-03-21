@@ -144,7 +144,9 @@ import { useInject } from '@jasonshimmy/vite-plugin-cer-app/composables'
 
 ### `useRuntimeConfig()`
 
-Returns the `public` runtime configuration object set in `cer.config.ts` under `runtimeConfig.public`. Available in all rendering modes (SPA, SSR, SSG) and on both server and client.
+Returns the runtime configuration set in `cer.config.ts`. Returns `{ public, private? }`:
+- `public` — available everywhere (server and client)
+- `private` — server-only secrets resolved from `process.env` at startup; `undefined` on the client
 
 ```ts
 // cer.config.ts
@@ -152,28 +154,51 @@ export default defineConfig({
   runtimeConfig: {
     public: {
       apiBase: process.env.VITE_API_BASE ?? '/api',
-      featureFlags: { darkMode: true },
+    },
+    private: {
+      dbUrl: '',       // resolved from process.env.DB_URL at server startup
     },
   },
 })
 ```
 
 ```ts
-// app/pages/index.ts — auto-imported, no import statement needed
+// app/pages/index.ts — public config, works on client and server
 component('page-index', () => {
   const { public: cfg } = useRuntimeConfig()
-  // cfg.apiBase → '/api'
-
   return html`<p>API base: ${cfg.apiBase}</p>`
 })
 ```
 
-The config is initialized at app boot (both client and server) by calling `initRuntimeConfig(runtimeConfig)` with the value from `virtual:cer-app-config`. You only need `useRuntimeConfig()` to read it.
+```ts
+// app/pages/data.ts — private config, server-only (loader)
+export const loader = async () => {
+  const { private: priv } = useRuntimeConfig()
+  const rows = await db.query(priv!.dbUrl)
+  return { rows }
+}
+```
 
-**Only use `runtimeConfig.public` for values safe to expose to the browser.** Secrets, tokens, and private keys must stay in server-only code (loaders, API handlers, server middleware).
+**Only use `runtimeConfig.public` for values safe to expose to the browser.** Use `runtimeConfig.private` for secrets — they are never sent to the client.
 
 If you need it outside auto-imported directories:
 
 ```ts
 import { useRuntimeConfig } from '@jasonshimmy/vite-plugin-cer-app/composables'
 ```
+
+---
+
+### `defineMiddleware(fn)`
+
+Identity helper that gives TypeScript the correct `MiddlewareFn` type. Auto-imported — no import needed in `app/middleware/` files.
+
+```ts
+// app/middleware/auth.ts
+export default defineMiddleware(async (to, from) => {
+  const isLoggedIn = !!localStorage.getItem('token')
+  return isLoggedIn ? true : '/login'
+})
+```
+
+See [Middleware](./middleware.md) for full documentation.

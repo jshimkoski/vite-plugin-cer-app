@@ -129,6 +129,38 @@ describe('generateRoutesCode', () => {
     const code = await generateRoutesCode(PAGES)
     expect(code).not.toContain('beforeEnter')
   })
+
+  it('uses return-value API (await handler) not callback-style (new Promise)', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/dashboard.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `component('page-dashboard', () => html\`<div/>\`)\nexport const meta = { middleware: ['auth'] }` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('await handler(to, from)')
+    expect(code).not.toContain('new Promise')
+  })
+
+  it('wraps handler call in try-catch (blocks navigation on error)', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/dashboard.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `component('page-dashboard', () => html\`<div/>\`)\nexport const meta = { middleware: ['auth'] }` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('try {')
+    expect(code).toContain('} catch (err) {')
+    expect(code).toContain('return false')
+  })
+
+  it('logs the middleware name in the error message', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/dashboard.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `component('page-dashboard', () => html\`<div/>\`)\nexport const meta = { middleware: ['auth'] }` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('console.error')
+    expect(code).toContain('Middleware')
+    expect(code).toContain('err)')
+  })
 })
 
 // ─── meta.layout ─────────────────────────────────────────────────────────────

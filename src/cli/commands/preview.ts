@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url'
 import {
   type IsrCacheEntry,
   type SsrHandlerFn,
+  isPathBounded,
   findRevalidate,
   findRenderMode,
   renderForIsr,
@@ -69,6 +70,13 @@ function serveStaticFile(
   distDir: string,
 ): boolean {
   const urlPath = (req.url ?? '/').split('?')[0]
+
+  // Guard against path traversal: resolved path must stay within distDir.
+  if (!isPathBounded(distDir, urlPath)) {
+    res.statusCode = 400
+    res.end('Bad Request')
+    return true
+  }
 
   // Try exact file path
   let filePath = join(distDir, urlPath)
@@ -329,7 +337,10 @@ export function previewCommand(): Command {
           const ext = extname(urlPath).toLowerCase()
           if (ext && ext !== '.html' && existsSync(clientDist)) {
             const assetPath = join(clientDist, urlPath)
-            if (existsSync(assetPath) && !statSync(assetPath).isDirectory()) {
+            if (
+              isPathBounded(clientDist, urlPath) &&
+              existsSync(assetPath) && !statSync(assetPath).isDirectory()
+            ) {
               res.setHeader('Content-Type', getMimeType(assetPath))
               res.setHeader('Cache-Control', 'no-cache')
               createReadStream(assetPath).pipe(res)

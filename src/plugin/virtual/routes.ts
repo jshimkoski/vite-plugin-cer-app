@@ -256,7 +256,13 @@ export async function generateRoutesCode(pagesDir: string): Promise<string> {
       `      for (const name of ${mwLiteral}) {\n` +
       `        const handler = middleware[name]\n` +
       `        if (typeof handler !== 'function') continue\n` +
-      `        const result = await new Promise((resolve) => handler(to, from, resolve))\n` +
+      `        let result\n` +
+      `        try {\n` +
+      `          result = await handler(to, from)\n` +
+      `        } catch (err) {\n` +
+      `          console.error('[cer-app] Middleware "' + name + '" threw an error:', err)\n` +
+      `          return false\n` +
+      `        }\n` +
       `        if (typeof result === 'string') return result\n` +
       `        if (result === false) return false\n` +
       `      }\n` +

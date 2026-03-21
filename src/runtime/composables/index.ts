@@ -2,4 +2,6 @@ export { useHead, beginHeadCollection, endHeadCollection, serializeHeadTags } fr
 export type { HeadInput } from './use-head.js'
 export { usePageData } from './use-page-data.js'
 export { useInject } from './use-inject.js'
-export { useRuntimeConfig, initRuntimeConfig } from './use-runtime-config.js'
+export { useRuntimeConfig, initRuntimeConfig, resolvePrivateConfig } from './use-runtime-config.js'
+export type { RuntimeConfigResult, RuntimeConfigPublic, RuntimeConfigPrivate } from './use-runtime-config.js'
+export { defineMiddleware } from './define-middleware.js'
