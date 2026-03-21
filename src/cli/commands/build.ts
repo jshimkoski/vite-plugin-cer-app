@@ -2,7 +2,7 @@ import { Command } from 'commander'
 import { build } from 'vite'
 import { resolve, join } from 'pathe'
 import { pathToFileURL } from 'node:url'
-import { existsSync, renameSync } from 'node:fs'
+import { existsSync, renameSync, mkdirSync, writeFileSync } from 'node:fs'
 import { cerApp, resolveConfig } from '../../plugin/index.js'
 import { buildSSR, resolveClientEntry } from '../../plugin/build-ssr.js'
 import { buildSSG } from '../../plugin/build-ssg.js'
@@ -22,6 +22,14 @@ async function loadCerConfig(root: string): Promise<CerAppConfig> {
   if (!filePath) return {}
 
   try {
+    // Bootstrap .cer/tsconfig.json so rolldown can resolve it during cer.config.ts transform
+    const cerDir = resolve(root, '.cer')
+    const cerTsconfig = resolve(cerDir, 'tsconfig.json')
+    if (!existsSync(cerTsconfig)) {
+      mkdirSync(cerDir, { recursive: true })
+      writeFileSync(cerTsconfig, '{"compilerOptions":{}}\n', 'utf-8')
+    }
+
     const { build: viteBuild } = await import('vite')
     await viteBuild({
       build: {

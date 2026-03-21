@@ -2,7 +2,7 @@ import { Command } from 'commander'
 import { createServer } from 'vite'
 import { resolve } from 'pathe'
 import { pathToFileURL } from 'node:url'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { cerApp } from '../../plugin/index.js'
 import type { CerAppConfig } from '../../types/config.js'
 
@@ -26,6 +26,14 @@ async function loadCerConfig(root: string): Promise<CerAppConfig> {
   }
 
   try {
+    // Bootstrap .cer/tsconfig.json so rolldown can resolve it during cer.config.ts transform
+    const cerDir = resolve(root, '.cer')
+    const cerTsconfig = resolve(cerDir, 'tsconfig.json')
+    if (!existsSync(cerTsconfig)) {
+      mkdirSync(cerDir, { recursive: true })
+      writeFileSync(cerTsconfig, '{"compilerOptions":{}}\n', 'utf-8')
+    }
+
     // Use Vite's build to transpile TS config at runtime
     const { build } = await import('vite')
     await build({

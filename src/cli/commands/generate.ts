@@ -1,7 +1,7 @@
 import { Command } from 'commander'
 import { resolve } from 'pathe'
 import { pathToFileURL } from 'node:url'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { resolveConfig } from '../../plugin/index.js'
 import { buildSSG } from '../../plugin/build-ssg.js'
 import { cerApp } from '../../plugin/index.js'
@@ -20,6 +20,14 @@ async function loadCerConfig(root: string): Promise<CerAppConfig> {
   if (!filePath) return {}
 
   try {
+    // Bootstrap .cer/tsconfig.json so rolldown can resolve it during cer.config.ts transform
+    const cerDir = resolve(root, '.cer')
+    const cerTsconfig = resolve(cerDir, 'tsconfig.json')
+    if (!existsSync(cerTsconfig)) {
+      mkdirSync(cerDir, { recursive: true })
+      writeFileSync(cerTsconfig, '{"compilerOptions":{}}\n', 'utf-8')
+    }
+
     const { build } = await import('vite')
     await build({
       build: {
