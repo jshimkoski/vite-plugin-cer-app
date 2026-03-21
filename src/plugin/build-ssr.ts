@@ -27,7 +27,11 @@ export function resolveClientEntry(config: ResolvedCerConfig): string {
  * The server entry template that wires all virtual modules together and
  * exports a request handler for Node.js (Express-compatible).
  */
-function generateServerEntryCode(): string {
+function generateServerEntryCode(config: ResolvedCerConfig): string {
+  const dsd = config.ssr.dsd
+  const renderImport = dsd
+    ? `import { registerEntityMap, renderToStringWithJITCSSDSD, DSD_POLYFILL_SCRIPT } from '@jasonshimmy/custom-elements-runtime/ssr'`
+    : `import { registerEntityMap, renderToStringWithJITCSS } from '@jasonshimmy/custom-elements-runtime/ssr'`
   return `// AUTO-GENERATED server entry by @jasonshimmy/vite-plugin-cer-app
 import { readFileSync, existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -38,7 +42,7 @@ import layouts from 'virtual:cer-layouts'
 import plugins from 'virtual:cer-plugins'
 import apiRoutes from 'virtual:cer-server-api'
 import { registerBuiltinComponents } from '@jasonshimmy/custom-elements-runtime'
-import { registerEntityMap, renderToStringWithJITCSSDSD, DSD_POLYFILL_SCRIPT } from '@jasonshimmy/custom-elements-runtime/ssr'
+${renderImport}
 import entitiesJson from '@jasonshimmy/custom-elements-runtime/entities.json'
 import { initRouter } from '@jasonshimmy/custom-elements-runtime/router'
 import { beginHeadCollection, endHeadCollection, serializeHeadTags } from '@jasonshimmy/vite-plugin-cer-app/composables'
@@ -193,7 +197,7 @@ export const handler = async (req, res) => {
   // dsdPolyfill: false — we inject the polyfill manually after merging so it
   // lands at the end of <body>, not inside <cer-layout-view> light DOM where
   // scripts may not execute.
-  const { htmlWithStyles } = renderToStringWithJITCSSDSD(vnode, {
+  const { htmlWithStyles } = ${dsd ? 'renderToStringWithJITCSSDSD' : 'renderToStringWithJITCSS'}(vnode, {
     dsdPolyfill: false,
     router,
   })
@@ -218,9 +222,9 @@ export const handler = async (req, res) => {
 
   // Inject DSD polyfill at end of <body>, outside <cer-layout-view>, so the
   // browser runs it after parsing the declarative shadow roots.
-  finalHtml = finalHtml.includes('</body>')
+  ${dsd ? `finalHtml = finalHtml.includes('</body>')
     ? finalHtml.replace('</body>', DSD_POLYFILL_SCRIPT + '</body>')
-    : finalHtml + DSD_POLYFILL_SCRIPT
+    : finalHtml + DSD_POLYFILL_SCRIPT` : '// dsd: false — no DSD polyfill needed'}
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8')
   res.end(finalHtml)
@@ -277,7 +281,7 @@ export async function buildSSR(
   }
 
   // Generate server entry source inline via a virtual plugin
-  const serverEntryCode = generateServerEntryCode()
+  const serverEntryCode = generateServerEntryCode(config)
   const VIRTUAL_SERVER_ENTRY = 'virtual:cer-server-entry'
   const RESOLVED_SERVER_ENTRY = '\0virtual:cer-server-entry'
 

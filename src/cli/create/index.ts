@@ -198,11 +198,11 @@ async function generateInlineTemplate(
           preview: 'cer-app preview',
         },
         dependencies: {
-          '@jasonshimmy/custom-elements-runtime': '^3.2.0',
+          '@jasonshimmy/custom-elements-runtime': '^3.2.1',
         },
         devDependencies: {
           vite: '^8.0.1',
-          '@jasonshimmy/vite-plugin-cer-app': '^0.4.1',
+          '@jasonshimmy/vite-plugin-cer-app': '^0.4.2',
           typescript: '^5.9.3',
         },
       },
@@ -237,6 +237,13 @@ async function generateInlineTemplate(
   await writeFile(
     join(targetDir, '.gitignore'),
     `# Dependencies\nnode_modules/\n\n# Build output\ndist/\n\n# CER App generated directory\n.cer/\n\n# Environment variables\n.env.local\n.env.*.local\n\n# Editor\n.vscode/\n.idea/\n*.suo\n*.sw?\n\n# OS\n.DS_Store\nThumbs.db\n\n# Logs\n*.log\n`,
+    'utf-8',
+  )
+
+  // tsconfig.json
+  await writeFile(
+    join(targetDir, 'tsconfig.json'),
+    `{\n  "extends": "./.cer/tsconfig.json"\n}\n`,
     'utf-8',
   )
 
