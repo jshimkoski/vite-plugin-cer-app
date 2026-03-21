@@ -50,6 +50,25 @@ export function matchRoutePattern(pattern: string, urlPath: string): boolean {
 }
 
 /**
+ * Returns the per-route `render` strategy ('static' | 'server' | 'spa') for
+ * the route that best matches `urlPath`, or `null` when no route matches or
+ * none declares a render mode.
+ */
+export function findRenderMode(
+  routes: Array<{ path: string; meta?: Record<string, unknown> }>,
+  urlPath: string,
+): 'static' | 'server' | 'spa' | null {
+  for (const route of routes) {
+    if (matchRoutePattern(route.path, urlPath)) {
+      const render = route.meta?.render
+      if (render === 'static' || render === 'server' || render === 'spa') return render
+      return null
+    }
+  }
+  return null
+}
+
+/**
  * Looks up the `meta.ssg.revalidate` TTL (in seconds) for the route that best
  * matches `urlPath`. Returns `null` when no route matches or none defines
  * `revalidate`.

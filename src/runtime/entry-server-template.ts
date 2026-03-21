@@ -27,6 +27,8 @@ import { registerEntityMap, renderToStreamWithJITCSSDSD, DSD_POLYFILL_SCRIPT } f
 import entitiesJson from '@jasonshimmy/custom-elements-runtime/entities.json'
 import { initRouter } from '@jasonshimmy/custom-elements-runtime/router'
 import { beginHeadCollection, endHeadCollection, serializeHeadTags, initRuntimeConfig } from '@jasonshimmy/vite-plugin-cer-app/composables'
+import { errorTag } from 'virtual:cer-error'
+import { createIsrHandler } from '@jasonshimmy/vite-plugin-cer-app/isr'
 
 registerBuiltinComponents()
 initRuntimeConfig(runtimeConfig)
@@ -155,8 +157,18 @@ const _prepareRequest = async (req) => {
           head = \`<script>window.__CER_DATA__ = \${JSON.stringify(data)}</script>\`
         }
       }
-    } catch {
-      // Non-fatal: loader errors fall back to an empty page; client will refetch.
+    } catch (err) {
+      // Loader threw — render the error page server-side if app/error.ts exists.
+      const status = (err && typeof err === 'object' && 'status' in err && typeof err.status === 'number')
+        ? err.status : 500
+      const message = (err instanceof Error) ? err.message : String(err)
+      if (!errorTag) {
+        console.error('[cer-app] Loader error (no app/error.ts defined):', err)
+      }
+      const errVnode = errorTag
+        ? { tag: errorTag, props: { attrs: { error: message, status: String(status) } }, children: [] }
+        : { tag: 'div', props: {}, children: [] }
+      return { vnode: errVnode, router, head: undefined, status }
     }
   }
 
@@ -172,12 +184,13 @@ const _prepareRequest = async (req) => {
     if (tag) vnode = { tag, props: {}, children: [vnode] }
   }
 
-  return { vnode, router, head }
+  return { vnode, router, head, status: null }
 }
 
 export const handler = async (req, res) => {
   await _cerDataStore.run(null, async () => {
-    const { vnode, router, head } = await _prepareRequest(req)
+    const { vnode, router, head, status } = await _prepareRequest(req)
+    if (status != null) res.statusCode = status
 
     // Begin collecting useHead() calls made during the synchronous render pass.
     // IMPORTANT: the stream's start() function runs synchronously on construction,
@@ -235,6 +248,10 @@ export const handler = async (req, res) => {
     res.end(DSD_POLYFILL_SCRIPT + fromBodyClose)
   })
 }
+
+// ISR-wrapped handler for production integrations (Express, Hono, Fastify).
+// Routes with meta.ssg.revalidate are served stale-while-revalidate.
+export const isrHandler = createIsrHandler(routes, handler)
 
 export { apiRoutes, plugins, layouts, routes }
 export default handler

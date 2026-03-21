@@ -32,6 +32,20 @@ export interface PageMeta {
    * @example export const meta = { transition: 'fade' }
    */
   transition?: string | boolean
+  /**
+   * Per-route rendering strategy. Overrides the global `mode` for this route.
+   *
+   * - `'server'` — always render server-side, never pre-render. In SSG mode
+   *   the route is skipped during the static build.
+   * - `'static'` — always serve pre-rendered static HTML. In the SSR preview
+   *   server the pre-rendered file is served from disk; falls back to SSR if
+   *   not found.
+   * - `'spa'`    — client-only. In SSR mode the server returns the SPA shell
+   *   (index.html) without rendering. In SSG mode the route is skipped.
+   *
+   * @example export const meta = { render: 'server' }
+   */
+  render?: 'static' | 'server' | 'spa'
 }
 
 export interface PageLoaderContext<P extends Record<string, string> = Record<string, string>> {

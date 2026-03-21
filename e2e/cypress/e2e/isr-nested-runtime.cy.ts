@@ -33,11 +33,13 @@ if (mode === 'ssr') {
       })
     })
 
-    // /isr-test uses revalidate: 0 — the TTL is always expired after the first
-    // render, so the second request is always served stale-while-revalidate.
-    it('first request to a revalidate:0 route returns X-Cache: HIT', () => {
+    // /isr-test uses revalidate: 0 — ISR is always engaged. The first request
+    // returns HIT (cold cache) or STALE (warm cache from a previous test run),
+    // but x-cache is always present. Exact HIT/STALE distinction for a cold
+    // cache is covered by unit tests (createIsrHandler).
+    it('revalidate:0 route always has X-Cache header (ISR engaged)', () => {
       cy.request('/isr-test').then((response) => {
-        expect(response.headers['x-cache']).to.equal('HIT')
+        expect(['HIT', 'STALE']).to.include(response.headers['x-cache'])
       })
     })
 

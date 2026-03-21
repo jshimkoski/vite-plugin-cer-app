@@ -335,6 +335,71 @@ describe('generateRoutesCode — meta.transition', () => {
   })
 })
 
+// ─── meta.render ──────────────────────────────────────────────────────────────
+
+describe('generateRoutesCode — meta.render', () => {
+  beforeEach(() => {
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(scanDirectory).mockResolvedValue([])
+    vi.mocked(readFile).mockResolvedValue('' as never)
+  })
+
+  it('emits meta.render "server" when declared', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/dashboard.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `export const meta = { render: 'server' }` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('render: "server"')
+  })
+
+  it('emits meta.render "spa" when declared', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/profile.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `export const meta = { render: 'spa' }` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('render: "spa"')
+  })
+
+  it('emits meta.render "static" when declared', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/about.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `export const meta = { render: 'static' }` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('render: "static"')
+  })
+
+  it('omits render meta when not declared', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/about.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `component('page-about', () => html\`<h1>About</h1>\`)` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).not.toContain('render:')
+  })
+
+  it('ignores unknown render values', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/about.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `export const meta = { render: 'unknown' }` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).not.toContain('render:')
+  })
+
+  it('can combine render with layout', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/dashboard.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `export const meta = { render: 'server', layout: 'admin' }` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('render: "server"')
+    expect(code).toContain('layout: "admin"')
+  })
+})
+
 // ─── nested layouts (layoutChain) ────────────────────────────────────────────
 
 describe('generateRoutesCode — layoutChain (nested layouts)', () => {

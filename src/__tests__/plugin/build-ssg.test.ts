@@ -4,6 +4,7 @@ vi.mock('node:fs', () => ({ existsSync: vi.fn().mockReturnValue(false) }))
 vi.mock('node:fs/promises', () => ({
   writeFile: vi.fn().mockResolvedValue(undefined),
   mkdir: vi.fn().mockResolvedValue(undefined),
+  readFile: vi.fn().mockResolvedValue(''),
 }))
 vi.mock('fast-glob', () => ({ default: vi.fn().mockResolvedValue([]) }))
 vi.mock('vite', () => ({
@@ -14,7 +15,7 @@ vi.mock('../../plugin/build-ssr.js', () => ({ buildSSR: vi.fn().mockResolvedValu
 vi.mock('../../plugin/path-utils.js', () => ({ buildRouteEntry: vi.fn() }))
 
 import { existsSync } from 'node:fs'
-import { writeFile, mkdir } from 'node:fs/promises'
+import { writeFile, mkdir, readFile } from 'node:fs/promises'
 import fg from 'fast-glob'
 import { createServer } from 'vite'
 import { buildSSR } from '../../plugin/build-ssr.js'
@@ -38,8 +39,10 @@ beforeEach(() => {
   vi.mocked(writeFile).mockClear()
   vi.mocked(mkdir).mockClear()
   vi.mocked(fg).mockClear()
+  vi.mocked(readFile).mockClear()
   vi.mocked(existsSync).mockReturnValue(false)
   vi.mocked(fg).mockResolvedValue([])
+  vi.mocked(readFile).mockResolvedValue('')
   vi.mocked(buildRouteEntry).mockReset()
 })
 
@@ -254,6 +257,128 @@ describe('buildSSG — path collection', () => {
       .mockReturnValueOnce({ routePath: '/', isDynamic: false, isCatchAll: false } as ReturnType<typeof buildRouteEntry>)
 
     await buildSSG(makeConfig({ ssg: { concurrency: 1 } } as Partial<ResolvedCerConfig>))
+
+    const manifestCall = vi.mocked(writeFile).mock.calls.find(([p]) =>
+      String(p).includes('ssg-manifest.json'),
+    )
+    const manifest = JSON.parse(String(manifestCall![1]))
+    expect(manifest.paths.length + manifest.errors.length).toBe(1)
+  })
+})
+
+// ─── render: 'server' / 'spa' skip ───────────────────────────────────────────
+
+describe('buildSSG — render strategy skip (static pages)', () => {
+  it('skips static page with render: server', async () => {
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(fg).mockResolvedValue(['/project/app/pages/dashboard.ts'])
+    vi.mocked(readFile).mockResolvedValue("export const meta = { render: 'server' }")
+    vi.mocked(buildRouteEntry).mockReturnValueOnce({
+      routePath: '/dashboard',
+      isDynamic: false,
+      isCatchAll: false,
+    } as ReturnType<typeof buildRouteEntry>)
+
+    const config = makeConfig({ ssg: { concurrency: 1 } } as Partial<ResolvedCerConfig>)
+    await buildSSG(config)
+
+    // buildRouteEntry should never be called — page is skipped before it
+    expect(buildRouteEntry).not.toHaveBeenCalled()
+  })
+
+  it('skips static page with render: spa', async () => {
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(fg).mockResolvedValue(['/project/app/pages/profile.ts'])
+    vi.mocked(readFile).mockResolvedValue("export const meta = { render: 'spa' }")
+    vi.mocked(buildRouteEntry).mockReturnValueOnce({
+      routePath: '/profile',
+      isDynamic: false,
+      isCatchAll: false,
+    } as ReturnType<typeof buildRouteEntry>)
+
+    const config = makeConfig({ ssg: { concurrency: 1 } } as Partial<ResolvedCerConfig>)
+    await buildSSG(config)
+
+    expect(buildRouteEntry).not.toHaveBeenCalled()
+  })
+
+  it('does not skip static page with render: static', async () => {
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(fg).mockResolvedValue(['/project/app/pages/legal.ts'])
+    vi.mocked(readFile).mockResolvedValue("export const meta = { render: 'static' }")
+    vi.mocked(buildRouteEntry).mockReturnValueOnce({
+      routePath: '/legal',
+      isDynamic: false,
+      isCatchAll: false,
+    } as ReturnType<typeof buildRouteEntry>)
+
+    await buildSSG(makeConfig())
+
+    expect(buildRouteEntry).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not skip static page with no render meta', async () => {
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(fg).mockResolvedValue(['/project/app/pages/about.ts'])
+    vi.mocked(readFile).mockResolvedValue("component('page-about', () => html`<h1>About</h1>`)")
+    vi.mocked(buildRouteEntry).mockReturnValueOnce({
+      routePath: '/about',
+      isDynamic: false,
+      isCatchAll: false,
+    } as ReturnType<typeof buildRouteEntry>)
+
+    await buildSSG(makeConfig())
+
+    expect(buildRouteEntry).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('buildSSG — render strategy skip (dynamic pages)', () => {
+  it('skips dynamic page with render: server from ssrLoadModule', async () => {
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(fg).mockResolvedValue(['/project/app/pages/[slug].ts'])
+    vi.mocked(readFile).mockResolvedValue('')
+    vi.mocked(buildRouteEntry).mockReturnValueOnce({
+      routePath: '/:slug',
+      isDynamic: true,
+      isCatchAll: false,
+    } as ReturnType<typeof buildRouteEntry>)
+
+    const closeFn = vi.fn().mockResolvedValue(undefined)
+    vi.mocked(createServer).mockResolvedValue({
+      ssrLoadModule: vi.fn().mockResolvedValue({ meta: { render: 'server' } }),
+      close: closeFn,
+    } as unknown as Awaited<ReturnType<typeof createServer>>)
+
+    const config = makeConfig({ ssg: { concurrency: 1 } } as Partial<ResolvedCerConfig>)
+    await buildSSG(config)
+
+    // Only '/' (always added) — the dynamic route was skipped
+    const manifestCall = vi.mocked(writeFile).mock.calls.find(([p]) =>
+      String(p).includes('ssg-manifest.json'),
+    )
+    const manifest = JSON.parse(String(manifestCall![1]))
+    expect(manifest.paths.length + manifest.errors.length).toBe(1)
+  })
+
+  it('skips dynamic page with render: spa from ssrLoadModule', async () => {
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(fg).mockResolvedValue(['/project/app/pages/[id].ts'])
+    vi.mocked(readFile).mockResolvedValue('')
+    vi.mocked(buildRouteEntry).mockReturnValueOnce({
+      routePath: '/:id',
+      isDynamic: true,
+      isCatchAll: false,
+    } as ReturnType<typeof buildRouteEntry>)
+
+    const closeFn = vi.fn().mockResolvedValue(undefined)
+    vi.mocked(createServer).mockResolvedValue({
+      ssrLoadModule: vi.fn().mockResolvedValue({ meta: { render: 'spa' } }),
+      close: closeFn,
+    } as unknown as Awaited<ReturnType<typeof createServer>>)
+
+    const config = makeConfig({ ssg: { concurrency: 1 } } as Partial<ResolvedCerConfig>)
+    await buildSSG(config)
 
     const manifestCall = vi.mocked(writeFile).mock.calls.find(([p]) =>
       String(p).includes('ssg-manifest.json'),

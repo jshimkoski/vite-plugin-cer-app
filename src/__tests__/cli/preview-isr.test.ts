@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import {
   matchRoutePattern,
   findRevalidate,
+  findRenderMode,
   renderForIsr,
   serveFromIsrCache,
   type IsrCacheEntry,
@@ -116,6 +117,49 @@ describe('findRevalidate', () => {
   it('ignores non-numeric revalidate values', () => {
     const routes = [{ path: '/about', meta: { ssg: { revalidate: 'invalid' } } }]
     expect(findRevalidate(routes, '/about')).toBeNull()
+  })
+})
+
+// ─── findRenderMode ───────────────────────────────────────────────────────────
+
+describe('findRenderMode', () => {
+  it('returns null for an empty routes array', () => {
+    expect(findRenderMode([], '/about')).toBeNull()
+  })
+
+  it('returns null when no route matches', () => {
+    const routes = [{ path: '/contact', meta: { render: 'server' } }]
+    expect(findRenderMode(routes, '/about')).toBeNull()
+  })
+
+  it('returns null when matched route has no render meta', () => {
+    const routes = [{ path: '/about' }]
+    expect(findRenderMode(routes, '/about')).toBeNull()
+  })
+
+  it('returns "server" for a matching route with render: server', () => {
+    const routes = [{ path: '/dashboard', meta: { render: 'server' } }]
+    expect(findRenderMode(routes, '/dashboard')).toBe('server')
+  })
+
+  it('returns "spa" for a matching route with render: spa', () => {
+    const routes = [{ path: '/profile', meta: { render: 'spa' } }]
+    expect(findRenderMode(routes, '/profile')).toBe('spa')
+  })
+
+  it('returns "static" for a matching route with render: static', () => {
+    const routes = [{ path: '/about', meta: { render: 'static' } }]
+    expect(findRenderMode(routes, '/about')).toBe('static')
+  })
+
+  it('returns null for unrecognised render values', () => {
+    const routes = [{ path: '/about', meta: { render: 'unknown' } }]
+    expect(findRenderMode(routes, '/about')).toBeNull()
+  })
+
+  it('matches dynamic routes', () => {
+    const routes = [{ path: '/blog/:slug', meta: { render: 'server' } }]
+    expect(findRenderMode(routes, '/blog/my-post')).toBe('server')
   })
 })
 

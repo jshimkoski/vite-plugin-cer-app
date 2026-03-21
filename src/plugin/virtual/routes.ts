@@ -65,6 +65,23 @@ function extractTransition(source: string): string | boolean | null {
 }
 
 /**
+ * Extracts the per-route `render` strategy from a page file's source.
+ * Returns 'static', 'server', 'spa', or null if absent.
+ *
+ * Matches patterns like:
+ *   render: 'server'
+ *   render: 'spa'
+ *   render: 'static'
+ */
+function extractRender(source: string): 'static' | 'server' | 'spa' | null {
+  const match = source.match(/render\s*:\s*['"]([^'"]+)['"]/)
+  if (!match) return null
+  const val = match[1]
+  if (val === 'static' || val === 'server' || val === 'spa') return val
+  return null
+}
+
+/**
  * Resolves the layout chain for a page by walking its ancestor directories
  * inside pagesDir looking for `_layout.ts` files. Each `_layout.ts` must
  * export a default string naming a layout in `app/layouts/`.
@@ -162,6 +179,7 @@ export async function generateRoutesCode(pagesDir: string): Promise<string> {
     layoutChain: string[] | null
     revalidate: number | null
     transition: string | boolean | null
+    render: 'static' | 'server' | 'spa' | null
   }> = await Promise.all(
     sorted.map(async (entry) => {
       try {
@@ -174,9 +192,10 @@ export async function generateRoutesCode(pagesDir: string): Promise<string> {
           layoutChain,
           revalidate: extractRevalidate(src),
           transition: extractTransition(src),
+          render: extractRender(src),
         }
       } catch {
-        return { middleware: [], layout: null, layoutChain: null, revalidate: null, transition: null }
+        return { middleware: [], layout: null, layoutChain: null, revalidate: null, transition: null, render: null }
       }
     }),
   )
@@ -185,7 +204,7 @@ export async function generateRoutesCode(pagesDir: string): Promise<string> {
 
   // Build routes array with lazy load() functions for code splitting.
   const routeItems = sorted.map((entry, i) => {
-    const { middleware: mw, layout, layoutChain, revalidate, transition } = metaPerEntry[i]
+    const { middleware: mw, layout, layoutChain, revalidate, transition, render } = metaPerEntry[i]
     const filePath = JSON.stringify(entry.filePath)
     const tagName = JSON.stringify(entry.tagName)
     const routePath = JSON.stringify(entry.routePath)
@@ -208,6 +227,9 @@ export async function generateRoutesCode(pagesDir: string): Promise<string> {
     }
     if (transition !== null) {
       metaFields.push(`transition: ${JSON.stringify(transition)}`)
+    }
+    if (render !== null) {
+      metaFields.push(`render: ${JSON.stringify(render)}`)
     }
     const metaStr = metaFields.length > 0 ? `    meta: { ${metaFields.join(', ')} },\n` : ''
 

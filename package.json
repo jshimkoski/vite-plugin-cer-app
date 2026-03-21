@@ -37,6 +37,10 @@
       "import": "./dist/types/index.js",
       "require": "./dist/types/index.cjs",
       "types": "./dist/types/index.d.ts"
+    },
+    "./isr": {
+      "import": "./dist/runtime/isr-handler.js",
+      "types": "./dist/runtime/isr-handler.d.ts"
     }
   },
   "bin": {

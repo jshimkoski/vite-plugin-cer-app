@@ -238,6 +238,39 @@ export default {
 
 Set to `false` to explicitly mark a page as having no transition (useful when a catch-all or default would otherwise apply one).
 
+### `meta.render`
+
+**Type:** `'static' | 'server' | 'spa'`
+
+Overrides the global rendering mode for a single route. Useful in mixed apps where most pages share one strategy but a few need different treatment.
+
+| Value | Behavior |
+|---|---|
+| `'server'` | Always renders server-side. In SSG mode the route is **skipped** during the static build — it is never pre-rendered. |
+| `'static'` | Always serves pre-rendered HTML from disk. In the SSR **preview server**, the framework looks for `dist/<path>/index.html`; falls back to SSR if the file is not found. In SSG mode the route is still pre-rendered at build time as normal. |
+| `'spa'`    | Client-only. In SSR mode the server returns the SPA shell (`index.html`) without rendering. In SSG mode the route is skipped. |
+
+```ts
+// app/pages/dashboard.ts — always SSR even in an otherwise SSG app
+export const meta = {
+  render: 'server',
+}
+```
+
+```ts
+// app/pages/profile.ts — client-only (auth wall, no crawlable content)
+export const meta = {
+  render: 'spa',
+}
+```
+
+```ts
+// app/pages/legal/privacy.ts — force static even in SSR mode
+export const meta = {
+  render: 'static',
+}
+```
+
 ---
 
 ## Route sorting

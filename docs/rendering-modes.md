@@ -106,6 +106,8 @@ Any request that:
 
 …is treated as an HTML request and rendered server-side.
 
+Per-route `meta.render` overrides are respected in the dev server: a route with `render: 'spa'` skips SSR and falls through to Vite's own asset handler (returning the SPA shell), exactly as it would in production.
+
 ### Integrating with Express / Fastify / Hono
 
 In production, wire the server bundle's handler into your web framework:
@@ -232,7 +234,7 @@ ISR is a per-route cache layer in the SSR preview server. Pages with `meta.ssg.r
 1. **First request (HIT after fresh render):** Cache miss — render via SSR, store in memory cache with TTL, then serve from the newly-populated cache. `X-Cache: HIT` is set.
 2. **Within TTL (HIT):** Serve directly from cache. `X-Cache: HIT` header is set.
 3. **After TTL expires (STALE):** Serve the stale cached HTML immediately with `X-Cache: STALE`. Kick off a background re-render. When the re-render completes, update the cache.
-4. **While revalidating:** Continue serving stale HTML to new requests.
+4. **While revalidating:** Continue serving stale HTML to new requests. If the background render takes longer than **30 seconds**, the revalidating lock is automatically released so the next request can trigger a fresh attempt.
 
 ### Configuration
 
@@ -260,9 +262,68 @@ export const meta = {
 | `revalidate: 3600` | Product pages, documentation |
 | `revalidate: 86400` | Marketing pages, rarely-changing content |
 
+### Query string handling
+
+ISR caches by **path only** — query strings are stripped from the cache key. Requests to `/blog/post?preview=true` and `/blog/post` share the same cache entry. Use `render: 'server'` (no `revalidate`) for routes where query parameters affect the rendered output.
+
+### Decision order in the preview server
+
+The built-in preview server resolves each request using this precedence:
+
+1. Static asset (`dist/client/**.*`) — served directly
+2. `render: 'spa'` — returns `dist/client/index.html` (SPA shell)
+3. `render: 'static'` — returns `dist/<path>/index.html`; falls back to SSR if file not found
+4. `render: 'server'` — always SSR, bypasses ISR cache
+5. ISR — if `meta.ssg.revalidate` is set, apply stale-while-revalidate caching
+6. Regular SSR
+
+### Compatibility with per-route render modes
+
+ISR is controlled solely by `meta.ssg.revalidate`. The `meta.render` override is independent:
+
+| `meta.render` | `meta.ssg.revalidate` | ISR behavior |
+|---|---|---|
+| _(not set)_ | set | ISR active |
+| `'server'` | set | ISR active — SSR output is cached |
+| `'server'` | not set | Pass-through; no caching |
+| `'static'` | — | Not applicable — `render: 'static'` serves pre-rendered files, not a live SSR render |
+| `'spa'` | — | Not applicable — `render: 'spa'` returns the SPA shell, not an SSR render |
+
+> **Production note:** The `isrHandler` export in the server bundle is a pure ISR-caching wrapper around the SSR handler. It does **not** implement `render: 'spa'` or `render: 'static'` behavior — those are handled by the preview server and the SSG build pipeline. In a custom production Express setup, `render: 'spa'` routes will be SSR-rendered unless you add your own middleware to intercept them before `isrHandler`. For most SSR apps, `render: 'spa'` routes are rare; if you need them in production, serve your SPA shell explicitly for those paths.
+
 ### Availability
 
-ISR is currently active in the built-in **preview server** (`cer-app preview`). When integrating the server bundle into Express / Hono / Fastify in production, implement the same stale-while-revalidate pattern using `route.meta?.ssg?.revalidate` from the exported `routes` array.
+ISR is active in the built-in **preview server** (`cer-app preview`) and in production via the `isrHandler` export from the server bundle.
+
+**Production (Express):**
+```ts
+import express from 'express'
+import sirv from 'sirv'
+import { isrHandler } from './dist/server/server.js'
+
+const app = express()
+app.use(sirv('dist/client', { dev: false }))
+app.use(isrHandler)   // ISR-aware; routes without revalidate pass straight through
+app.listen(3000)
+```
+
+**Production (Hono):**
+```ts
+import { Hono } from 'hono'
+import { isrHandler } from './dist/server/server.js'
+
+const app = new Hono()
+app.use('*', isrHandler)
+```
+
+If you need to build the cache yourself, use the `createIsrHandler` utility:
+
+```ts
+import { createIsrHandler } from '@jasonshimmy/vite-plugin-cer-app/isr'
+import { handler, routes } from './dist/server/server.js'
+
+const isrHandler = createIsrHandler(routes, handler)
+```
 
 ---
 

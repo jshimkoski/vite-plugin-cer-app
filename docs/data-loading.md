@@ -123,17 +123,84 @@ export const loader: PageLoader<{ slug: string }> = async ({ params }) => {
 
 ## Error handling in loaders
 
-Unhandled errors in `loader` propagate to the SSR error handler and return a 500 response. Handle expected failures explicitly:
+When a `loader` throws, the SSR error boundary intercepts it:
+
+- If `app/error.ts` exists, the server renders the `page-error` component instead of the normal page and returns the appropriate HTTP status.
+- If `app/error.ts` does not exist, the error is logged to the server console and a blank 500 response is returned.
+
+To send a specific HTTP status code from a loader, attach a `status` property to the thrown error:
 
 ```ts
 export const loader: PageLoader<{ id: string }> = async ({ params }) => {
   const item = await db.item.findById(params.id)
   if (!item) {
-    throw new Response('Not Found', { status: 404 })
+    const err = Object.assign(new Error('Not Found'), { status: 404 })
+    throw err
   }
   return { item }
 }
 ```
+
+You can also throw a standard `Response` — the framework reads its `.status` property:
+
+```ts
+throw new Response('Not Found', { status: 404 })
+```
+
+Unhandled errors without a `status` property default to HTTP 500.
+
+---
+
+## Error boundary — `app/error.ts`
+
+Create `app/error.ts` to define a custom error page shown when navigation fails. The file must export a custom element named `page-error`:
+
+```ts
+// app/error.ts
+component('page-error', () => {
+  const props = useProps<{ error: string; status: string }>({
+    error: 'An unexpected error occurred.',
+    status: '500',
+  })
+
+  return html`
+    <div style="padding:2rem">
+      <h2 style="color:#c00">Error ${props.status}</h2>
+      <p>${props.error}</p>
+      <button @click="${() => (globalThis as any).resetError?.()}">
+        Try again
+      </button>
+    </div>
+  `
+})
+```
+
+### Props received by `page-error`
+
+| Prop | Type | Source |
+|------|------|--------|
+| `error` | `string` | Error message from the thrown value |
+| `status` | `string` | HTTP status code as a string (`"404"`, `"500"`, etc.) — **SSR only** |
+
+### `resetError()`
+
+The framework exposes `globalThis.resetError()` as a global function. Calling it clears the error state and re-navigates to the current path, giving the user a way to recover without a full page reload.
+
+```ts
+// Call from a button click handler inside page-error
+(globalThis as any).resetError?.()
+```
+
+### SSR vs. client-side behavior
+
+| Scenario | Behavior |
+|----------|----------|
+| **Loader throws during SSR** | Server renders `page-error` with `error` and `status` props; response uses the thrown status code |
+| **Navigation throws on the client** | `cer-layout-view` renders `page-error` with `error` prop only (no HTTP status in the browser) |
+| **No `app/error.ts` defined (SSR)** | Error is logged to the server console; blank 500 response |
+| **No `app/error.ts` defined (client)** | Raw error message rendered in a `<div>` |
+
+> **SPA mode:** There is no server-side error boundary in SPA mode. The `loader` function is never called server-side, so `page-error` is only rendered for client-side navigation errors. To handle loading failures in SPA, catch errors inside `useOnConnected` and render an error state manually.
 
 ---
 

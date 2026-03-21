@@ -315,7 +315,7 @@ router's route objects.
 
 ---
 
-### 6.3 Per-route render strategy 🔜
+### 6.3 Per-route render strategy ✅
 
 **Problem:** All routes use the same mode (SPA / SSR / SSG). Nuxt's route
 rules allow mixing: some routes rendered statically, some on the server, some
@@ -424,7 +424,7 @@ Cloudflare Workers / Deno Deploy adapter. Requires replacing Node's
 | 5.1 | Data loader hydration | 2 | ✅ |
 | 6.1 | ISR | 2–3 | ✅ |
 | 6.2 | Nested layouts | 2–3 | ✅ |
-| 6.3 | Per-route render strategy | 3 | 🔜 |
+| 6.3 | Per-route render strategy | 3 | ✅ |
 | 6.4 | Link prefetching | 3 | ✅ |
 | 6.5 | Route transitions | 3 | ✅ |
 | 6b | runtimeConfig / public env vars | 2 | ✅ |

@@ -464,6 +464,97 @@ describe('configureCerDevServer — SSR mode', () => {
   })
 })
 
+// ─── Per-route render mode (SSR mode) ────────────────────────────────────────
+
+describe("configureCerDevServer — per-route render mode in SSR", () => {
+  /** Build a server where virtual:cer-routes returns the given routes array. */
+  function makeServerWithRoutes(
+    pageRoutes: Array<{ path: string; meta?: Record<string, unknown> }>,
+    ssrHandler = vi.fn(async (_req: any, res: any) => res.end('<html>SSR</html>')),
+  ) {
+    const { server, getMiddleware } = makeServer()
+    server.ssrLoadModule.mockImplementation(async (path: string) => {
+      if (path.includes('server-middleware')) return { serverMiddleware: [] }
+      if (path.includes('server-api') || path.includes('cer-server-api')) return { apiRoutes: [] }
+      if (path.includes('cer-routes')) return { default: pageRoutes }
+      return { handler: ssrHandler }
+    })
+    configureCerDevServer(server as any, makeConfig({ mode: 'ssr' }))
+    return { middleware: getMiddleware(), ssrHandler }
+  }
+
+  it("calls next() instead of SSR for a route with render: 'spa'", async () => {
+    const { middleware, ssrHandler } = makeServerWithRoutes([
+      { path: '/spa-page', meta: { render: 'spa' } },
+    ])
+    const next = vi.fn()
+    await middleware(
+      createReq({ url: '/spa-page', headers: { accept: 'text/html' } }),
+      createRes(),
+      next,
+    )
+    expect(next).toHaveBeenCalled()
+    expect(ssrHandler).not.toHaveBeenCalled()
+  })
+
+  it("proceeds to SSR for a route with render: 'server'", async () => {
+    const { middleware, ssrHandler } = makeServerWithRoutes([
+      { path: '/server-page', meta: { render: 'server' } },
+    ])
+    await middleware(
+      createReq({ url: '/server-page', headers: { accept: 'text/html' } }),
+      createRes(),
+      vi.fn(),
+    )
+    expect(ssrHandler).toHaveBeenCalled()
+  })
+
+  it("proceeds to SSR for a route with no render meta", async () => {
+    const { middleware, ssrHandler } = makeServerWithRoutes([
+      { path: '/normal-page' },
+    ])
+    await middleware(
+      createReq({ url: '/normal-page', headers: { accept: 'text/html' } }),
+      createRes(),
+      vi.fn(),
+    )
+    expect(ssrHandler).toHaveBeenCalled()
+  })
+
+  it("falls back to SSR when routes module throws during render mode check", async () => {
+    const ssrHandler = vi.fn(async (_req: any, res: any) => res.end('<html>SSR</html>'))
+    const { server, getMiddleware } = makeServer()
+    server.ssrLoadModule.mockImplementation(async (path: string) => {
+      if (path.includes('server-middleware')) return { serverMiddleware: [] }
+      if (path.includes('server-api') || path.includes('cer-server-api')) return { apiRoutes: [] }
+      if (path.includes('cer-routes')) throw new Error('module not ready')
+      return { handler: ssrHandler }
+    })
+    configureCerDevServer(server as any, makeConfig({ mode: 'ssr' }))
+    await getMiddleware()(
+      createReq({ url: '/some-page', headers: { accept: 'text/html' } }),
+      createRes(),
+      vi.fn(),
+    )
+    // Despite the routes module throwing, SSR should still run
+    expect(ssrHandler).toHaveBeenCalled()
+  })
+
+  it("does not load routes module in SPA mode (no render mode check needed)", async () => {
+    const { server, getMiddleware } = makeServer()
+    configureCerDevServer(server as any, makeConfig({ mode: 'spa' }))
+    await getMiddleware()(
+      createReq({ url: '/about', headers: { accept: 'text/html' } }),
+      createRes(),
+      vi.fn(),
+    )
+    const routesCalls = (server.ssrLoadModule as any).mock.calls.filter(
+      ([p]: [string]) => p.includes('cer-routes'),
+    )
+    expect(routesCalls).toHaveLength(0)
+  })
+})
+
 // ─── parseBody edge cases ─────────────────────────────────────────────────────
 
 describe('configureCerDevServer — malformed JSON body', () => {

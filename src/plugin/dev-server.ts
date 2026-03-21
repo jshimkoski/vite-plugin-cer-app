@@ -109,6 +109,24 @@ function parseQuery(url: string): Record<string, string> {
 }
 
 /**
+ * Tests whether a route path pattern matches a URL path.
+ * Mirrors the logic in preview-isr.ts#matchRoutePattern — kept local to
+ * avoid a plugin→CLI dependency.
+ */
+function _matchDevRoute(pattern: string, urlPath: string): boolean {
+  const norm = (s: string) => s.replace(/\/+$/, '') || '/'
+  if (norm(pattern) === norm(urlPath)) return true
+  const regexStr =
+    '^' +
+    norm(pattern)
+      .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+      .replace(/:[^/]+\*/g, '.*')
+      .replace(/:[^/]+/g, '[^/]+') +
+    '$'
+  return new RegExp(regexStr).test(norm(urlPath))
+}
+
+/**
  * Configures the Vite dev server with:
  * 1. API route handlers from server/api/
  * 2. Server middleware from server/middleware/
@@ -218,6 +236,21 @@ export function configureCerDevServer(
         (!url.includes('.') && !url.startsWith('/api/'))
 
       if (acceptsHtml) {
+        // Check per-route render mode — skip SSR for 'spa' routes.
+        const urlPathOnly = url.split('?')[0]
+        try {
+          const routesMod = await server.ssrLoadModule('virtual:cer-routes')
+          const pageRoutes = Array.isArray(routesMod.default) ? routesMod.default as Array<{ path: string; meta?: Record<string, unknown> }> : []
+          for (const route of pageRoutes) {
+            if (_matchDevRoute(route.path, urlPathOnly)) {
+              if (route.meta?.render === 'spa') {
+                next()
+                return
+              }
+              break
+            }
+          }
+        } catch { /* module not ready — continue to SSR */ }
         try {
           // Load the SSR entry module
           const ssrEntry = await server.ssrLoadModule(

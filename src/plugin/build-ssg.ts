@@ -1,4 +1,4 @@
-import { writeFile, mkdir } from 'node:fs/promises'
+import { writeFile, mkdir, readFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join } from 'pathe'
 import { createServer, type UserConfig } from 'vite'
@@ -45,6 +45,15 @@ async function collectSsgPaths(
   const dynamicFiles: Array<{ file: string; entry: ReturnType<typeof buildRouteEntry> }> = []
 
   for (const file of files) {
+    // Skip routes that declare render: 'server' or render: 'spa' — they are
+    // either always-SSR or client-only and must not be pre-rendered.
+    try {
+      const src = await readFile(file, 'utf-8')
+      const renderMatch = src.match(/render\s*:\s*['"]([^'"]+)['"]/)
+      const renderMode = renderMatch ? renderMatch[1] : null
+      if (renderMode === 'server' || renderMode === 'spa') continue
+    } catch { /* ignore read errors */ }
+
     const entry = buildRouteEntry(file, config.pagesDir)
 
     if (!entry.isDynamic && !entry.isCatchAll) {
@@ -73,6 +82,7 @@ async function collectSsgPaths(
           const pageMod = await viteServer.ssrLoadModule(file)
           const pageMeta = pageMod.meta ?? pageMod.pageMeta
 
+          if (pageMeta?.render === 'server' || pageMeta?.render === 'spa') continue
           if (pageMeta?.ssg?.paths) {
             const pathsResult = await pageMeta.ssg.paths()
             for (const ctx of pathsResult) {

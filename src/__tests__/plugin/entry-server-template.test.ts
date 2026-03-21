@@ -142,4 +142,57 @@ describe('entry-server-template (ENTRY_SERVER_TEMPLATE content)', () => {
     expect(src).toContain('stream.getReader()')
     expect(src).toContain('reader.read()')
   })
+
+  // ─── Error boundary ──────────────────────────────────────────────────────────
+
+  it('imports errorTag from virtual:cer-error', () => {
+    expect(src).toContain('errorTag')
+    expect(src).toContain('virtual:cer-error')
+  })
+
+  it('catches loader errors in _prepareRequest', () => {
+    expect(src).toContain('catch (err)')
+    // The catch block is inside _prepareRequest, before the layout chain
+    const catchIdx = src.indexOf('catch (err)')
+    const prepareIdx = src.indexOf('_prepareRequest')
+    expect(catchIdx).toBeGreaterThan(prepareIdx)
+  })
+
+  it('extracts .status from the thrown error for HTTP status code', () => {
+    expect(src).toContain("'status' in err")
+    expect(src).toContain('err.status')
+  })
+
+  it('defaults to status 500 when thrown error has no .status', () => {
+    expect(src).toContain(': 500')
+  })
+
+  it('renders errorTag component when loader throws and errorTag is set', () => {
+    expect(src).toContain('tag: errorTag')
+  })
+
+  it('logs to console.error when loader throws and no errorTag is defined', () => {
+    expect(src).toContain('console.error')
+    expect(src).toContain('!errorTag')
+  })
+
+  it('propagates status to res.statusCode', () => {
+    expect(src).toContain('res.statusCode = status')
+  })
+
+  it('returns status: null on the happy path', () => {
+    expect(src).toContain('status: null')
+  })
+
+  // ─── ISR production export ───────────────────────────────────────────────────
+
+  it('imports createIsrHandler from the isr subpath', () => {
+    expect(src).toContain('createIsrHandler')
+    expect(src).toContain('vite-plugin-cer-app/isr')
+  })
+
+  it('exports isrHandler wrapping handler with ISR caching', () => {
+    expect(src).toContain('export const isrHandler')
+    expect(src).toContain('createIsrHandler(routes, handler)')
+  })
 })

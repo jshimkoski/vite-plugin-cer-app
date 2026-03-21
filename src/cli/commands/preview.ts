@@ -7,6 +7,7 @@ import {
   type IsrCacheEntry,
   type SsrHandlerFn,
   findRevalidate,
+  findRenderMode,
   renderForIsr,
   serveFromIsrCache,
 } from './preview-isr.js'
@@ -198,6 +199,51 @@ export function previewCommand(): Command {
           if (existsSync(clientDist) && url !== '/' && url.includes('.')) {
             const served = serveStaticFile(req, res, clientDist)
             if (served) return
+          }
+
+          // Per-route render strategy — checked before ISR.
+          const renderMode = findRenderMode(pageRoutes, urlPath)
+
+          // render: 'spa' — skip SSR, serve the client index.html shell.
+          if (renderMode === 'spa') {
+            const spaIndex = join(distDir, 'client/index.html')
+            if (existsSync(spaIndex)) {
+              res.setHeader('Content-Type', 'text/html; charset=utf-8')
+              res.setHeader('Cache-Control', 'no-cache')
+              createReadStream(spaIndex).pipe(res)
+            } else {
+              res.statusCode = 404
+              res.setHeader('Content-Type', 'text/plain')
+              res.end('Not Found')
+            }
+            return
+          }
+
+          // render: 'static' — try pre-rendered HTML from dist/, fall through to SSR.
+          if (renderMode === 'static') {
+            const staticFile = urlPath === '/'
+              ? join(distDir, 'index.html')
+              : join(distDir, urlPath.replace(/^\//, ''), 'index.html')
+            if (existsSync(staticFile)) {
+              res.setHeader('Content-Type', 'text/html; charset=utf-8')
+              res.setHeader('Cache-Control', 'no-cache')
+              createReadStream(staticFile).pipe(res)
+              return
+            }
+            // Fall through to SSR if no pre-rendered file exists.
+          }
+
+          // render: 'server' — always SSR, bypass ISR cache.
+          if (renderMode === 'server') {
+            try {
+              await handler(req, res)
+            } catch (err) {
+              console.error('[cer-app] SSR handler error:', err)
+              res.statusCode = 500
+              res.setHeader('Content-Type', 'text/plain')
+              res.end('Internal Server Error')
+            }
+            return
           }
 
           // ISR: check whether this route has a revalidate TTL.
