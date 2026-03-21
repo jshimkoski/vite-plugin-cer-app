@@ -33,8 +33,8 @@ describe('entry-server-template (ENTRY_SERVER_TEMPLATE content)', () => {
     expect(src).toContain('@jasonshimmy/custom-elements-runtime')
   })
 
-  it('imports renderToStringWithJITCSSDSD and DSD_POLYFILL_SCRIPT from ssr subpath', () => {
-    expect(src).toContain('renderToStringWithJITCSSDSD')
+  it('imports renderToStreamWithJITCSSDSD and DSD_POLYFILL_SCRIPT from ssr subpath', () => {
+    expect(src).toContain('renderToStreamWithJITCSSDSD')
     expect(src).toContain('DSD_POLYFILL_SCRIPT')
     expect(src).toContain('custom-elements-runtime/ssr')
   })
@@ -94,9 +94,17 @@ describe('entry-server-template (ENTRY_SERVER_TEMPLATE content)', () => {
     expect(src).toContain('_prepareRequest')
   })
 
-  it('uses beginHeadCollection / endHeadCollection around the render', () => {
+  it('calls endHeadCollection() synchronously before any await to avoid race conditions', () => {
     expect(src).toContain('beginHeadCollection()')
     expect(src).toContain('endHeadCollection()')
+    // endHeadCollection must come before reader.read() so concurrent requests
+    // (SSG concurrency > 1) cannot reset the shared globalThis collector between
+    // beginHeadCollection and endHeadCollection.
+    const endIdx = src.indexOf('endHeadCollection()')
+    const readIdx = src.indexOf('reader.read()')
+    expect(endIdx).toBeGreaterThan(-1)
+    expect(readIdx).toBeGreaterThan(-1)
+    expect(endIdx).toBeLessThan(readIdx)
   })
 
   it('passes dsdPolyfill: false to suppress inline polyfill', () => {
@@ -104,8 +112,8 @@ describe('entry-server-template (ENTRY_SERVER_TEMPLATE content)', () => {
   })
 
   it('injects DSD_POLYFILL_SCRIPT before </body>', () => {
-    expect(src).toContain("finalHtml.replace('</body>'")
-    expect(src).toContain('DSD_POLYFILL_SCRIPT')
+    expect(src).toContain("lastIndexOf('</body>')")
+    expect(src).toContain('DSD_POLYFILL_SCRIPT + fromBodyClose')
   })
 
   it('merges SSR html with client template when available', () => {
@@ -123,5 +131,15 @@ describe('entry-server-template (ENTRY_SERVER_TEMPLATE content)', () => {
 
   it('sets Content-Type header on response', () => {
     expect(src).toContain('text/html; charset=utf-8')
+  })
+
+  it('sets Transfer-Encoding: chunked header for streaming', () => {
+    expect(src).toContain('Transfer-Encoding')
+    expect(src).toContain('chunked')
+  })
+
+  it('reads the stream using a reader loop', () => {
+    expect(src).toContain('stream.getReader()')
+    expect(src).toContain('reader.read()')
   })
 })

@@ -97,6 +97,52 @@ describe('buildSSG — renderPath success (real server bundle)', () => {
     expect(manifest.paths).toHaveLength(2)
   })
 
+  it('captures HTML from a streaming handler that calls write() then end()', async () => {
+    // Simulate the renderToStreamWithJITCSSDSD-based handler which calls
+    // res.write(firstChunk) for sync content and res.end(polyfill + tail).
+    // Use a completely separate tmpdir with a unique path so Node's native ESM
+    // import cache cannot return a previously-loaded module for the same URL.
+    const streamRoot = join(tmpdir(), `cer-ssg-stream-${Date.now()}`)
+    const streamServerDir = join(streamRoot, 'dist', 'server')
+    mkdirSync(streamServerDir, { recursive: true })
+    writeFileSync(
+      join(streamServerDir, 'server.js'),
+      `export const handler = async (req, res) => {
+        res.setHeader('Content-Type', 'text/html');
+        res.setHeader('Transfer-Encoding', 'chunked');
+        res.write('<html><head></head>');
+        res.write('<body>streamed</body>');
+        res.end('</html>');
+      };
+      export const apiRoutes = [];
+      export const plugins = [];
+      export const layouts = {};
+      `,
+      'utf-8',
+    )
+
+    await vi.resetModules()
+    const { buildSSG } = await import('../../plugin/build-ssg.js')
+    const config = {
+      root: streamRoot,
+      srcDir: join(streamRoot, 'app'),
+      pagesDir: join(streamRoot, 'app', 'pages'),
+      mode: 'ssg',
+      ssg: { routes: ['/'], concurrency: 1 },
+    } as unknown as ResolvedCerConfig
+    await buildSSG(config)
+
+    const { readFileSync, existsSync } = await import('node:fs')
+    const outPath = join(streamRoot, 'dist', 'index.html')
+    expect(existsSync(outPath)).toBe(true)
+    const html = readFileSync(outPath, 'utf-8')
+    expect(html).toContain('<html><head></head>')
+    expect(html).toContain('<body>streamed</body>')
+    expect(html).toContain('</html>')
+
+    rmSync(streamRoot, { recursive: true, force: true })
+  })
+
   it('uses cached _serverMod on second renderPath call (no double import)', async () => {
     // In a fresh module instance, render two paths sequentially.
     // The second renderPath call hits the !_serverMod === false branch (cache).

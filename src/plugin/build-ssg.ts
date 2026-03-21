@@ -131,12 +131,14 @@ async function renderPath(
 
   // Mock req/res for the Express-style handler.
   // The handler internally merges with dist/client/index.html, so we just
-  // capture whatever it ends with.
+  // capture whatever it writes/ends with.
   const mockReq = { url: path, headers: {} }
   return new Promise<string>((resolve, reject) => {
+    const chunks: string[] = []
     const mockRes = {
       setHeader: () => {},
-      end: (body: string) => resolve(body),
+      write: (chunk: string) => { chunks.push(chunk) },
+      end: (body?: string) => resolve(chunks.join('') + (body ?? '')),
     }
     ;(handlerFn as (req: unknown, res: unknown) => Promise<void>)(mockReq, mockRes).catch(reject)
   })

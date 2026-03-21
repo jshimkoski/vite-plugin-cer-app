@@ -7,7 +7,7 @@
  *
  * Key features:
  * - AsyncLocalStorage for race-condition-free concurrent renders (SSG concurrency > 1)
- * - Declarative Shadow DOM via renderToStringWithJITCSSDSD (always on)
+ * - Declarative Shadow DOM via renderToStreamWithJITCSSDSD (always on, streamed)
  * - useHead() support via beginHeadCollection / endHeadCollection
  * - DSD polyfill injected at end of <body> after client-template merge
  */
@@ -23,7 +23,7 @@ import plugins from 'virtual:cer-plugins'
 import apiRoutes from 'virtual:cer-server-api'
 import { runtimeConfig } from 'virtual:cer-app-config'
 import { registerBuiltinComponents } from '@jasonshimmy/custom-elements-runtime'
-import { registerEntityMap, renderToStringWithJITCSSDSD, DSD_POLYFILL_SCRIPT } from '@jasonshimmy/custom-elements-runtime/ssr'
+import { registerEntityMap, renderToStreamWithJITCSSDSD, DSD_POLYFILL_SCRIPT } from '@jasonshimmy/custom-elements-runtime/ssr'
 import entitiesJson from '@jasonshimmy/custom-elements-runtime/entities.json'
 import { initRouter } from '@jasonshimmy/custom-elements-runtime/router'
 import { beginHeadCollection, endHeadCollection, serializeHeadTags, initRuntimeConfig } from '@jasonshimmy/vite-plugin-cer-app/composables'
@@ -180,38 +180,59 @@ export const handler = async (req, res) => {
     const { vnode, router, head } = await _prepareRequest(req)
 
     // Begin collecting useHead() calls made during the synchronous render pass.
+    // IMPORTANT: the stream's start() function runs synchronously on construction,
+    // so ALL useHead() calls happen before the stream object is returned. We must
+    // call endHeadCollection() immediately — before any await — to avoid a race
+    // window where a concurrent request (e.g. SSG concurrency > 1) resets the
+    // shared globalThis collector while this handler is suspended at an await.
     beginHeadCollection()
 
     // dsdPolyfill: false — we inject the polyfill manually after merging so it
     // lands at the end of <body>, not inside <cer-layout-view> light DOM where
     // scripts may not execute.
-    const { htmlWithStyles } = renderToStringWithJITCSSDSD(vnode, {
-      dsdPolyfill: false,
-      router,
-    })
+    // The first chunk from the stream is the full synchronous render. Subsequent
+    // chunks are async component swap scripts streamed as they resolve.
+    const stream = renderToStreamWithJITCSSDSD(vnode, { dsdPolyfill: false, router })
 
-    // Collect and serialize any useHead() calls from the rendered components.
+    // Collect head tags synchronously — all useHead() calls have already fired
+    // inside the stream constructor's start() before it returned.
     const headTags = serializeHeadTags(endHeadCollection())
+
+    const reader = stream.getReader()
+
+    // Read the first (synchronous) chunk.
+    const { value: firstChunk = '' } = await reader.read()
 
     // Merge loader data script + useHead() tags into the document head.
     const headContent = [head, headTags].filter(Boolean).join('\\n')
 
     // Wrap the rendered body in a full HTML document and inject the head additions
     // (loader data script, useHead() tags, JIT styles). No polyfill in body yet.
-    const ssrHtml = \`<!DOCTYPE html><html><head>\${headContent}</head><body>\${htmlWithStyles}</body></html>\`
+    const ssrHtml = \`<!DOCTYPE html><html><head>\${headContent}</head><body>\${firstChunk}</body></html>\`
 
-    let finalHtml = _clientTemplate
+    const merged = _clientTemplate
       ? _mergeWithClientTemplate(ssrHtml, _clientTemplate)
       : ssrHtml
 
-    // Inject DSD polyfill at end of <body>, outside <cer-layout-view>, so the
-    // browser runs it after parsing the declarative shadow roots.
-    finalHtml = finalHtml.includes('</body>')
-      ? finalHtml.replace('</body>', DSD_POLYFILL_SCRIPT + '</body>')
-      : finalHtml + DSD_POLYFILL_SCRIPT
+    // Split at </body> so async swap scripts and the DSD polyfill can be streamed
+    // in before the document is closed.
+    const bodyCloseIdx = merged.lastIndexOf('</body>')
+    const beforeBodyClose = bodyCloseIdx >= 0 ? merged.slice(0, bodyCloseIdx) : merged
+    const fromBodyClose  = bodyCloseIdx >= 0 ? merged.slice(bodyCloseIdx) : ''
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8')
-    res.end(finalHtml)
+    res.setHeader('Transfer-Encoding', 'chunked')
+    res.write(beforeBodyClose)
+
+    // Stream async component swap scripts through as-is.
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      res.write(value)
+    }
+
+    // Inject DSD polyfill immediately before </body>, then close the document.
+    res.end(DSD_POLYFILL_SCRIPT + fromBodyClose)
   })
 }
 
