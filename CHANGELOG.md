@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.4.4] - 2026-03-21
+
+- fix: bootstrap .cer/tsconfig.json during config loading for improved resolution (f8bda65)
+
 ## [v0.4.3] - 2026-03-21
 
 - fix: fix DSD config and update FOUC tests to DSD correctness tests and enhance assertions (a8d36a3)
