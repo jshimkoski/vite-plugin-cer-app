@@ -61,9 +61,9 @@ describe('resolveHtmlEntry', () => {
 })
 
 describe('generateDefaultHtml', () => {
-  it('always references /.cer/app.ts', () => {
+  it('always references /@cer/app.ts', () => {
     const html = generateDefaultHtml()
-    expect(html).toContain('/.cer/app.ts')
+    expect(html).toContain('/@cer/app.ts')
     expect(html).not.toContain('/app/app.ts')
   })
 

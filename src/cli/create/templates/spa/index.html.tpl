@@ -7,6 +7,6 @@
   </head>
   <body>
     <cer-layout-view></cer-layout-view>
-    <script type="module" src="/.cer/app.ts"></script>
+    <script type="module" src="/@cer/app.ts"></script>
   </body>
 </html>

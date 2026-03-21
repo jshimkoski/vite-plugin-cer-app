@@ -26,7 +26,7 @@ export function resolveHtmlEntry(config: ResolvedCerConfig): string {
 
 /**
  * Generates the content for the default `.cer/index.html`.
- * Always points to the generated `/.cer/app.ts` entry.
+ * Always points to the virtual `/@cer/app.ts` entry.
  */
 export function generateDefaultHtml(): string {
   return `<!DOCTYPE html>
@@ -38,7 +38,7 @@ export function generateDefaultHtml(): string {
   </head>
   <body>
     <cer-layout-view></cer-layout-view>
-    <script type="module" src="/.cer/app.ts"></script>
+    <script type="module" src="/@cer/app.ts"></script>
   </body>
 </html>
 `

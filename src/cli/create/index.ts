@@ -243,7 +243,7 @@ async function generateInlineTemplate(
   // index.html
   await writeFile(
     join(targetDir, 'index.html'),
-    `<!DOCTYPE html>\n<html lang="en">\n  <head>\n    <meta charset="UTF-8">\n    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n    <title>${projectName}</title>\n  </head>\n  <body>\n    <cer-layout-view></cer-layout-view>\n    <script type="module" src="/.cer/app.ts"></script>\n  </body>\n</html>\n`,
+    `<!DOCTYPE html>\n<html lang="en">\n  <head>\n    <meta charset="UTF-8">\n    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n    <title>${projectName}</title>\n  </head>\n  <body>\n    <cer-layout-view></cer-layout-view>\n    <script type="module" src="/@cer/app.ts"></script>\n  </body>\n</html>\n`,
     'utf-8',
   )
 }

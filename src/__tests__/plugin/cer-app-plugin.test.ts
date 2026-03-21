@@ -47,6 +47,7 @@ type TestPlugin = {
   resolveId: (id: string) => string | undefined
   load: (id: string) => Promise<string | null>
   transform: (code: string, id: string) => unknown
+  transformIndexHtml: (html: string) => string
   buildStart: () => Promise<void>
   configureServer: (server: unknown) => Promise<void>
 }
@@ -143,10 +144,16 @@ describe('cerApp plugin — resolveId hook', () => {
     expect(plugin.resolveId('virtual:cer-error')).toBe('\0virtual:cer-error')
   })
 
-  it('resolves /.cer/app.ts to \\0cer-app-entry (virtual, bypasses fs security)', () => {
+  it('resolves /@cer/app.ts to \\0cer-app-entry (virtual module)', () => {
     const plugin = getCerPlugin()
     plugin.config({ root: '/project' }, { command: 'serve', mode: 'development' })
-    expect(plugin.resolveId('/.cer/app.ts')).toBe('\0cer-app-entry')
+    expect(plugin.resolveId('/@cer/app.ts')).toBe('\0cer-app-entry')
+  })
+
+  it('does not resolve /.cer/app.ts (old URL, rewritten by transformIndexHtml)', () => {
+    const plugin = getCerPlugin()
+    plugin.config({ root: '/project' }, { command: 'serve', mode: 'development' })
+    expect(plugin.resolveId('/.cer/app.ts')).toBeUndefined()
   })
 
   it('returns undefined for unknown ids', () => {
@@ -286,6 +293,35 @@ describe('cerApp plugin — transform hook', () => {
   })
 })
 
+describe('cerApp plugin — transformIndexHtml hook', () => {
+  it('rewrites /.cer/app.ts src to /@cer/app.ts', () => {
+    const plugin = getCerPlugin()
+    plugin.config({ root: '/project' }, { command: 'serve', mode: 'development' })
+    const input = '<script type="module" src="/.cer/app.ts"></script>'
+    const output = plugin.transformIndexHtml(input)
+    expect(output).toContain('src="/@cer/app.ts"')
+    expect(output).not.toContain('src="/.cer/app.ts"')
+  })
+
+  it('leaves html unchanged when /.cer/app.ts is not present', () => {
+    const plugin = getCerPlugin()
+    plugin.config({ root: '/project' }, { command: 'serve', mode: 'development' })
+    const input = '<script type="module" src="/@cer/app.ts"></script>'
+    expect(plugin.transformIndexHtml(input)).toBe(input)
+  })
+})
+
+describe('cerApp plugin — configResolved hook', () => {
+  it('calls writeGeneratedDir during configResolved', async () => {
+    const { writeGeneratedDir } = await import('../../plugin/generated-dir.js')
+    vi.mocked(writeGeneratedDir).mockClear()
+    const plugin = getCerPlugin()
+    plugin.config({ root: '/project' }, { command: 'serve', mode: 'development' })
+    plugin.configResolved(FAKE_RESOLVED)
+    expect(writeGeneratedDir).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('cerApp plugin — buildStart hook', () => {
   it('calls writeGeneratedDir on build start', async () => {
     const { writeGeneratedDir } = await import('../../plugin/generated-dir.js')
@@ -294,7 +330,8 @@ describe('cerApp plugin — buildStart hook', () => {
     plugin.config({ root: '/project' }, { command: 'build', mode: 'production' })
     plugin.configResolved(FAKE_RESOLVED)
     await plugin.buildStart()
-    expect(writeGeneratedDir).toHaveBeenCalledTimes(1)
+    // writeGeneratedDir is called once in configResolved and once in buildStart
+    expect(writeGeneratedDir).toHaveBeenCalledTimes(2)
   })
 
   it('calls scanComposableExports on build start', async () => {
@@ -342,7 +379,8 @@ describe('cerApp plugin — configureServer hook', () => {
       middlewares: { use: vi.fn() },
     }
     await plugin.configureServer(mockServer)
-    expect(writeGeneratedDir).toHaveBeenCalledTimes(1)
+    // configResolved calls it once, configureServer calls it again
+    expect(writeGeneratedDir).toHaveBeenCalledTimes(2)
   })
 
   it('calls scanComposableExports on server configure', async () => {

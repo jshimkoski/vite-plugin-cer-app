@@ -3,6 +3,8 @@
  * All tests run in every build mode (SPA, SSR, SSG).
  */
 
+const mode = Cypress.env('mode') as 'spa' | 'ssr' | 'ssg'
+
 describe('Counter interactivity', () => {
   beforeEach(() => {
     cy.visit('/counter')
@@ -120,3 +122,16 @@ describe('Auth middleware', () => {
     cy.get('cer-layout-view').shadow().find('[data-cy=plugin-greeting]').should('contain', 'Hello from ks-setup plugin!')
   })
 })
+
+if (mode !== 'spa') {
+  describe('Plugin provide/inject — server-side rendering', () => {
+    it('plugin greeting is present in the initial server HTML', () => {
+      // Auth middleware is client-side only, so the server renders /protected
+      // unconditionally. This verifies useInject() reads from __cerPluginProvides
+      // during the SSR render pass (before any client JS runs).
+      cy.request('/protected').then((resp) => {
+        expect(resp.body).to.include('Hello from ks-setup plugin!')
+      })
+    })
+  })
+}

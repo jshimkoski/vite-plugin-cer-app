@@ -37,11 +37,11 @@ const router = initRouter({ routes })
 const isNavigating = ref(false)
 const currentError = ref(null)
 
-const resetError = (): void => {
+const resetError = () => {
   currentError.value = null
   void router.replace(router.getCurrent().path)
 }
-;(globalThis as Record<string, unknown>).resetError = resetError
+;(globalThis).resetError = resetError
 
 const _push = router.push.bind(router)
 const _replace = router.replace.bind(router)
@@ -77,10 +77,10 @@ router.replace = async (path) => {
 // Declared BEFORE component('cer-layout-view') to avoid a temporal dead zone
 // ReferenceError: customElements.define() upgrades existing DOM elements
 // synchronously, calling the render function immediately.
-const _pluginProvides = new Map<string, unknown>()
+const _pluginProvides = new Map()
 // Expose plugin provides globally so page components can read them synchronously
 // regardless of render order.
-;(globalThis as Record<string, unknown>).__cerPluginProvides = _pluginProvides
+;(globalThis).__cerPluginProvides = _pluginProvides
 
 // ─── <cer-layout-view> ───────────────────────────────────────────────────────
 
@@ -92,10 +92,10 @@ component('cer-layout-view', () => {
   }
 
   const current = ref(router.getCurrent())
-  let unsub: (() => void) | undefined
+  let unsub
 
   useOnConnected(() => {
-    unsub = router.subscribe((s: typeof current.value) => { current.value = s })
+    unsub = router.subscribe((s) => { current.value = s })
   })
   useOnDisconnected(() => { unsub?.(); unsub = undefined })
 
@@ -111,9 +111,9 @@ component('cer-layout-view', () => {
   }
 
   const matched = router.matchRoute(current.value.path)
-  const routeMeta = matched?.route?.meta as { layout?: string } | undefined
+  const routeMeta = matched?.route?.meta
   const layoutName = routeMeta?.layout ?? 'default'
-  const layoutTag = (layouts as Record<string, string>)[layoutName]
+  const layoutTag = layouts[layoutName]
   const routerView = { tag: 'router-view', props: {}, children: [] }
 
   if (layoutTag) return { tag: layoutTag, props: {}, children: [routerView] }
@@ -124,7 +124,7 @@ for (const plugin of plugins) {
   if (plugin && typeof plugin.setup === 'function') {
     await plugin.setup({
       router,
-      provide: (key: string, value: unknown) => { _pluginProvides.set(key, value) },
+      provide: (key, value) => { _pluginProvides.set(key, value) },
       config: {},
     })
   }
@@ -151,7 +151,7 @@ if (typeof window !== 'undefined') {
   await _replace(window.location.pathname + window.location.search + window.location.hash)
   // Clear SSR loader data after initial navigation so subsequent client-side
   // navigations don't accidentally reuse stale server data.
-  delete (globalThis as Record<string, unknown>).__CER_DATA__
+  delete (globalThis).__CER_DATA__
 }
 
 export { router }

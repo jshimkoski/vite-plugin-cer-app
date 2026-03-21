@@ -41,9 +41,12 @@ const RESOLVED_IDS = Object.fromEntries(
   Object.entries(VIRTUAL_IDS).map(([k, v]) => [k, `\0${v}`]),
 ) as Record<keyof typeof VIRTUAL_IDS, string>
 
-// The generated app entry is served as a virtual module so Vite doesn't need
-// to find it on disk (Vite's fs security policy blocks paths starting with `/.`).
-const APP_ENTRY_URL = '/.cer/app.ts'
+// The app entry is served via a virtual module at /@cer/app.ts.
+// Using /@ avoids Vite's dot-directory fs security restriction that blocks /.cer/
+// from being served through the transform middleware. The physical .cer/app.ts
+// is still written to disk for IDE/TypeScript support, but the browser fetches
+// /@cer/app.ts which resolves to this virtual module.
+const APP_ENTRY_URL = '/@cer/app.ts'
 const RESOLVED_APP_ENTRY = '\0cer-app-entry'
 
 /**
@@ -217,6 +220,16 @@ export function cerApp(userConfig: CerAppConfig = {}): Plugin[] {
     configResolved(resolvedConfig) {
       // Re-resolve with the final root
       config = resolveConfig(userConfig, resolvedConfig.root)
+      // Write .cer/ immediately after config is resolved so the physical
+      // app.ts exists for IDE/TypeScript support before any Vite hooks fire.
+      writeGeneratedDir(config)
+    },
+
+    transformIndexHtml(html: string) {
+      // Rewrite any existing /.cer/app.ts src reference (older projects or
+      // the scaffold template) to /@cer/app.ts so Vite's transform middleware
+      // processes it. Vite blocks /.* paths from the transform pipeline.
+      return html.replace(/src=["']\/\.cer\/app\.ts["']/g, 'src="/@cer/app.ts"')
     },
 
     resolveId(id: string) {
