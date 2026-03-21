@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.7.0] - 2026-03-21
+
+- feat: add per-route render strategies and error handling in ISR (d76fb89)
+
 ## [v0.6.0] - 2026-03-21
 
 - feat(ssr): switch server entry from renderToStringWithJITCSSDSD to renderToStreamWithJITCSSDSD for true incremental streaming (cca67d8)
