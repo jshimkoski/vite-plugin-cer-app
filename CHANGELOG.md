@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.9.0] - 2026-03-21
+
+- feat: add useCookie and useSeoMeta composables with tests (6536902)
+
 ## [v0.8.0] - 2026-03-21
 
 - feat: add middleware support and enhance runtime configuration (78ef4d2)
