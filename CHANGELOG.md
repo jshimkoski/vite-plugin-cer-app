@@ -1,6 +1,11 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.4.3] - 2026-03-21
+
+- fix: fix DSD config and update FOUC tests to DSD correctness tests and enhance assertions (a8d36a3)
+- chore: update eslint (5a367e0)
+
 ## [v0.4.2] - 2026-03-21
 
 - fix: update dependencies in project templates to latest versions (1390724)
