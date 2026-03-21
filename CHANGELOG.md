@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.5.0] - 2026-03-21
+
+- feat: add runtime configuration support and ISR enhancements (847cd25)
+
 ## [v0.4.6] - 2026-03-21
 
 - fix: merge extraneous templates (7a859bd)
