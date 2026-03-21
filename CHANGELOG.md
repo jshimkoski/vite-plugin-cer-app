@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.4.2] - 2026-03-21
+
+- fix: update dependencies in project templates to latest versions (1390724)
+
 ## [v0.4.1] - 2026-03-21
 
 - fix: update app entry point to use virtual module path /@cer/app.ts across templates and tests (139abaf)
