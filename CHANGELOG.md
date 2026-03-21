@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.4.1] - 2026-03-21
+
+- fix: update app entry point to use virtual module path /@cer/app.ts across templates and tests (139abaf)
+
 ## [v0.4.0] - 2026-03-20
 
 - feat: implement useInject composable for consistent value injection across SPA, SSR, and SSG fix: cer app hidden directory issue (f614e92)
