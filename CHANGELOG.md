@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.13.0] - 2026-03-22
+
+- feat: implement streaming Web API Response support in Cloudflare and Netlify adapters (bfe00e3)
+
 ## [v0.12.1] - 2026-03-22
 
 - fix: add meta.hydrate support for route hydration strategies and implement related tests (0513743)
