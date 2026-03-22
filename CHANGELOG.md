@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.12.0] - 2026-03-22
+
+- feat: implement ISR support with isrHandler for SSR fallback in Cloudflare, Netlify, and Vercel adapters (ddcc4d4)
+
 ## [v0.11.0] - 2026-03-22
 
 - feat: add Cloudflare Pages adapter for SSR and SSG support (2734c26)
