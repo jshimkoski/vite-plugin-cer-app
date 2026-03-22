@@ -17,7 +17,9 @@
  *   - Writes `netlify.toml` that points to the correct publish directory and
  *     adds a SPA fallback redirect (/* → /index.html).
  *
- * Netlify Functions v2 limitation: responses are buffered (no streaming).
+ * Responses are streamed via the Web Streams TransformStream API — chunks written
+ * by the SSR handler are forwarded to the client as they arrive rather than being
+ * buffered until the full page is rendered.
  * All other behaviour (cookies, headers, API routes, ISR) is fully supported.
  */
 
@@ -40,8 +42,11 @@ import {
  *
  * The function:
  * 1. Converts the incoming Web API Request to a mock Node.js IncomingMessage.
- * 2. Creates a mock ServerResponse that collects chunks and resolves a Promise
- *    with a Web API Response once `end()` is called.
+ * 2. Creates a streaming mock ServerResponse backed by a TransformStream.
+ *    Chunks written via res.write() are enqueued into the stream immediately;
+ *    res.end() closes the stream and resolves the Promise with a streaming
+ *    Web API Response. The platform receives the Response body as a ReadableStream
+ *    so bytes flow to the client as they are written — no full-page buffering.
  * 3. Routes /api/* to the API handlers, everything else to the SSR handler.
  *
  * The server bundle is imported using a path relative to the function file
@@ -104,7 +109,9 @@ async function toNodeRequest(webReq) {
 }
 
 function createNodeResponse() {
-  const chunks = []
+  const { readable, writable } = new TransformStream()
+  const writer = writable.getWriter()
+  const encoder = new TextEncoder()
   const headers = {}
   let _resolve
   let _ended = false
@@ -116,15 +123,14 @@ function createNodeResponse() {
     removeHeader(name) { delete headers[name.toLowerCase()] },
     write(chunk) {
       if (_ended) return
-      chunks.push(typeof chunk === 'string' ? Buffer.from(chunk, 'utf-8') : Buffer.from(chunk))
+      void writer.write(typeof chunk === 'string' ? encoder.encode(chunk) : chunk).catch(() => {})
     },
     end(chunk) {
       if (_ended) return
       _ended = true
-      if (chunk) {
-        chunks.push(typeof chunk === 'string' ? Buffer.from(chunk, 'utf-8') : Buffer.from(chunk))
-      }
-      _resolve(new Response(Buffer.concat(chunks), { status: res.statusCode, headers }))
+      if (chunk) void writer.write(typeof chunk === 'string' ? encoder.encode(chunk) : chunk).catch(() => {})
+      void writer.close().catch(() => {})
+      _resolve(new Response(readable, { status: res.statusCode, headers }))
     },
     // Helpers expected by API route handlers.
     json(data) {

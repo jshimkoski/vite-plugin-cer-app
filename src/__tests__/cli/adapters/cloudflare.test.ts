@@ -104,6 +104,35 @@ describe('runCloudflareAdapter — SSR mode', () => {
     expect(worker).toContain('if (_ended) return')
   })
 
+  it('worker returns a streaming Web API Response (TransformStream body)', async () => {
+    await runCloudflareAdapter(root)
+    const worker = readText(root, 'dist/_worker.js')
+    expect(worker).toContain('new Response(readable,')
+    expect(worker).toContain('TransformStream')
+    expect(worker).not.toContain('Buffer.concat')
+  })
+
+  it('worker streams chunks via writer.write() instead of buffering', async () => {
+    await runCloudflareAdapter(root)
+    const worker = readText(root, 'dist/_worker.js')
+    expect(worker).toContain('writer.write(')
+    expect(worker).toContain('writer.close()')
+  })
+
+  it('worker uses TextEncoder to convert string chunks to Uint8Array', async () => {
+    await runCloudflareAdapter(root)
+    const worker = readText(root, 'dist/_worker.js')
+    expect(worker).toContain('encoder.encode(chunk)')
+    expect(worker).toContain('new TextEncoder()')
+  })
+
+  it('worker silently swallows writer rejections to prevent UnhandledPromiseRejection on client disconnect', async () => {
+    await runCloudflareAdapter(root)
+    const worker = readText(root, 'dist/_worker.js')
+    expect(worker).toContain('.catch(() => {})')
+    expect(worker).toContain('writer.close().catch(() => {})')
+  })
+
   it('worker wraps API handlers in runWithRequestContext for cookie/session access', async () => {
     await runCloudflareAdapter(root)
     const worker = readText(root, 'dist/_worker.js')

@@ -3,7 +3,7 @@
  *
  * These tests exercise the full request/response pipeline through the generated
  * `dist/_worker.js`: Web API Request → server middleware → API route handler
- * / SSR handler → buffered Web API Response.
+ * / SSR handler → streaming Web API Response (TransformStream body).
  *
  * Prerequisites (run automatically via `npm run e2e:integration:cloudflare`):
  *   1. `cer-app build --mode ssr --root e2e/kitchen-sink`
@@ -46,8 +46,10 @@ describe.skipIf(!workerExists)('Cloudflare Pages worker — integration', () => 
     expect(res.headers.get('content-type')).toContain('text/html')
   })
 
-  it('GET / response is a complete HTML document', async () => {
+  it('GET / response is a complete HTML document streamed via ReadableStream', async () => {
     const res = await call('/')
+    // Response body is a ReadableStream (streaming, not pre-buffered).
+    expect(res.body).toBeInstanceOf(ReadableStream)
     const body = await res.text()
     expect(body).toContain('<!DOCTYPE html')
     expect(body).toContain('</html>')

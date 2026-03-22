@@ -12,7 +12,7 @@
   },
   "devDependencies": {
     "vite": "^8.0.1",
-    "@jasonshimmy/vite-plugin-cer-app": "^0.6.0",
+    "@jasonshimmy/vite-plugin-cer-app": "^0.13.0",
     "typescript": "^5.9.3"
   }
 }

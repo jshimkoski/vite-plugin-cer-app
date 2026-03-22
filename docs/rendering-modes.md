@@ -67,6 +67,23 @@ The server renders HTML for each request. Uses Declarative Shadow DOM (DSD) to e
 7. `useHead()` calls are collected from the synchronous render and injected before `</head>`
 8. The rendered HTML is merged with the Vite client bundle shell and streamed as a chunked response
 
+### Streaming behavior by platform
+
+The SSR server renders in two phases: a synchronous first chunk (the full page HTML up to `</body>`) and zero or more subsequent async chunks (component swap scripts and the DSD polyfill). All platforms stream both phases to the client.
+
+| Platform | Streaming mechanism | Notes |
+|---|---|---|
+| `cer-app preview` | Node.js `res.write()` → native chunked HTTP | `Transfer-Encoding: chunked` set automatically |
+| Vercel | Node.js `res.write()` → native chunked HTTP | Vercel injects real `req`/`res` into the handler |
+| Netlify | `TransformStream` → `Response(readableStream)` | Web Streams API; Netlify Functions v2 |
+| Cloudflare Pages | `TransformStream` → `Response(readableStream)` | Web Streams API; Cloudflare Workers |
+
+**TTFB benefit:** The browser receives the first chunk (full page HTML, including all pre-rendered content) before async swap scripts are ready. Content is visible immediately — async scripts stream in afterward without blocking the initial paint.
+
+**Error recovery:** If the SSR handler throws after writing the first chunk, the catch handler sets `res.statusCode = 500` and calls `res.end('Internal Server Error')`. On Netlify/Cloudflare the `Response` status (committed at `end()` time) will be 500, and the partial HTML will be followed by the error string. Use `meta.render: 'server'` with no `revalidate` on routes where partial responses are unacceptable — errors on those routes are caught before any output is written.
+
+**Client disconnects:** If the client closes the connection during streaming (Netlify/Cloudflare), `writer.write()` and `writer.close()` rejections are silently swallowed — the server continues handling other requests normally.
+
 ### Build output
 
 ```

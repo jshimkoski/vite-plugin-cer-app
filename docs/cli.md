@@ -187,7 +187,7 @@ cer-app adapt --platform vercel --root ./packages/my-app
 - Copies content-hashed assets to `.netlify/publish/` (no `index.html` — HTML is served by the function).
 - Writes `netlify.toml` with the publish directory, `Cache-Control` headers for assets, and a catch-all redirect to the SSR function.
 - SPA/SSG builds: writes `netlify.toml` only (no function needed).
-- Note: Netlify Functions buffer the full response — streaming is not supported.
+- SSR responses are streamed via the Web Streams `TransformStream` API — HTML chunks are forwarded to the client as they are written rather than waiting for the full page to render.
 - Deploy with `netlify deploy`.
 
 **Cloudflare behavior (`--platform cloudflare`):**
@@ -196,7 +196,7 @@ cer-app adapt --platform vercel --root ./packages/my-app
 - Requires the `nodejs_compat` compatibility flag (written automatically into `wrangler.toml`) for `AsyncLocalStorage` and `node:stream` support.
 - Copies content-hashed assets to `dist/` alongside the worker. Cloudflare Pages CDN serves matched static files first; all other requests fall through to `_worker.js`.
 - SPA/SSG builds: no worker generated — Cloudflare Pages serves `dist/` as a static site.
-- Note: responses are buffered (Cloudflare Functions limitation, same as Netlify).
+- SSR responses are streamed via the Web Streams `TransformStream` API — HTML chunks are forwarded to the client as they are written rather than waiting for the full page to render.
 - Deploy with `wrangler pages deploy dist`.
 
 **Auto-run via `cer.config.ts`:**

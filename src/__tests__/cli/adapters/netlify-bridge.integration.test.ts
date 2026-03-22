@@ -3,7 +3,7 @@
  *
  * These tests exercise the full request/response pipeline through the generated
  * `netlify/functions/ssr.mjs` bridge: Web API Request → Node.js mock → SSR
- * handler → buffered Web API Response.
+ * handler → streaming Web API Response (TransformStream body).
  *
  * Prerequisites (run automatically via `npm run e2e:integration:netlify`):
  *   1. `cer-app build --mode ssr --root e2e/kitchen-sink`   → dist/server/server.js
@@ -45,9 +45,10 @@ describe.skipIf(!bridgeExists)('Netlify SSR bridge — integration', () => {
 
   it('GET / response body is a complete HTML document', async () => {
     const res = await bridge(new Request('http://localhost/'))
+    // Response body is a ReadableStream (streaming, not pre-buffered).
+    expect(res.body).toBeInstanceOf(ReadableStream)
     const body = await res.text()
     expect(body).toContain('<!DOCTYPE html')
-    // Response is buffered in full — not truncated mid-document.
     expect(body).toContain('</html>')
   })
 

@@ -48,6 +48,9 @@ import {
  * - Uses top-level await (supported in Cloudflare Workers ES modules).
  * - Mirrors the Netlify bridge's Web Request → Node.js mock → Response pattern;
  *   Cloudflare Workers with nodejs_compat support node:stream + AsyncLocalStorage.
+ * - Responses are streamed via the Web Streams TransformStream API — chunks written
+ *   by the SSR handler are forwarded to the client as they arrive rather than being
+ *   buffered until the full page is rendered.
  * - Exports `{ fetch }` — the Cloudflare Pages _worker.js module format.
  */
 function generateWorkerBridge(clientHtml: string): string {
@@ -118,7 +121,9 @@ async function toNodeRequest(webReq) {
 }
 
 function createNodeResponse() {
-  const chunks = []
+  const { readable, writable } = new TransformStream()
+  const writer = writable.getWriter()
+  const encoder = new TextEncoder()
   const headers = {}
   let _resolve
   let _ended = false
@@ -130,15 +135,14 @@ function createNodeResponse() {
     removeHeader(name) { delete headers[name.toLowerCase()] },
     write(chunk) {
       if (_ended) return
-      chunks.push(typeof chunk === 'string' ? Buffer.from(chunk, 'utf-8') : Buffer.from(chunk))
+      void writer.write(typeof chunk === 'string' ? encoder.encode(chunk) : chunk).catch(() => {})
     },
     end(chunk) {
       if (_ended) return
       _ended = true
-      if (chunk) {
-        chunks.push(typeof chunk === 'string' ? Buffer.from(chunk, 'utf-8') : Buffer.from(chunk))
-      }
-      _resolve(new Response(Buffer.concat(chunks), { status: res.statusCode, headers }))
+      if (chunk) void writer.write(typeof chunk === 'string' ? encoder.encode(chunk) : chunk).catch(() => {})
+      void writer.close().catch(() => {})
+      _resolve(new Response(readable, { status: res.statusCode, headers }))
     },
     json(data) {
       this.setHeader('Content-Type', 'application/json; charset=utf-8')

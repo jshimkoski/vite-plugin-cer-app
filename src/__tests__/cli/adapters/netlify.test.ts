@@ -71,10 +71,33 @@ describe('runNetlifyAdapter — SSR mode', () => {
     expect(bridge).toContain("from 'node:stream'")
   })
 
-  it('bridge returns a Web API Response', async () => {
+  it('bridge returns a streaming Web API Response (TransformStream body)', async () => {
     await runNetlifyAdapter(root)
     const bridge = readText(root, 'netlify/functions/ssr.mjs')
-    expect(bridge).toContain('new Response(')
+    expect(bridge).toContain('new Response(readable,')
+    expect(bridge).toContain('TransformStream')
+    expect(bridge).not.toContain('Buffer.concat')
+  })
+
+  it('bridge streams chunks via writer.write() instead of buffering', async () => {
+    await runNetlifyAdapter(root)
+    const bridge = readText(root, 'netlify/functions/ssr.mjs')
+    expect(bridge).toContain('writer.write(')
+    expect(bridge).toContain('writer.close()')
+  })
+
+  it('bridge uses TextEncoder to convert string chunks to Uint8Array', async () => {
+    await runNetlifyAdapter(root)
+    const bridge = readText(root, 'netlify/functions/ssr.mjs')
+    expect(bridge).toContain('encoder.encode(chunk)')
+    expect(bridge).toContain('new TextEncoder()')
+  })
+
+  it('bridge silently swallows writer rejections to prevent UnhandledPromiseRejection on client disconnect', async () => {
+    await runNetlifyAdapter(root)
+    const bridge = readText(root, 'netlify/functions/ssr.mjs')
+    expect(bridge).toContain('.catch(() => {})')
+    expect(bridge).toContain('writer.close().catch(() => {})')
   })
 
   it('bridge handles /api/* routing', async () => {
