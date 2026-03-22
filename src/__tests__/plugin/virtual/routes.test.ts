@@ -432,6 +432,81 @@ describe('generateRoutesCode — meta.render', () => {
   })
 })
 
+// ─── meta.hydrate ─────────────────────────────────────────────────────────────
+
+describe('generateRoutesCode — meta.hydrate', () => {
+  beforeEach(() => {
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(scanDirectory).mockResolvedValue([])
+    vi.mocked(readFile).mockResolvedValue('' as never)
+  })
+
+  it('emits meta.hydrate "idle" when declared', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/about.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `export const meta = { hydrate: 'idle' }` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('hydrate: "idle"')
+  })
+
+  it('emits meta.hydrate "visible" when declared', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/hero.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `export const meta = { hydrate: 'visible' }` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('hydrate: "visible"')
+  })
+
+  it('emits meta.hydrate "none" when declared', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/static-page.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `export const meta = { hydrate: 'none' }` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('hydrate: "none"')
+  })
+
+  it('does NOT emit meta.hydrate when "load" (default — no-op)', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/about.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `export const meta = { hydrate: 'load' }` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).not.toContain('hydrate:')
+  })
+
+  it('omits hydrate meta when not declared', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/about.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `component('page-about', () => html\`<h1>About</h1>\`)` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).not.toContain('hydrate:')
+  })
+
+  it('ignores unknown hydrate values', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/about.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `export const meta = { hydrate: 'lazy' }` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).not.toContain('hydrate:')
+  })
+
+  it('can combine hydrate with layout and render', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/dashboard.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `export const meta = { hydrate: 'idle', layout: 'minimal', render: 'server' }` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('hydrate: "idle"')
+    expect(code).toContain('layout: "minimal"')
+    expect(code).toContain('render: "server"')
+  })
+})
+
 // ─── nested layouts (layoutChain) ────────────────────────────────────────────
 
 describe('generateRoutesCode — layoutChain (nested layouts)', () => {

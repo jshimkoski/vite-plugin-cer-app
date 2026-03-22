@@ -148,14 +148,30 @@ Array of named middleware to run before navigating to this page. Names must matc
 
 ### `meta.hydrate`
 
-Controls when the component hydrates on the client after SSR:
+Controls when the page component activates (hydrates) on the client after SSR. The server always renders full HTML regardless of this setting — it only affects client-side JS activation timing.
 
-| Value | Behavior |
-|---|---|
-| `'load'` | Hydrates immediately on page load |
-| `'idle'` | Hydrates when the browser is idle |
-| `'visible'` | Hydrates when the element enters the viewport |
-| `'none'` | Never hydrates (static HTML only) |
+| Value | Behavior | Browser API |
+|---|---|---|
+| `'load'` | Hydrates immediately on page load (default) | — |
+| `'idle'` | Defers until the browser has finished higher-priority work | `requestIdleCallback` (falls back to `setTimeout` in Safari) |
+| `'visible'` | Defers until `<cer-layout-view>` enters the viewport | `IntersectionObserver` |
+| `'none'` | Never hydrates — SSR HTML stays as-is, no JS activation | — |
+
+```ts
+// app/pages/marketing.ts — defer activation until idle
+export const meta = {
+  hydrate: 'idle',
+}
+
+// app/pages/legal/terms.ts — fully static, no JS needed
+export const meta = {
+  hydrate: 'none',
+}
+```
+
+**`'none'` and `usePageData`:** When `hydrate: 'none'` is set, the page component never activates and `usePageData()` loader data is not consumed. Avoid using `loader` on pages with `hydrate: 'none'` — the serialized `window.__CER_DATA__` will be present in the HTML but never read or cleaned up by the client.
+
+**SPA mode:** `meta.hydrate` has no effect in SPA mode — there is no SSR output to preserve, so the component always activates immediately.
 
 ### `meta.ssg.paths`
 

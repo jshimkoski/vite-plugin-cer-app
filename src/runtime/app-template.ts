@@ -142,28 +142,58 @@ for (const plugin of plugins) {
   }
 }
 
-// ─── Pre-load initial route ───────────────────────────────────────────────────
+// ─── Pre-load initial route + hydration strategy ─────────────────────────────
 // Download the current page's route chunk AFTER plugins run so that
 // cer-layout-view's first render (which calls provide()) completes before
 // page components are defined and their renders are scheduled. This ensures
 // inject() in child components can find values stored by provide().
+//
+// meta.hydrate controls WHEN the initial page activates:
+//   'load'    — immediately (default)
+//   'idle'    — deferred until requestIdleCallback (browser idle)
+//   'visible' — deferred until cer-layout-view enters the viewport
+//   'none'    — never: SSR HTML stays as-is, no JS activation
 
 if (typeof window !== 'undefined') {
   const _initMatch = router.matchRoute(window.location.pathname)
-  if (_initMatch?.route?.load) {
-    try { await _initMatch.route.load() } catch { /* non-fatal */ }
+  const _hydrateStrategy = _initMatch?.route?.meta?.hydrate ?? 'load'
+
+  if (_hydrateStrategy === 'none') {
+    // Static HTML only — leave SSR output untouched, clean up data immediately.
+    delete (globalThis).__CER_DATA__
+  } else {
+    const _doHydrate = async () => {
+      if (_initMatch?.route?.load) {
+        try { await _initMatch.route.load() } catch { /* non-fatal */ }
+      }
+      // Use the original (unwrapped) replace so isNavigating stays false during
+      // the initial paint — the loading component must not flash over pre-rendered content.
+      await _replace(window.location.pathname + window.location.search + window.location.hash)
+      // Clear SSR loader data after initial navigation so subsequent client-side
+      // navigations don't accidentally reuse stale server data.
+      delete (globalThis).__CER_DATA__
+    }
+
+    if (_hydrateStrategy === 'idle') {
+      // Defer until the browser has finished higher-priority work.
+      if (typeof requestIdleCallback !== 'undefined') {
+        requestIdleCallback(() => { void _doHydrate() })
+      } else {
+        // Safari / older environments fallback.
+        setTimeout(() => { void _doHydrate() }, 1)
+      }
+    } else if (_hydrateStrategy === 'visible') {
+      // Defer until cer-layout-view (or body as fallback) enters the viewport.
+      const _el = document.querySelector('cer-layout-view') ?? document.body
+      const _io = new IntersectionObserver(([entry]) => {
+        if (entry.isIntersecting) { _io.disconnect(); void _doHydrate() }
+      })
+      _io.observe(_el)
+    } else {
+      // 'load' — hydrate immediately (default behaviour).
+      await _doHydrate()
+    }
   }
-}
-
-// ─── Initial navigation ──────────────────────────────────────────────────────
-
-if (typeof window !== 'undefined') {
-  // Use the original (unwrapped) replace so isNavigating stays false during
-  // the initial paint — the loading component must not flash over pre-rendered content.
-  await _replace(window.location.pathname + window.location.search + window.location.hash)
-  // Clear SSR loader data after initial navigation so subsequent client-side
-  // navigations don't accidentally reuse stale server data.
-  delete (globalThis).__CER_DATA__
 }
 
 export { router }

@@ -65,6 +65,24 @@ function extractTransition(source: string): string | boolean | null {
 }
 
 /**
+ * Extracts the per-route `hydrate` strategy from a page file's source.
+ * Returns 'load', 'idle', 'visible', 'none', or null if absent.
+ * 'load' is the default — callers skip emitting it to keep the bundle lean.
+ *
+ * Matches patterns like:
+ *   hydrate: 'idle'
+ *   hydrate: 'visible'
+ *   hydrate: 'none'
+ */
+function extractHydrate(source: string): 'load' | 'idle' | 'visible' | 'none' | null {
+  const match = source.match(/hydrate\s*:\s*['"]([^'"]+)['"]/)
+  if (!match) return null
+  const val = match[1]
+  if (val === 'load' || val === 'idle' || val === 'visible' || val === 'none') return val
+  return null
+}
+
+/**
  * Extracts the per-route `render` strategy from a page file's source.
  * Returns 'static', 'server', 'spa', or null if absent.
  *
@@ -180,6 +198,7 @@ export async function generateRoutesCode(pagesDir: string): Promise<string> {
     revalidate: number | null
     transition: string | boolean | null
     render: 'static' | 'server' | 'spa' | null
+    hydrate: 'load' | 'idle' | 'visible' | 'none' | null
   }> = await Promise.all(
     sorted.map(async (entry) => {
       try {
@@ -193,9 +212,10 @@ export async function generateRoutesCode(pagesDir: string): Promise<string> {
           revalidate: extractRevalidate(src),
           transition: extractTransition(src),
           render: extractRender(src),
+          hydrate: extractHydrate(src),
         }
       } catch {
-        return { middleware: [], layout: null, layoutChain: null, revalidate: null, transition: null, render: null }
+        return { middleware: [], layout: null, layoutChain: null, revalidate: null, transition: null, render: null, hydrate: null }
       }
     }),
   )
@@ -204,7 +224,7 @@ export async function generateRoutesCode(pagesDir: string): Promise<string> {
 
   // Build routes array with lazy load() functions for code splitting.
   const routeItems = sorted.map((entry, i) => {
-    const { middleware: mw, layout, layoutChain, revalidate, transition, render } = metaPerEntry[i]
+    const { middleware: mw, layout, layoutChain, revalidate, transition, render, hydrate } = metaPerEntry[i]
     const filePath = JSON.stringify(entry.filePath)
     const tagName = JSON.stringify(entry.tagName)
     const routePath = JSON.stringify(entry.routePath)
@@ -230,6 +250,10 @@ export async function generateRoutesCode(pagesDir: string): Promise<string> {
     }
     if (render !== null) {
       metaFields.push(`render: ${JSON.stringify(render)}`)
+    }
+    // 'load' is the default — only emit non-default values to keep bundle lean.
+    if (hydrate !== null && hydrate !== 'load') {
+      metaFields.push(`hydrate: ${JSON.stringify(hydrate)}`)
     }
     const metaStr = metaFields.length > 0 ? `    meta: { ${metaFields.join(', ')} },\n` : ''
 
