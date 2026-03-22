@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.12.1] - 2026-03-22
+
+- fix: add meta.hydrate support for route hydration strategies and implement related tests (0513743)
+
 ## [v0.12.0] - 2026-03-22
 
 - feat: implement ISR support with isrHandler for SSR fallback in Cloudflare, Netlify, and Vercel adapters (ddcc4d4)
