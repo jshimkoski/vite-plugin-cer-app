@@ -9,3 +9,6 @@ coverage
 .netlify/
 netlify/
 netlify.toml
+
+# Cloudflare adapter output
+wrangler.toml

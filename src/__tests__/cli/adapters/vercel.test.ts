@@ -96,7 +96,7 @@ describe('runVercelAdapter — SSR mode', () => {
     await runVercelAdapter(root)
     expect(existsSync(join(root, '.vercel/output/functions/index.func/index.js'))).toBe(true)
     const launcher = readText(root, '.vercel/output/functions/index.func/index.js')
-    expect(launcher).toContain("import { handler, apiRoutes } from './server/server.js'")
+    expect(launcher).toContain("import { handler, apiRoutes, runServerMiddleware, runWithRequestContext } from './server/server.js'")
     expect(launcher).toContain('export default async function cerAppHandler')
   })
 
@@ -105,6 +105,20 @@ describe('runVercelAdapter — SSR mode', () => {
     const launcher = readText(root, '.vercel/output/functions/index.func/index.js')
     expect(launcher).toContain("urlPath.startsWith('/api/')")
     expect(launcher).toContain('matchApiPattern')
+  })
+
+  it('launcher attaches req.query (parsed query string) before calling handler', async () => {
+    await runVercelAdapter(root)
+    const launcher = readText(root, '.vercel/output/functions/index.func/index.js')
+    expect(launcher).toContain('parseQuery')
+    expect(launcher).toContain('req.query = parseQuery(')
+  })
+
+  it('launcher attaches req.body (parsed JSON body) before calling handler', async () => {
+    await runVercelAdapter(root)
+    const launcher = readText(root, '.vercel/output/functions/index.func/index.js')
+    expect(launcher).toContain('parseBody')
+    expect(launcher).toContain('req.body = await parseBody(req)')
   })
 
   it('writes package.json with type:module in function dir', async () => {

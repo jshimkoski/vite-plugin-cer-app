@@ -98,6 +98,47 @@ but lacks basic production safeguards.
 
 ## Phase 9 — Auth Primitives
 
+### 9.0 Server middleware + `useSession()` ✅
+
+**Problem:** No way to intercept every SSR/API request before routing (auth,
+CORS, logging). No isomorphic session management.
+
+**Design:**
+
+*Convention:* Files in `server/middleware/` export a default
+`defineServerMiddleware()` function. They run in alphabetical order on every
+request before API routes and before SSR rendering.
+
+```ts
+// server/middleware/auth.ts
+export default defineServerMiddleware(async (req, res, next) => {
+  const session = useSession<{ userId: string }>()
+  const data = await session.get()
+  if (!data?.userId) { res.statusCode = 401; res.end('Unauthorized'); return }
+  ;(req as any).user = data
+  next()
+})
+```
+
+`useSession<T>(options?)` — HMAC-SHA-256 signed cookie session:
+- Signing key: `runtimeConfig.private.sessionSecret` (resolved from
+  `SESSION_SECRET` env var at server startup).
+- `get()` → verifies signature, returns typed data or `null`.
+- `set(data)` → signs and writes `httpOnly` cookie.
+- `clear()` → sets `maxAge = 0`.
+- Web Crypto API (`crypto.subtle`) — works in Node.js ≥ 18 and Cloudflare Workers.
+
+**Files:**
+- `src/plugin/virtual/server-middleware.ts` — generator (existed, now wired)
+- `src/runtime/entry-server-template.ts` — `runServerMiddleware()` exported
+- `src/cli/adapters/netlify.ts` / `vercel.ts` / `cloudflare.ts` — call it before routing
+- `src/runtime/composables/define-server-middleware.ts` — new composable
+- `src/runtime/composables/use-session.ts` — new composable
+- `src/runtime/composables/index.ts` — re-exports
+- `src/plugin/dts-generator.ts` — globals + `virtual:cer-server-middleware` decl
+
+---
+
 ### 9.1 Client-side route middleware (navigation guards) ✅
 
 **Problem:** There is no way to intercept client-side navigations to redirect
@@ -203,22 +244,32 @@ response during SSR and `document.cookie` on the client.
 
 ## Phase 10 — Platform Adapters
 
-### 10.1 Cloudflare Workers adapter 🔜
+### 10.1 Cloudflare Workers adapter ✅
 
 **Problem:** The server bundle uses Node.js streams (`AsyncLocalStorage`,
 `createReadStream`, `IncomingMessage`). Cloudflare Workers run a Web
 platform environment without these.
 
-**Design:**
-- Replace `renderToStreamWithJITCSSDSD` with a Web Streams equivalent in
-  `entry-server-template.ts` when the `cloudflare` adapter is selected.
-- Swap `AsyncLocalStorage` with `AsyncContext` (TC39 proposal, available in
-  Workers) or a request-scoped `Map`.
-- The adapter wraps the handler as a `fetch(Request): Response` function.
-- Build output: a single `worker.js` compatible with `wrangler deploy`.
+**Solution:** Cloudflare Pages Advanced Mode (`_worker.js`) with
+`nodejs_compat` compatibility flag. Key techniques:
+- `nodejs_compat` provides `AsyncLocalStorage`, `node:stream` (`Readable.from`)
+  and `node:buffer` — everything the SSR bundle needs.
+- `dist/client/index.html` is read at adapter-run time and inlined as a string
+  constant in `_worker.js` via `globalThis.__CER_CLIENT_TEMPLATE__`, set using
+  top-level `await` before the server bundle is dynamically imported. This
+  bypasses the `node:fs` call in the bundle's module init without changing the
+  server entry template beyond adding a graceful try-catch fallback.
+- The worker bridge mirrors the Netlify bridge (Web Request → Node.js mock →
+  Response) and runs `runServerMiddleware` + API routing before SSR.
+- Responses are buffered (Cloudflare Functions limitation, same as Netlify).
 
-**Complexity:** High. Requires a new server entry template and build pipeline
-changes.
+**Files:**
+- `src/cli/adapters/cloudflare.ts` — Cloudflare Pages adapter
+- `src/runtime/entry-server-template.ts` — `globalThis.__CER_CLIENT_TEMPLATE__`
+  fallback + try-catch around `readFileSync`
+- `src/cli/commands/adapt.ts` — `cer-app adapt --platform cloudflare`
+- `src/types/config.ts` — `'cloudflare'` added to `adapter` union
+- `src/cli/commands/build.ts` — auto-runs adapter post-build
 
 ---
 
@@ -280,9 +331,10 @@ canonical URL. No new infrastructure needed — all forwarded to `<head>`.
 | 8.1 | Path traversal fix in preview server | 🔴 Critical | ✅ |
 | 8.2 | `runtimeConfig.private` (server-only secrets) | 🔴 Critical | ✅ |
 | 8.3 | Preview server hardening (headers, timeouts, graceful shutdown) | 🟡 High | ✅ |
+| 9.0 | Server middleware + `useSession()` | 🟡 High | ✅ |
 | 9.1 | Client-side route middleware (navigation guards) | 🟡 High | ✅ |
 | 9.2 | `useCookie()` composable | 🟡 High | ✅ |
-| 10.1 | Cloudflare Workers adapter | 🟢 Medium | 🔜 |
+| 10.1 | Cloudflare Workers adapter | 🟢 Medium | ✅ |
 | 10.2 | Vercel adapter | 🟢 Medium | ✅ |
 | 10.3 | Netlify adapter | 🟢 Medium | ✅ |
 | 11.1 | DevTools overlay | 🟢 Medium | ❌ |

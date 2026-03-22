@@ -289,6 +289,7 @@ export function cerApp(userConfig: CerAppConfig = {}): Plugin[] {
 
       const result = autoImportTransform(code, id, {
         srcDir: config.srcDir,
+        serverMiddlewareDir: config.serverMiddlewareDir,
         composableExports: config.autoImports?.composables !== false ? composableExports : undefined,
       })
       if (result === null) return null

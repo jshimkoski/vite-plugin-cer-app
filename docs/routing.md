@@ -307,6 +307,33 @@ component('layout-default', () => {
 
 ---
 
+## Loading state — `app/loading.ts`
+
+Create `app/loading.ts` to display a loading indicator while a route chunk is being fetched during client-side navigation. The file must export a custom element named `page-loading`:
+
+```ts
+// app/loading.ts
+component('page-loading', () => {
+  return html`
+    <div style="display:flex;align-items:center;gap:8px;padding:1rem">
+      <span style="width:14px;height:14px;border:2px solid #ccc;border-top-color:#555;border-radius:50%;animation:spin 0.7s linear infinite;display:inline-block"></span>
+      Loading…
+      <style>@keyframes spin { to { transform: rotate(360deg) } }</style>
+    </div>
+  `
+})
+```
+
+**Behaviour:**
+
+- `page-loading` is rendered in place of the normal layout + page tree while the route chunk is being loaded.
+- Once the chunk resolves and the page is ready to render, `page-loading` is replaced automatically.
+- `page-loading` is never included in SSR or SSG output — it only appears during client-side navigation.
+
+If `app/loading.ts` does not exist, navigation proceeds without any intermediate state (the previous page stays visible until the new one is ready).
+
+---
+
 ## Virtual module
 
 The route list is exposed as the virtual module `virtual:cer-routes`, which you can import directly in `app/app.ts`:

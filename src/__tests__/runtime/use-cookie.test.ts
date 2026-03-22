@@ -151,6 +151,44 @@ describe('useCookie — SSR (via AsyncLocalStorage)', () => {
     const cookie = useCookie('x')
     expect(cookie.value).toBeUndefined()
   })
+
+  it('applies defaultOptions when no call-time options are passed to set()', () => {
+    const { req, res } = makeReqRes()
+    store.run({ req, res }, () => {
+      useCookie('auth', { httpOnly: true, secure: true, sameSite: 'Strict' }).set('tok')
+    })
+    const header = res.getHeader('Set-Cookie') as string[]
+    const value = Array.isArray(header) ? header[0] : header
+    expect(value).toContain('HttpOnly')
+    expect(value).toContain('Secure')
+    expect(value).toContain('SameSite=Strict')
+  })
+
+  it('call-time options override defaultOptions', () => {
+    const { req, res } = makeReqRes()
+    store.run({ req, res }, () => {
+      useCookie('pref', { sameSite: 'Strict', httpOnly: true }).set('v', { sameSite: 'Lax' })
+    })
+    const header = res.getHeader('Set-Cookie') as string[]
+    const value = Array.isArray(header) ? header[0] : header
+    // call-time sameSite: 'Lax' must win over the default 'Strict'
+    expect(value).toContain('SameSite=Lax')
+    expect(value).not.toContain('SameSite=Strict')
+    // defaultOptions httpOnly is still inherited
+    expect(value).toContain('HttpOnly')
+  })
+
+  it('defaultOptions are applied on remove() when no call-time options are passed', () => {
+    const { req, res } = makeReqRes('secure=tok')
+    store.run({ req, res }, () => {
+      useCookie('secure', { path: '/app', domain: 'example.com' }).remove()
+    })
+    const header = res.getHeader('Set-Cookie') as string[]
+    const value = Array.isArray(header) ? header[0] : header
+    expect(value).toContain('Max-Age=0')
+    expect(value).toContain('Path=/app')
+    expect(value).toContain('Domain=example.com')
+  })
 })
 
 // ─── Client path ──────────────────────────────────────────────────────────────

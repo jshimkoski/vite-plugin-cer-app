@@ -9,4 +9,6 @@ rmSync(join(root, 'node_modules', '.cer-app-cache'), { recursive: true, force: t
 rmSync(join(root, '.netlify'), { recursive: true, force: true })
 rmSync(join(root, 'netlify'), { recursive: true, force: true })
 rmSync(join(root, '.vercel'), { recursive: true, force: true })
+// Cloudflare: _worker.js sits inside dist/ (cleaned above); wrangler.toml at root.
+rmSync(join(root, 'wrangler.toml'), { force: true })
 console.log('[e2e] Cleaned kitchen-sink/dist, cache, and adapter outputs')

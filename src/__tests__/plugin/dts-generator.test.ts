@@ -173,6 +173,31 @@ describe('generateAutoImportDts', () => {
     expect(dts).toContain("const useRuntimeConfig: typeof import('@jasonshimmy/vite-plugin-cer-app/composables')['useRuntimeConfig']")
   })
 
+  it('declares defineMiddleware as a framework global', async () => {
+    const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain("const defineMiddleware: typeof import('@jasonshimmy/vite-plugin-cer-app/composables')['defineMiddleware']")
+  })
+
+  it('declares defineServerMiddleware as a framework global', async () => {
+    const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain("const defineServerMiddleware: typeof import('@jasonshimmy/vite-plugin-cer-app/composables')['defineServerMiddleware']")
+  })
+
+  it('declares useSeoMeta as a framework global', async () => {
+    const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain("const useSeoMeta: typeof import('@jasonshimmy/vite-plugin-cer-app/composables')['useSeoMeta']")
+  })
+
+  it('declares useCookie as a framework global', async () => {
+    const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain("const useCookie: typeof import('@jasonshimmy/vite-plugin-cer-app/composables')['useCookie']")
+  })
+
+  it('declares useSession as a framework global', async () => {
+    const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain("const useSession: typeof import('@jasonshimmy/vite-plugin-cer-app/composables')['useSession']")
+  })
+
   it('declares when directive as a global', async () => {
     const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
     expect(dts).toContain("const when: typeof import('@jasonshimmy/custom-elements-runtime/directives')['when']")
@@ -251,6 +276,16 @@ describe('generateVirtualModuleDts', () => {
   it('declares RuntimePublicConfig in virtual:cer-app-config', async () => {
     const dts = await generateVirtualModuleDts(ROOT, COMPOSABLES_DIR)
     expect(dts).toContain('RuntimePublicConfig')
+  })
+
+  it('declares virtual:cer-server-middleware module', async () => {
+    const dts = await generateVirtualModuleDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain("declare module 'virtual:cer-server-middleware'")
+  })
+
+  it('declares virtual:cer-middleware module', async () => {
+    const dts = await generateVirtualModuleDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain("declare module 'virtual:cer-middleware'")
   })
 
   it('includes user composable re-exports in virtual:cer-composables', async () => {

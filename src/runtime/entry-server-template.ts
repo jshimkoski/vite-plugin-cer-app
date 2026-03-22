@@ -21,6 +21,7 @@ import routes from 'virtual:cer-routes'
 import layouts from 'virtual:cer-layouts'
 import plugins from 'virtual:cer-plugins'
 import apiRoutes from 'virtual:cer-server-api'
+import serverMiddleware from 'virtual:cer-server-middleware'
 import { runtimeConfig, _runtimePrivateDefaults } from 'virtual:cer-app-config'
 import { registerBuiltinComponents } from '@jasonshimmy/custom-elements-runtime'
 import { registerEntityMap, renderToStreamWithJITCSSDSD, DSD_POLYFILL_SCRIPT } from '@jasonshimmy/custom-elements-runtime/ssr'
@@ -74,13 +75,59 @@ const _cerDataStore = new AsyncLocalStorage()
 const _cerReqStore = new AsyncLocalStorage()
 ;(globalThis).__CER_REQ_STORE__ = _cerReqStore
 
+// Runs fn inside the per-request AsyncLocalStorage context so that isomorphic
+// composables (useCookie, useSession, etc.) can access req/res without prop-drilling.
+// Call this for every API handler invocation — not just SSR renders.
+export function runWithRequestContext(req, res, fn) {
+  return _cerReqStore.run({ req, res }, fn)
+}
+
+// Runs the server/middleware/ chain for a request.
+// Returns false if a middleware short-circuited the response; true to continue.
+// Exported so Netlify / Vercel / Cloudflare bridges can also call it for API routes.
+export async function runServerMiddleware(req, res) {
+  for (const { handler: mw } of (serverMiddleware ?? [])) {
+    if (typeof mw !== 'function') continue
+    let calledNext = false
+    try {
+      await new Promise((resolve, reject) => {
+        Promise.resolve(mw(req, res, (err) => {
+          if (err) reject(err)
+          else { calledNext = true; resolve() }
+        })).catch(reject)
+      })
+    } catch {
+      if (!res.writableEnded) {
+        res.statusCode = 500
+        res.end('Internal Server Error')
+      }
+      return false
+    }
+    if (res.writableEnded || !calledNext) return false
+  }
+  return true
+}
+
 // Load the Vite-built client index.html (dist/client/index.html) so every SSR
 // response includes the client-side scripts needed for hydration and routing.
 // The server bundle lives at dist/server/server.js, so ../client resolves correctly.
-const _clientTemplatePath = join(dirname(fileURLToPath(import.meta.url)), '../client/index.html')
-const _clientTemplate = existsSync(_clientTemplatePath)
-  ? readFileSync(_clientTemplatePath, 'utf-8')
-  : null
+//
+// Cloudflare Workers (and other runtimes without node:fs) can inject the
+// template before this module loads by setting globalThis.__CER_CLIENT_TEMPLATE__.
+// The Cloudflare adapter inlines dist/client/index.html as a string constant in
+// _worker.js and sets the global before dynamically importing the server bundle.
+let _clientTemplate = (globalThis).__CER_CLIENT_TEMPLATE__ ?? null
+if (!_clientTemplate) {
+  try {
+    const _clientTemplatePath = join(dirname(fileURLToPath(import.meta.url)), '../client/index.html')
+    _clientTemplate = existsSync(_clientTemplatePath)
+      ? readFileSync(_clientTemplatePath, 'utf-8')
+      : null
+  } catch {
+    // node:fs not available in this runtime — Cloudflare adapter must set
+    // globalThis.__CER_CLIENT_TEMPLATE__ before importing this bundle.
+  }
+}
 
 // Merge the SSR rendered body with the Vite client shell so the final page
 // contains both pre-rendered DSD content and the client bundle scripts.
@@ -265,6 +312,6 @@ export const handler = async (req, res) => {
 // Routes with meta.ssg.revalidate are served stale-while-revalidate.
 export const isrHandler = createIsrHandler(routes, handler)
 
-export { apiRoutes, plugins, layouts, routes }
+export { apiRoutes, plugins, layouts, routes, serverMiddleware }
 export default handler
 `

@@ -359,6 +359,73 @@ describe('configureCerDevServer — server middleware', () => {
     await getMiddleware()(createReq({ url: '/api/health' }), createRes(), vi.fn())
     expect(apiHandler).not.toHaveBeenCalled()
   })
+
+  it('sends 500 and stops chain when middleware calls next(err)', async () => {
+    const smHandler = vi.fn((_req: any, _res: any, next: (err?: unknown) => void) => {
+      next(new Error('auth failed'))
+    })
+    const apiHandler = vi.fn()
+    const { server, getMiddleware } = makeServer()
+    server.ssrLoadModule.mockImplementation(async (path: string) => {
+      if (path.includes('server-middleware')) return { serverMiddleware: [{ name: 'err', handler: smHandler }] }
+      return { apiRoutes: [{ path: '/api/health', handlers: { get: apiHandler } }] }
+    })
+    configureCerDevServer(server as any, makeConfig())
+    const res = createRes()
+    await getMiddleware()(createReq({ url: '/api/health' }), res, vi.fn())
+    expect(res.statusCode).toBe(500)
+    expect(res.end).toHaveBeenCalledWith('Internal Server Error')
+    expect(apiHandler).not.toHaveBeenCalled()
+  })
+
+  it('sends 500 and stops chain when middleware throws', async () => {
+    const smHandler = vi.fn(() => { throw new Error('unexpected') })
+    const apiHandler = vi.fn()
+    const { server, getMiddleware } = makeServer()
+    server.ssrLoadModule.mockImplementation(async (path: string) => {
+      if (path.includes('server-middleware')) return { serverMiddleware: [{ name: 'throw', handler: smHandler }] }
+      return { apiRoutes: [{ path: '/api/health', handlers: { get: apiHandler } }] }
+    })
+    configureCerDevServer(server as any, makeConfig())
+    const res = createRes()
+    await getMiddleware()(createReq({ url: '/api/health' }), res, vi.fn())
+    expect(res.statusCode).toBe(500)
+    expect(apiHandler).not.toHaveBeenCalled()
+  })
+
+  it('handles async middleware that returns a Promise and calls next() after awaiting', async () => {
+    const callOrder: string[] = []
+    const smHandler = vi.fn((_req: any, _res: any, next: () => void) =>
+      new Promise<void>((resolve) => {
+        // Simulate async work before calling next
+        setImmediate(() => { callOrder.push('sm'); next(); resolve() })
+      }),
+    )
+    const apiHandler = vi.fn((_req: any, res: any) => { callOrder.push('api'); res.end('ok') })
+    const { server, getMiddleware } = makeServer()
+    server.ssrLoadModule.mockImplementation(async (path: string) => {
+      if (path.includes('server-middleware')) return { serverMiddleware: [{ name: 'async', handler: smHandler }] }
+      return { apiRoutes: [{ path: '/api/health', handlers: { get: apiHandler } }] }
+    })
+    configureCerDevServer(server as any, makeConfig())
+    await getMiddleware()(createReq({ url: '/api/health' }), createRes(), vi.fn())
+    expect(callOrder).toEqual(['sm', 'api'])
+  })
+
+  it('handles async middleware that rejects (returns a rejected Promise)', async () => {
+    const smHandler = vi.fn(() => Promise.reject(new Error('async failure')))
+    const apiHandler = vi.fn()
+    const { server, getMiddleware } = makeServer()
+    server.ssrLoadModule.mockImplementation(async (path: string) => {
+      if (path.includes('server-middleware')) return { serverMiddleware: [{ name: 'async-throw', handler: smHandler }] }
+      return { apiRoutes: [{ path: '/api/health', handlers: { get: apiHandler } }] }
+    })
+    configureCerDevServer(server as any, makeConfig())
+    const res = createRes()
+    await getMiddleware()(createReq({ url: '/api/health' }), res, vi.fn())
+    expect(res.statusCode).toBe(500)
+    expect(apiHandler).not.toHaveBeenCalled()
+  })
 })
 
 // ─── SSR mode ─────────────────────────────────────────────────────────────────

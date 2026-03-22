@@ -3,6 +3,8 @@ import { normalize } from 'pathe'
 
 export interface AutoImportOptions {
   srcDir: string
+  /** Absolute path to server/middleware/ directory */
+  serverMiddlewareDir?: string
   /** Map of composable export name → absolute file path */
   composableExports?: Map<string, string>
 }
@@ -11,9 +13,9 @@ const RUNTIME_IMPORTS = `import { component, html, css, ref, computed, watch, wa
 
 const DIRECTIVE_IMPORTS = `import { when, each, match, anchorBlock } from '@jasonshimmy/custom-elements-runtime/directives';`
 
-const FRAMEWORK_IMPORTS = `import { useHead, usePageData, useInject, useRuntimeConfig, defineMiddleware, useSeoMeta, useCookie } from '@jasonshimmy/vite-plugin-cer-app/composables';`
+const FRAMEWORK_IMPORTS = `import { useHead, usePageData, useInject, useRuntimeConfig, defineMiddleware, defineServerMiddleware, useSeoMeta, useCookie, useSession } from '@jasonshimmy/vite-plugin-cer-app/composables';`
 
-const FRAMEWORK_IDENTIFIERS = ['useHead', 'usePageData', 'useInject', 'useRuntimeConfig', 'defineMiddleware', 'useSeoMeta', 'useCookie']
+const FRAMEWORK_IDENTIFIERS = ['useHead', 'usePageData', 'useInject', 'useRuntimeConfig', 'defineMiddleware', 'defineServerMiddleware', 'useSeoMeta', 'useCookie', 'useSession']
 
 const RUNTIME_IDENTIFIERS = [
   'component',
@@ -74,7 +76,10 @@ export function autoImportTransform(
   const isRootConventionFile =
     normalizedId.startsWith(srcDir + '/') &&
     !normalizedId.slice(srcDir.length + 1).includes('/')
-  const isTargetDir = isSubDir || isRootConventionFile
+  // server/middleware/ files also get framework auto-imports
+  const serverMiddlewareDir = opts.serverMiddlewareDir ? normalize(opts.serverMiddlewareDir) : null
+  const isServerMiddleware = serverMiddlewareDir != null && normalizedId.startsWith(serverMiddlewareDir + '/')
+  const isTargetDir = isSubDir || isRootConventionFile || isServerMiddleware
 
   if (!isTargetDir) return null
 

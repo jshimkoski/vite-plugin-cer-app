@@ -52,6 +52,48 @@ if (mode !== 'ssr') {
       })
     })
 
+    context('GET /api/echo — req.query parsing', () => {
+      it('returns parsed query parameters', () => {
+        cy.request('/api/echo?page=2&limit=10').then((response) => {
+          expect(response.status).to.eq(200)
+          expect(response.body.query).to.deep.eq({ page: '2', limit: '10' })
+        })
+      })
+
+      it('returns empty object when no query string is present', () => {
+        cy.request('/api/echo').then((response) => {
+          expect(response.status).to.eq(200)
+          expect(response.body.query).to.deep.eq({})
+        })
+      })
+    })
+
+    context('POST /api/echo — req.body parsing', () => {
+      it('echoes a JSON body back in the response', () => {
+        cy.request({
+          method: 'POST',
+          url: '/api/echo',
+          body: { message: 'hello', count: 42 },
+          headers: { 'Content-Type': 'application/json' },
+        }).then((response) => {
+          expect(response.status).to.eq(200)
+          expect(response.body.echo).to.deep.eq({ message: 'hello', count: 42 })
+        })
+      })
+
+      it('handles an empty JSON body', () => {
+        cy.request({
+          method: 'POST',
+          url: '/api/echo',
+          body: {},
+          headers: { 'Content-Type': 'application/json' },
+        }).then((response) => {
+          expect(response.status).to.eq(200)
+          expect(response.body.echo).to.deep.eq({})
+        })
+      })
+    })
+
     context('GET /api/posts/:slug', () => {
       it('returns the correct post for first-post', () => {
         cy.request('/api/posts/first-post').then((response) => {

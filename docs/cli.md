@@ -162,7 +162,7 @@ cer-app adapt [options]
 
 | Option | Default | Description |
 |---|---|---|
-| `--platform <platform>` | *(required)* | Target platform: `vercel` or `netlify` |
+| `--platform <platform>` | *(required)* | Target platform: `vercel`, `netlify`, or `cloudflare` |
 | `--root <root>` | `process.cwd()` | Project root directory |
 
 **Examples:**
@@ -170,6 +170,7 @@ cer-app adapt [options]
 ```sh
 cer-app adapt --platform vercel
 cer-app adapt --platform netlify
+cer-app adapt --platform cloudflare
 cer-app adapt --platform vercel --root ./packages/my-app
 ```
 
@@ -189,13 +190,23 @@ cer-app adapt --platform vercel --root ./packages/my-app
 - Note: Netlify Functions buffer the full response — streaming is not supported.
 - Deploy with `netlify deploy`.
 
+**Cloudflare behavior (`--platform cloudflare`):**
+
+- Writes `dist/_worker.js` — a Cloudflare Pages [Advanced Mode](https://developers.cloudflare.com/pages/functions/advanced-mode/) worker. The client HTML template is inlined in the worker as a string constant so `node:fs` is never needed at runtime.
+- Requires the `nodejs_compat` compatibility flag (written automatically into `wrangler.toml`) for `AsyncLocalStorage` and `node:stream` support.
+- Copies content-hashed assets to `dist/` alongside the worker. Cloudflare Pages CDN serves matched static files first; all other requests fall through to `_worker.js`.
+- SPA/SSG builds: no worker generated — Cloudflare Pages serves `dist/` as a static site.
+- Note: responses are buffered (Cloudflare Functions limitation, same as Netlify).
+- Deploy with `wrangler pages deploy dist`.
+
 **Auto-run via `cer.config.ts`:**
 
 ```ts
 // cer.config.ts
 export default defineConfig({
   mode: 'ssr',
-  adapter: 'vercel',  // runs automatically after cer-app build
+  adapter: 'cloudflare',  // 'vercel' | 'netlify' | 'cloudflare'
+  // runs automatically after cer-app build
 })
 ```
 

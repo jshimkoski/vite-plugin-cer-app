@@ -13,7 +13,7 @@ import {
   serveFromIsrCache,
 } from './preview-isr.js'
 
-// ─── API route matching ───────────────────────────────────────────────────────
+// ─── API route matching & body parsing ───────────────────────────────────────
 
 /**
  * Matches an API route pattern (e.g. '/api/items/:id') against a URL path.
@@ -53,6 +53,54 @@ const MIME_TYPES: Record<string, string> = {
   '.ttf': 'font/ttf',
   '.eot': 'application/vnd.ms-fontobject',
   '.map': 'application/json',
+}
+
+/**
+ * Reads the raw body from an IncomingMessage as a Buffer.
+ */
+function readBody(req: IncomingMessage): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = []
+    req.on('data', (chunk: Buffer) => chunks.push(chunk))
+    req.on('end', () => resolve(Buffer.concat(chunks)))
+    req.on('error', reject)
+  })
+}
+
+/**
+ * Parses URL query string into a plain object.
+ */
+function parseQuery(url: string): Record<string, string> {
+  const qIndex = url.indexOf('?')
+  if (qIndex === -1) return {}
+  const qs = url.slice(qIndex + 1)
+  const result: Record<string, string> = {}
+  for (const part of qs.split('&')) {
+    if (!part) continue
+    const eqIdx = part.indexOf('=')
+    if (eqIdx === -1) {
+      result[decodeURIComponent(part)] = ''
+    } else {
+      result[decodeURIComponent(part.slice(0, eqIdx))] = decodeURIComponent(part.slice(eqIdx + 1))
+    }
+  }
+  return result
+}
+
+/**
+ * Parses the request body for JSON content types.
+ * Returns the parsed object for application/json, raw Buffer for other
+ * bodies, or undefined for methods that carry no body.
+ */
+async function parseBody(req: IncomingMessage): Promise<unknown> {
+  const contentType = req.headers['content-type'] ?? ''
+  const method = req.method?.toUpperCase() ?? 'GET'
+  if (!['POST', 'PUT', 'PATCH'].includes(method)) return undefined
+  const buf = await readBody(req)
+  if (contentType.includes('application/json')) {
+    try { return JSON.parse(buf.toString('utf-8')) } catch { return undefined }
+  }
+  return buf
 }
 
 function getMimeType(filePath: string): string {
@@ -172,6 +220,8 @@ export function previewCommand(): Command {
         let serverMod: {
           handler?: SsrHandlerFn
           default?: SsrHandlerFn
+          runServerMiddleware?: (req: IncomingMessage, res: ServerResponse) => Promise<boolean>
+          runWithRequestContext?: <T>(req: IncomingMessage, res: ServerResponse, fn: () => Promise<T>) => Promise<T>
           apiRoutes?: Array<{ path: string; handlers: Record<string, unknown> }>
         }
         try {
@@ -186,6 +236,11 @@ export function previewCommand(): Command {
           console.error('[cer-app] Server bundle does not export a handler function.')
           process.exit(1)
         }
+
+        // Server middleware chain exported by the server bundle
+        const runServerMiddleware = serverMod.runServerMiddleware
+        // Request context wrapper — runs fn inside _cerReqStore so useCookie / useSession work in API handlers
+        const runWithRequestContext = serverMod.runWithRequestContext
 
         // API route array exported by the server bundle: [{ path, handlers }]
         const apiRoutes: Array<{ path: string; handlers: Record<string, unknown> }> =
@@ -210,13 +265,18 @@ export function previewCommand(): Command {
           const urlPath = url.split('?')[0]
           const method = req.method ?? 'GET'
 
+          // Run server middleware before routing — stops chain if it returns false
+          if (runServerMiddleware && !(await runServerMiddleware(req, res))) return
+
           // Route /api/* requests to the server bundle's API handlers
           if (urlPath.startsWith('/api/')) {
             for (const route of apiRoutes) {
               const matched = matchApiPattern(route.path, urlPath)
               if (matched !== null) {
-                const augReq = req as IncomingMessage & { params: Record<string, string> }
+                const augReq = req as IncomingMessage & { params: Record<string, string>; query: Record<string, string>; body: unknown }
                 augReq.params = matched
+                augReq.query = parseQuery(url)
+                augReq.body = await parseBody(req)
                 const augRes = res as ServerResponse & {
                   json(data: unknown): void
                   status(code: number): typeof augRes
@@ -235,7 +295,8 @@ export function previewCommand(): Command {
 
                 if (typeof handlerFn === 'function') {
                   try {
-                    await handlerFn(augReq, augRes)
+                    const invoke = () => Promise.resolve(handlerFn(augReq, augRes))
+                    await (runWithRequestContext ? runWithRequestContext(req, res, invoke) : invoke())
                   } catch (err) {
                     console.error(`[cer-app] API handler error at ${route.path}:`, err)
                     res.statusCode = 500

@@ -72,12 +72,13 @@ export interface CerAppConfig {
    * When set, `cer-app build` automatically runs the adapter after the build
    * completes, producing the platform-specific output alongside `dist/`.
    *
-   * - `'vercel'`  — Vercel Build Output API v3 (`.vercel/output/`)
-   * - `'netlify'` — Netlify Functions v2 + `netlify.toml`
+   * - `'vercel'`     — Vercel Build Output API v3 (`.vercel/output/`)
+   * - `'netlify'`    — Netlify Functions v2 + `netlify.toml`
+   * - `'cloudflare'` — Cloudflare Pages `_worker.js` + `wrangler.toml`
    *
    * You can also run the adapter independently with `cer-app adapt --platform <name>`.
    */
-  adapter?: 'vercel' | 'netlify'
+  adapter?: 'vercel' | 'netlify' | 'cloudflare'
 }
 
 export function defineConfig(config: CerAppConfig): CerAppConfig {

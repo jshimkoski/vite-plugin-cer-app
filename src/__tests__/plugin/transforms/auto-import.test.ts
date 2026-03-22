@@ -288,6 +288,55 @@ describe('autoImportTransform — framework composable injection', () => {
     const count = result.split(`from ${FRAMEWORK_PKG}`).length - 1
     expect(count).toBe(1)
   })
+
+  it('injects defineServerMiddleware import when defineServerMiddleware is used', () => {
+    const code = "export default defineServerMiddleware((_req, _res, next) => { next() })"
+    const result = autoImportTransform(code, '/project/app/middleware/server-check.ts', opts)!
+    expect(result).toContain(`from ${FRAMEWORK_PKG}`)
+    expect(result).toContain('defineServerMiddleware')
+  })
+
+  it('injects useSession import when useSession is used', () => {
+    const code = "component('page-x', () => { const s = useSession(); return html`<div></div>` })"
+    const result = autoImportTransform(code, '/project/app/pages/x.ts', opts)!
+    expect(result).toContain(`from ${FRAMEWORK_PKG}`)
+    expect(result).toContain('useSession')
+  })
+})
+
+describe('autoImportTransform — server/middleware/ directory', () => {
+  const serverOpts = { srcDir, serverMiddlewareDir: '/project/server/middleware' }
+
+  it('transforms files in server/middleware/ when serverMiddlewareDir is provided', () => {
+    const code = "export default defineServerMiddleware((_req, _res, next) => { next() })"
+    const result = autoImportTransform(code, '/project/server/middleware/cors.ts', serverOpts)
+    expect(result).not.toBeNull()
+  })
+
+  it('injects defineServerMiddleware import for server/middleware/ files', () => {
+    const code = "export default defineServerMiddleware((_req, _res, next) => { next() })"
+    const result = autoImportTransform(code, '/project/server/middleware/cors.ts', serverOpts)!
+    expect(result).toContain('defineServerMiddleware')
+    expect(result).toContain(`from ${FRAMEWORK_PKG}`)
+  })
+
+  it('injects useSession import for server/middleware/ files', () => {
+    const code = "export default defineServerMiddleware(async (_req, res, next) => { const s = useSession(); const d = await s.get(); if (!d) { res.end(); return } next() })"
+    const result = autoImportTransform(code, '/project/server/middleware/auth.ts', serverOpts)!
+    expect(result).toContain('useSession')
+  })
+
+  it('injects useCookie import for server/middleware/ files', () => {
+    const code = "export default defineServerMiddleware((req, res, next) => { const token = useCookie('token'); next() })"
+    const result = autoImportTransform(code, '/project/server/middleware/auth.ts', serverOpts)!
+    expect(result).toContain('useCookie')
+  })
+
+  it('does NOT transform server/middleware/ when serverMiddlewareDir is not set', () => {
+    const code = "export default defineServerMiddleware((_req, _res, next) => { next() })"
+    const result = autoImportTransform(code, '/project/server/middleware/cors.ts', { srcDir })
+    expect(result).toBeNull()
+  })
 })
 
 // ─── Composable import injection ─────────────────────────────────────────────

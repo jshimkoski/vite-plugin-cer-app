@@ -173,3 +173,93 @@ describe('preview server — request timeouts', () => {
     expect(staticTimeoutIdx).toBeGreaterThan(-1)
   })
 })
+
+// ─── Server middleware + request context ─────────────────────────────────────
+
+describe('preview server — server middleware and request context', () => {
+  it('extracts runServerMiddleware from server bundle', () => {
+    expect(src).toContain('const runServerMiddleware = serverMod.runServerMiddleware')
+  })
+
+  it('extracts runWithRequestContext from server bundle', () => {
+    expect(src).toContain('const runWithRequestContext = serverMod.runWithRequestContext')
+  })
+
+  it('calls runServerMiddleware before API routing and SSR', () => {
+    // runServerMiddleware call must come before the /api/ check in the handler
+    const apiIdx = src.indexOf("urlPath.startsWith('/api/')")
+    const mwIdx = src.indexOf('await runServerMiddleware(req, res)')
+    expect(mwIdx).toBeGreaterThan(0)
+    expect(mwIdx).toBeLessThan(apiIdx)
+  })
+
+  it('short-circuits the request when runServerMiddleware returns false', () => {
+    // The guard pattern: !(await runServerMiddleware(req, res)) => return
+    expect(src).toContain('if (runServerMiddleware && !(await runServerMiddleware(req, res))) return')
+  })
+
+  it('wraps API handler calls in runWithRequestContext so useCookie/useSession work', () => {
+    expect(src).toContain('runWithRequestContext ? runWithRequestContext(req, res, invoke)')
+  })
+
+  it('falls back to direct invocation if runWithRequestContext is not exported by the bundle', () => {
+    // Older bundles without runWithRequestContext: should still call the handler
+    expect(src).toContain(': invoke()')
+  })
+})
+
+// ─── API request body parsing ─────────────────────────────────────────────────
+
+describe('preview server — API request body parsing', () => {
+  it('defines a parseBody helper', () => {
+    expect(src).toContain('async function parseBody(')
+  })
+
+  it('parses JSON bodies for POST/PUT/PATCH requests', () => {
+    const fnStart = src.indexOf('async function parseBody(')
+    const fnEnd = src.indexOf('\nfunction ', fnStart + 1)
+    const body = src.slice(fnStart, fnEnd > -1 ? fnEnd : undefined)
+    expect(body).toContain("application/json")
+    expect(body).toContain("JSON.parse")
+  })
+
+  it('attaches parsed body to augReq.body before invoking the API handler', () => {
+    expect(src).toContain('augReq.body = await parseBody(req)')
+  })
+
+  it('skips body parsing for GET/DELETE requests', () => {
+    const fnStart = src.indexOf('async function parseBody(')
+    const fnEnd = src.indexOf('\nfunction ', fnStart + 1)
+    const body = src.slice(fnStart, fnEnd > -1 ? fnEnd : undefined)
+    expect(body).toContain("'POST'")
+    expect(body).toContain("'PUT'")
+    expect(body).toContain("'PATCH'")
+    expect(body).toContain('return undefined')
+  })
+})
+
+// ─── API query string parsing ─────────────────────────────────────────────────
+
+describe('preview server — API query string parsing', () => {
+  it('defines a parseQuery helper', () => {
+    expect(src).toContain('function parseQuery(')
+  })
+
+  it('attaches parsed query to augReq.query before invoking the API handler', () => {
+    expect(src).toContain('augReq.query = parseQuery(url)')
+  })
+
+  it('parseQuery decodes percent-encoded keys and values', () => {
+    const fnStart = src.indexOf('function parseQuery(')
+    const fnEnd = src.indexOf('\nfunction ', fnStart + 1)
+    const body = src.slice(fnStart, fnEnd > -1 ? fnEnd : undefined)
+    expect(body).toContain('decodeURIComponent')
+  })
+
+  it('parseQuery returns empty object when no query string is present', () => {
+    const fnStart = src.indexOf('function parseQuery(')
+    const fnEnd = src.indexOf('\nfunction ', fnStart + 1)
+    const body = src.slice(fnStart, fnEnd > -1 ? fnEnd : undefined)
+    expect(body).toContain('return {}')
+  })
+})

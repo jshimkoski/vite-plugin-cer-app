@@ -126,7 +126,16 @@ describe('entry-server-template (ENTRY_SERVER_TEMPLATE content)', () => {
   })
 
   it('exports apiRoutes, plugins, layouts, and routes', () => {
-    expect(src).toContain('export { apiRoutes, plugins, layouts, routes }')
+    expect(src).toContain('export { apiRoutes, plugins, layouts, routes, serverMiddleware }')
+  })
+
+  it('exports runServerMiddleware for adapter use', () => {
+    expect(src).toContain('export async function runServerMiddleware(req, res)')
+  })
+
+  it('exports runWithRequestContext for wrapping API handlers in request context', () => {
+    expect(src).toContain('export function runWithRequestContext(req, res, fn)')
+    expect(src).toContain('_cerReqStore.run({ req, res }, fn)')
   })
 
   it('sets Content-Type header on response', () => {

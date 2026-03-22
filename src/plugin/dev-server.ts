@@ -145,17 +145,24 @@ export function configureCerDevServer(
       const smMod = await server.ssrLoadModule('virtual:cer-server-middleware')
       const serverMiddleware = (smMod.serverMiddleware ?? smMod.default ?? []) as Array<{
         name: string
-        handler: (req: IncomingMessage, res: ServerResponse, next: () => void) => void | Promise<void>
+        handler: (req: IncomingMessage, res: ServerResponse, next: (err?: unknown) => void) => void | Promise<void>
       }>
 
       for (const { handler } of serverMiddleware) {
-        if (typeof handler === 'function') {
-          let calledNext = false
-          await handler(req, res, () => {
-            calledNext = true
+        if (typeof handler !== 'function') continue
+        let calledNext = false
+        try {
+          await new Promise<void>((resolve, reject) => {
+            Promise.resolve(handler(req, res, (err?: unknown) => {
+              if (err) reject(err)
+              else { calledNext = true; resolve() }
+            })).then(() => { if (!calledNext) resolve() }).catch(reject)
           })
-          if (!calledNext) return
+        } catch {
+          if (!res.writableEnded) { res.statusCode = 500; res.end('Internal Server Error') }
+          return
         }
+        if (res.writableEnded || !calledNext) return
       }
     } catch {
       // middleware module not ready — continue

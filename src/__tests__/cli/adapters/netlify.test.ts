@@ -78,10 +78,26 @@ describe('runNetlifyAdapter — SSR mode', () => {
     expect(bridge).toContain('apiRoutes')
   })
 
-  it('bridge wraps sync API handlers with Promise.resolve() to avoid .catch() on void', async () => {
+  it('bridge wraps API handlers in runWithRequestContext for cookie/session access', async () => {
     await runNetlifyAdapter(root)
     const bridge = readText(root, 'netlify/functions/ssr.mjs')
-    expect(bridge).toContain('Promise.resolve(fn(nodeReq, res)).catch(')
+    expect(bridge).toContain('runWithRequestContext')
+    expect(bridge).toContain('runWithRequestContext(nodeReq, res, () => Promise.resolve(fn(nodeReq, res)))')
+  })
+
+  it('bridge attaches req.query (parsed query string) in toNodeRequest', async () => {
+    await runNetlifyAdapter(root)
+    const bridge = readText(root, 'netlify/functions/ssr.mjs')
+    expect(bridge).toContain('parseQuery')
+    expect(bridge).toContain('req.query = parseQuery(')
+  })
+
+  it('bridge attaches req.body (parsed JSON body) in toNodeRequest', async () => {
+    await runNetlifyAdapter(root)
+    const bridge = readText(root, 'netlify/functions/ssr.mjs')
+    expect(bridge).toContain('req.body =')
+    expect(bridge).toContain("'application/json'")
+    expect(bridge).toContain('JSON.parse(')
   })
 
   it('bridge mock res has writableEnded guard to prevent double end()', async () => {

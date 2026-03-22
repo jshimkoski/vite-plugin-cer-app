@@ -14,5 +14,5 @@ export type MiddlewareFn = (to: RouteState, from: RouteState | null) => GuardRes
 export type ServerMiddleware = (
   req: IncomingMessage,
   res: ServerResponse,
-  next: () => void,
+  next: (err?: unknown) => void,
 ) => void | Promise<void>

@@ -171,6 +171,78 @@ Options for SPA + API:
 
 ---
 
+## Using composables in API handlers
+
+Files in `server/api/` are **not** covered by the auto-import transform (unlike `app/pages/`, `app/layouts/`, etc.). To use framework composables such as `useCookie` or `useSession`, import them explicitly:
+
+```ts
+// server/api/session.ts
+import { useSession } from '@jasonshimmy/vite-plugin-cer-app/composables'
+
+export const GET: ApiHandler = async (_req, res) => {
+  const session = useSession<{ userId: string }>()
+  const data = await session.get()
+  res.json({ userId: data?.userId ?? null })
+}
+
+export const POST: ApiHandler = async (_req, res) => {
+  const session = useSession<{ userId: string }>()
+  await session.set({ userId: 'user-123' })
+  res.json({ ok: true })
+}
+```
+
+```ts
+// server/api/prefs.ts
+import { useCookie } from '@jasonshimmy/vite-plugin-cer-app/composables'
+
+export const POST: ApiHandler = async (_req, res) => {
+  const theme = useCookie('theme')
+  theme.set('dark', { path: '/', maxAge: 31536000 })
+  res.json({ ok: true })
+}
+```
+
+`useCookie` and `useSession` read and write HTTP headers through the per-request `AsyncLocalStorage` context, which the framework sets up automatically before calling each API handler.
+
+---
+
+## Custom server integration
+
+When integrating the server bundle with a custom Node.js server (Express, Fastify, Hono, etc.) instead of the built-in adapters, wrap each API handler call with `runWithRequestContext` so that composables like `useCookie` and `useSession` have access to the current `req`/`res`:
+
+```ts
+// Express custom server
+import express from 'express'
+import { handler, apiRoutes, runWithRequestContext } from './dist/server/server.js'
+
+const app = express()
+
+app.all('/api/*', async (req, res) => {
+  for (const route of apiRoutes) {
+    const params = matchApiPattern(route.path, req.path)
+    if (params) {
+      req.params = params
+      const fn = route.handlers[req.method.toLowerCase()] ?? route.handlers.default
+      if (fn) {
+        await runWithRequestContext(req, res, () => fn(req, res))
+        return
+      }
+    }
+  }
+  res.status(404).send('Not Found')
+})
+
+app.use((req, res) => handler(req, res))
+app.listen(3000)
+```
+
+`runWithRequestContext(req, res, fn)` runs `fn` inside the per-request `AsyncLocalStorage` context. Without it, `useCookie`, `useSession`, and other server-side composables cannot access the current request or response.
+
+> The built-in preview server and all platform adapters (Vercel, Netlify, Cloudflare) call `runWithRequestContext` automatically — you only need this when building a custom integration.
+
+---
+
 ## Virtual module
 
 The route map is available via `virtual:cer-server-api`:

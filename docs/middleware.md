@@ -117,9 +117,8 @@ Server middleware runs on the HTTP level — before API routes and before SSR re
 
 ```ts
 // server/middleware/cors.ts
-import type { ServerMiddleware } from '@jasonshimmy/vite-plugin-cer-app/types'
-
-const cors: ServerMiddleware = (req, res, next) => {
+// defineServerMiddleware is auto-imported — no import statement needed
+export default defineServerMiddleware((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
@@ -131,9 +130,13 @@ const cors: ServerMiddleware = (req, res, next) => {
   }
 
   next()
-}
+})
+```
 
-export default cors
+If you need it outside `server/middleware/` files, import explicitly:
+
+```ts
+import { defineServerMiddleware } from '@jasonshimmy/vite-plugin-cer-app/composables'
 ```
 
 ### `ServerMiddleware` signature
@@ -142,11 +145,14 @@ export default cors
 type ServerMiddleware = (
   req: IncomingMessage,
   res: ServerResponse,
-  next: () => void,
+  next: (err?: unknown) => void,
 ) => void | Promise<void>
 ```
 
-Call `next()` to pass the request to the next handler. If you do not call `next()`, the middleware chain stops and subsequent handlers (API routes, SSR) will not run.
+- Call `next()` to pass the request to the next handler.
+- Call `next(err)` with an error to short-circuit the chain and send a `500` response.
+- Throw (synchronously or via a rejected Promise) to produce the same result as `next(err)` — the chain stops and a `500` is returned.
+- If you do not call `next()` at all (e.g. you called `res.end()`), the chain stops and subsequent handlers (API routes, SSR) will not run.
 
 ---
 

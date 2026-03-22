@@ -111,6 +111,27 @@ Use `useOnConnected` or lazy initialization inside the function body for side ef
 
 These composables are provided by the framework and auto-imported alongside the runtime. They do **not** live in `app/composables/` — they are injected from `@jasonshimmy/vite-plugin-cer-app/composables`.
 
+### Auto-import scope
+
+Built-in composables are auto-imported in the following directories:
+
+| Directory | Auto-imported |
+|---|---|
+| `app/pages/` | ✅ |
+| `app/layouts/` | ✅ |
+| `app/components/` | ✅ |
+| `app/middleware/` | ✅ |
+| `server/middleware/` | ✅ |
+| `server/api/` | ❌ — import explicitly |
+
+Files in `server/api/` are not in the auto-import scope. To use composables there, import them explicitly:
+
+```ts
+import { useSession, useCookie } from '@jasonshimmy/vite-plugin-cer-app/composables'
+```
+
+See [server-api.md](./server-api.md) for details and usage examples.
+
 ### `useHead(input)`
 
 Sets document head tags (`<title>`, `<meta>`, `<link>`, etc.). Works in SPA, SSR, and SSG modes. See [head-management.md](./head-management.md).
@@ -333,5 +354,100 @@ export default defineMiddleware(async (to, from) => {
   return isLoggedIn ? true : '/login'
 })
 ```
+
+---
+
+### `defineServerMiddleware(fn)`
+
+Identity helper for server-side middleware. Files in `server/middleware/` export a default `defineServerMiddleware()` function. They run in **alphabetical filename order** on every SSR and API request, before routing — in all environments (dev server, Vercel, Netlify, Cloudflare).
+
+```ts
+// server/middleware/01-cors.ts
+export default defineServerMiddleware((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  next()
+})
+
+// server/middleware/02-auth.ts
+export default defineServerMiddleware(async (req, res, next) => {
+  const session = useSession<{ userId: string }>()
+  const data = await session.get()
+  if (!data?.userId) { res.statusCode = 401; res.end('Unauthorized'); return }
+  ;(req as any).user = data
+  next()
+})
+```
+
+Call `next()` to continue to the next middleware or request handler. Write the response without calling `next()` to short-circuit the chain. Calling `next(err)` with an error sends a `500` response.
+
+If you need it outside auto-imported directories:
+
+```ts
+import { defineServerMiddleware } from '@jasonshimmy/vite-plugin-cer-app/composables'
+```
+
+---
+
+### `useSession<T>(options?)`
+
+HMAC-SHA-256 signed cookie session. Stores JSON-serialisable session data in a single `httpOnly` cookie, signed with a secret key. Works isomorphically: on the server it reads/writes HTTP headers; on the client it reads the cookie from `document.cookie`.
+
+**Setup:** declare the signing key in `runtimeConfig.private`:
+
+```ts
+// cer.config.ts
+export default defineConfig({
+  runtimeConfig: {
+    private: { sessionSecret: '' },  // resolved from SESSION_SECRET env var at startup
+  },
+})
+```
+
+**Usage:**
+
+```ts
+// server/middleware/auth.ts — validate session on every request
+export default defineServerMiddleware(async (req, res, next) => {
+  const session = useSession<{ userId: string; role: string }>()
+  const data = await session.get()
+  if (!data?.userId) { res.statusCode = 401; res.end(); return }
+  next()
+})
+
+// app/pages/login.ts — create session after verifying credentials
+export const loader = async ({ req }) => {
+  // ... verify credentials
+  const session = useSession<{ userId: string }>()
+  await session.set({ userId: user.id })
+  return { ok: true }
+}
+
+// app/pages/logout.ts
+export const loader = async () => {
+  await useSession().clear()
+  return { ok: true }
+}
+```
+
+| Method | Returns | Description |
+|---|---|---|
+| `get()` | `Promise<T \| null>` | Reads and verifies the session cookie. Returns data or `null` if absent/invalid/tampered. |
+| `set(data)` | `Promise<void>` | Signs `data` and writes the session cookie. Replaces any existing session. |
+| `clear()` | `Promise<void>` | Clears the session cookie by setting `maxAge = 0`. |
+
+#### `SessionOptions`
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `name` | `string` | `'session'` | Cookie name |
+| `maxAge` | `number` | `604800` (7 days) | Cookie max-age in seconds |
+
+If you need it outside auto-imported directories:
+
+```ts
+import { useSession } from '@jasonshimmy/vite-plugin-cer-app/composables'
+import type { SessionOptions, SessionComposable } from '@jasonshimmy/vite-plugin-cer-app/composables'
+```
+
 
 See [Middleware](./middleware.md) for full documentation.

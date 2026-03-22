@@ -9,6 +9,7 @@ import { buildSSG } from '../../plugin/build-ssg.js'
 import { writeGeneratedDir } from '../../plugin/generated-dir.js'
 import { runVercelAdapter } from '../adapters/vercel.js'
 import { runNetlifyAdapter } from '../adapters/netlify.js'
+import { runCloudflareAdapter } from '../adapters/cloudflare.js'
 import type { CerAppConfig } from '../../types/config.js'
 
 async function loadCerConfig(root: string): Promise<CerAppConfig> {
@@ -72,6 +73,9 @@ async function runAdapter(adapter: string | undefined, root: string): Promise<vo
       break
     case 'netlify':
       await runNetlifyAdapter(root)
+      break
+    case 'cloudflare':
+      await runCloudflareAdapter(root)
       break
     default:
       console.warn(`[cer-app] Unknown adapter "${adapter}" — skipping.`)

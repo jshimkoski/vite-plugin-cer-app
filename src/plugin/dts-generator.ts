@@ -76,7 +76,7 @@ const RUNTIME_GLOBALS = [
 
 const DIRECTIVE_GLOBALS = ['when', 'each', 'match', 'anchorBlock']
 
-const FRAMEWORK_GLOBALS = ['useHead', 'usePageData', 'useInject', 'useRuntimeConfig', 'defineMiddleware', 'useSeoMeta', 'useCookie']
+const FRAMEWORK_GLOBALS = ['useHead', 'usePageData', 'useInject', 'useRuntimeConfig', 'defineMiddleware', 'defineServerMiddleware', 'useSeoMeta', 'useCookie', 'useSession']
 
 /**
  * Scans a composables directory and returns a map of export name → file path.
@@ -201,6 +201,12 @@ export async function generateVirtualModuleDts(
   lines.push(`declare module 'virtual:cer-middleware' {`)
   lines.push(`  const middleware: Record<string, Function>`)
   lines.push(`  export { middleware }`)
+  lines.push(`}`)
+  lines.push('')
+  lines.push(`declare module 'virtual:cer-server-middleware' {`)
+  lines.push(`  import type { ServerMiddleware } from '@jasonshimmy/vite-plugin-cer-app/types'`)
+  lines.push(`  export const serverMiddleware: Array<{ name: string; handler: ServerMiddleware }>`)
+  lines.push(`  export default serverMiddleware`)
   lines.push(`}`)
   lines.push('')
   lines.push(`declare module 'virtual:cer-loading' {`)

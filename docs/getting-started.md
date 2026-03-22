@@ -137,6 +137,42 @@ component('layout-default', () => {
 
 ---
 
+## TypeScript path aliases
+
+The framework automatically generates `.cer/tsconfig.json` with `~/` path aliases on every dev server start and build. To enable IDE autocomplete and type-checking for these aliases, extend it from your project `tsconfig.json`:
+
+```json
+// tsconfig.json
+{
+  "extends": "./.cer/tsconfig.json"
+}
+```
+
+The generated aliases map:
+
+| Alias | Resolves to |
+|---|---|
+| `~/*` | `app/*` |
+| `~/pages/*` | `app/pages/*` |
+| `~/layouts/*` | `app/layouts/*` |
+| `~/components/*` | `app/components/*` |
+| `~/composables/*` | `app/composables/*` |
+| `~/plugins/*` | `app/plugins/*` |
+| `~/middleware/*` | `app/middleware/*` |
+| `~/assets/*` | `app/assets/*` |
+
+```ts
+// Before — relative import
+import { useTheme } from '../../composables/useTheme'
+
+// After — alias import
+import { useTheme } from '~/composables/useTheme'
+```
+
+> `.cer/tsconfig.json` is auto-generated — do not edit or commit it. It is regenerated on every `cer-app dev` and `cer-app build`. Add `.cer/` to `.gitignore`.
+
+---
+
 ## Running the dev server
 
 ```sh
