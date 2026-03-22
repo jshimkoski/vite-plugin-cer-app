@@ -1,3 +1,11 @@
 node_modules
 dist
 coverage
+
+# Vercel adapter output
+.vercel/
+
+# Netlify adapter output
+.netlify/
+netlify/
+netlify.toml

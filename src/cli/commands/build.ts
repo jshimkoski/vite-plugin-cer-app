@@ -7,6 +7,8 @@ import { cerApp, resolveConfig } from '../../plugin/index.js'
 import { buildSSR, resolveClientEntry } from '../../plugin/build-ssr.js'
 import { buildSSG } from '../../plugin/build-ssg.js'
 import { writeGeneratedDir } from '../../plugin/generated-dir.js'
+import { runVercelAdapter } from '../adapters/vercel.js'
+import { runNetlifyAdapter } from '../adapters/netlify.js'
 import type { CerAppConfig } from '../../types/config.js'
 
 async function loadCerConfig(root: string): Promise<CerAppConfig> {
@@ -62,6 +64,20 @@ async function loadCerConfig(root: string): Promise<CerAppConfig> {
   }
 }
 
+async function runAdapter(adapter: string | undefined, root: string): Promise<void> {
+  if (!adapter) return
+  switch (adapter) {
+    case 'vercel':
+      await runVercelAdapter(root)
+      break
+    case 'netlify':
+      await runNetlifyAdapter(root)
+      break
+    default:
+      console.warn(`[cer-app] Unknown adapter "${adapter}" — skipping.`)
+  }
+}
+
 export function buildCommand(): Command {
   return new Command('build')
     .description('Build the application for production')
@@ -102,6 +118,7 @@ export function buildCommand(): Command {
             renameSync(generatedHtmlOut, rootHtmlOut)
           }
           console.log('[cer-app] SPA build complete.')
+          await runAdapter(userConfig.adapter, root)
           // Force exit: Vite HTML builds may keep Node timers alive.
           process.exit(0)
           break
@@ -113,6 +130,7 @@ export function buildCommand(): Command {
             plugins: cerApp(userConfig),
           }
           await buildSSR(config, viteUserConfig)
+          await runAdapter(userConfig.adapter, root)
           break
         }
 
@@ -122,6 +140,7 @@ export function buildCommand(): Command {
             plugins: cerApp(userConfig),
           }
           await buildSSG(config, viteUserConfig)
+          await runAdapter(userConfig.adapter, root)
           // Force exit: the SSG path-enumeration Vite server may keep alive Node timers
           process.exit(0)
           break

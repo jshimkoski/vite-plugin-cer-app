@@ -149,6 +149,58 @@ dist/
 
 ---
 
+### `cer-app adapt`
+
+Adapts the production build for a deployment platform.
+
+Run this after `cer-app build` to produce the platform-specific output alongside `dist/`.
+You can also configure `adapter` in `cer.config.ts` so the adapter runs automatically at the end of every build.
+
+```sh
+cer-app adapt [options]
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--platform <platform>` | *(required)* | Target platform: `vercel` or `netlify` |
+| `--root <root>` | `process.cwd()` | Project root directory |
+
+**Examples:**
+
+```sh
+cer-app adapt --platform vercel
+cer-app adapt --platform netlify
+cer-app adapt --platform vercel --root ./packages/my-app
+```
+
+**Vercel behavior (`--platform vercel`):**
+
+- Writes `.vercel/output/` following the [Vercel Build Output API v3](https://vercel.com/docs/build-output-api/v3).
+- SSR builds: creates a Node.js Serverless Function at `.vercel/output/functions/index.func/` that routes `/api/*` to the exported API handlers and passes everything else to the SSR handler. Content-hashed assets are copied to `.vercel/output/static/` for CDN delivery.
+- SPA/SSG builds: copies static files to `.vercel/output/static/` with a SPA fallback route.
+- Deploy with `vercel deploy --prebuilt`.
+
+**Netlify behavior (`--platform netlify`):**
+
+- Writes `netlify/functions/ssr.mjs` — a Netlify Functions v2 bridge that converts the Web `Request`/`Response` API to the Node.js-style handler used by the server bundle. Handles `/api/*` routing inline.
+- Copies content-hashed assets to `.netlify/publish/` (no `index.html` — HTML is served by the function).
+- Writes `netlify.toml` with the publish directory, `Cache-Control` headers for assets, and a catch-all redirect to the SSR function.
+- SPA/SSG builds: writes `netlify.toml` only (no function needed).
+- Note: Netlify Functions buffer the full response — streaming is not supported.
+- Deploy with `netlify deploy`.
+
+**Auto-run via `cer.config.ts`:**
+
+```ts
+// cer.config.ts
+export default defineConfig({
+  mode: 'ssr',
+  adapter: 'vercel',  // runs automatically after cer-app build
+})
+```
+
+---
+
 ## `create-cer-app`
 
 Scaffolds a new project from a template.

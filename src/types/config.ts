@@ -67,6 +67,17 @@ export interface CerAppConfig {
    * out of `public`.
    */
   runtimeConfig?: RuntimeConfig
+  /**
+   * Deployment platform adapter.
+   * When set, `cer-app build` automatically runs the adapter after the build
+   * completes, producing the platform-specific output alongside `dist/`.
+   *
+   * - `'vercel'`  — Vercel Build Output API v3 (`.vercel/output/`)
+   * - `'netlify'` — Netlify Functions v2 + `netlify.toml`
+   *
+   * You can also run the adapter independently with `cer-app adapt --platform <name>`.
+   */
+  adapter?: 'vercel' | 'netlify'
 }
 
 export function defineConfig(config: CerAppConfig): CerAppConfig {

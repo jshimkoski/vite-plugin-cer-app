@@ -59,6 +59,8 @@
     "e2e:build:spa": "npm run e2e:clean && node dist/cli/index.js build --mode spa --root e2e/kitchen-sink",
     "e2e:build:ssr": "npm run e2e:clean && node dist/cli/index.js build --mode ssr --root e2e/kitchen-sink",
     "e2e:build:ssg": "npm run e2e:clean && node dist/cli/index.js build --mode ssg --root e2e/kitchen-sink",
+    "e2e:adapt:netlify": "node dist/cli/index.js adapt --platform netlify --root e2e/kitchen-sink",
+    "e2e:integration:netlify": "npm run e2e:build:ssr && npm run e2e:adapt:netlify && vitest run src/__tests__/cli/adapters/netlify-bridge.integration.test.ts",
     "e2e:serve:spa": "node dist/cli/index.js preview --root e2e/kitchen-sink --port 4174",
     "e2e:serve:ssr": "node dist/cli/index.js preview --root e2e/kitchen-sink --port 4175 --ssr",
     "e2e:serve:ssg": "node dist/cli/index.js preview --root e2e/kitchen-sink --port 4176",

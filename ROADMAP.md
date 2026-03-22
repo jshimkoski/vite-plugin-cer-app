@@ -222,7 +222,7 @@ changes.
 
 ---
 
-### 10.2 Vercel adapter 🔜
+### 10.2 Vercel adapter ✅
 
 **Problem:** Vercel expects functions in `.vercel/output/functions/` with a
 specific manifest format.
@@ -233,11 +233,23 @@ Static assets are moved to `.vercel/output/static/`.
 
 **Complexity:** Medium. Mostly file system manipulation.
 
+**Files:**
+- `src/cli/adapters/vercel.ts` — Vercel Build Output API v3 adapter
+- `src/cli/commands/adapt.ts` — `cer-app adapt` command
+- `src/types/config.ts` — `adapter` field on `CerAppConfig`
+- `src/cli/commands/build.ts` — auto-runs adapter post-build
+
 ---
 
-### 10.3 Netlify adapter 🔜
+### 10.3 Netlify adapter ✅
 
-Similar to Vercel but targets Netlify Functions / Edge Functions format.
+Similar to Vercel but targets Netlify Functions v2 format. Writes a bridge
+function (`netlify/functions/ssr.mjs`) that converts between the Web
+`Request`/`Response` API and the Node.js-style handler. Responses are
+buffered (no streaming — Netlify Functions limitation).
+
+**Files:**
+- `src/cli/adapters/netlify.ts` — Netlify adapter
 
 ---
 
@@ -271,8 +283,8 @@ canonical URL. No new infrastructure needed — all forwarded to `<head>`.
 | 9.1 | Client-side route middleware (navigation guards) | 🟡 High | ✅ |
 | 9.2 | `useCookie()` composable | 🟡 High | ✅ |
 | 10.1 | Cloudflare Workers adapter | 🟢 Medium | 🔜 |
-| 10.2 | Vercel adapter | 🟢 Medium | 🔜 |
-| 10.3 | Netlify adapter | 🟢 Medium | 🔜 |
+| 10.2 | Vercel adapter | 🟢 Medium | ✅ |
+| 10.3 | Netlify adapter | 🟢 Medium | ✅ |
 | 11.1 | DevTools overlay | 🟢 Medium | ❌ |
 | 11.2 | i18n | 🟢 Medium | 🔜 |
 | 11.3 | `useSeoMeta()` | 🟢 Medium | ✅ |
