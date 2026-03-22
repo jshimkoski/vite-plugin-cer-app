@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.11.0] - 2026-03-22
+
+- feat: add Cloudflare Pages adapter for SSR and SSG support (2734c26)
+
 ## [v0.10.0] - 2026-03-22
 
 - feat: add adapters for Vercel and Netlify deployment platforms (7112bf6)
