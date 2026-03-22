@@ -287,6 +287,10 @@ Requires a `revalidate` option per route (via `meta.ssg.revalidate: 60`).
 
 **Files:**
 - `src/cli/commands/preview.ts` — ISR cache layer
+- `src/runtime/isr-handler.ts` — `createIsrHandler` factory (shared by all platforms)
+- `src/cli/adapters/vercel.ts` — uses `isrHandler` for SSR fallback
+- `src/cli/adapters/netlify.ts` — uses `isrHandler` for SSR fallback
+- `src/cli/adapters/cloudflare.ts` — uses `isrHandler` for SSR fallback
 - `src/plugin/virtual/routes.ts` — include `meta.ssg.revalidate` in route
 - `src/types/page.ts` — add `revalidate` to `PageSsgConfig`
 

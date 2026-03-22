@@ -64,7 +64,7 @@ import { Readable } from 'node:stream'
 // Must be set before the dynamic import below resolves.
 globalThis.__CER_CLIENT_TEMPLATE__ = \`${escaped}\`
 
-const { handler, apiRoutes, runServerMiddleware, runWithRequestContext } = await import('./server/server.js')
+const { handler, isrHandler, apiRoutes, runServerMiddleware, runWithRequestContext } = await import('./server/server.js')
 
 function matchApiPattern(pattern, urlPath) {
   const pp = pattern.split('/')
@@ -185,8 +185,8 @@ async function handleRequest(webReq) {
     return new Response('Not Found', { status: 404 })
   }
 
-  // All other requests: SSR.
-  handler(nodeReq, res).catch(() => {
+  // All other requests: SSR (with ISR for routes that declare meta.ssg.revalidate).
+  isrHandler(nodeReq, res).catch(() => {
     if (!res.writableEnded) {
       res.statusCode = 500
       res.end('Internal Server Error')

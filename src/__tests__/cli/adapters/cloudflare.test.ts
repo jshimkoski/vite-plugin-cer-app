@@ -76,6 +76,13 @@ describe('runCloudflareAdapter — SSR mode', () => {
     expect(worker).toContain('Readable')
   })
 
+  it('worker imports isrHandler and uses it for SSR fallback (enables ISR stale-while-revalidate)', async () => {
+    await runCloudflareAdapter(root)
+    const worker = readText(root, 'dist/_worker.js')
+    expect(worker).toContain('isrHandler')
+    expect(worker).toContain('isrHandler(nodeReq, res)')
+  })
+
   it('worker handles /api/* routing via matchApiPattern', async () => {
     await runCloudflareAdapter(root)
     const worker = readText(root, 'dist/_worker.js')

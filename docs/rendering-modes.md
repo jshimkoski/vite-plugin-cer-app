@@ -227,7 +227,7 @@ Any CDN or static host. Upload the entire `dist/` directory (excluding `dist/ser
 
 ## ISR — Incremental Static Regeneration
 
-ISR is a per-route cache layer in the SSR preview server. Pages with `meta.ssg.revalidate` set are rendered once, cached, and re-rendered in the background when the TTL expires (stale-while-revalidate).
+ISR is a per-route cache layer built into the SSR server bundle. Pages with `meta.ssg.revalidate` set are rendered once, cached in memory, and re-rendered in the background when the TTL expires (stale-while-revalidate). It works identically in the preview server, on Vercel, on Netlify, and on Cloudflare Pages — no extra configuration required.
 
 ### How it works
 
@@ -266,9 +266,9 @@ export const meta = {
 
 ISR caches by **path only** — query strings are stripped from the cache key. Requests to `/blog/post?preview=true` and `/blog/post` share the same cache entry. Use `render: 'server'` (no `revalidate`) for routes where query parameters affect the rendered output.
 
-### Decision order in the preview server
+### Decision order (preview server and hosting adapters)
 
-The built-in preview server resolves each request using this precedence:
+The built-in preview server — and the generated entry points for Vercel, Netlify, and Cloudflare — resolve each request using this precedence:
 
 1. Static asset (`dist/client/**.*`) — served directly
 2. `render: 'spa'` — returns `dist/client/index.html` (SPA shell)
@@ -293,9 +293,19 @@ ISR is controlled solely by `meta.ssg.revalidate`. The `meta.render` override is
 
 ### Availability
 
-ISR is active in the built-in **preview server** (`cer-app preview`) and in production via the `isrHandler` export from the server bundle.
+ISR is active everywhere the `isrHandler` from the server bundle is used:
 
-**Production (Express):**
+| Environment | ISR supported |
+|---|---|
+| `cer-app preview` (built-in preview server) | ✅ |
+| Vercel (via `cer-app adapt vercel`) | ✅ |
+| Netlify (via `cer-app adapt netlify`) | ✅ |
+| Cloudflare Pages (via `cer-app adapt cloudflare`) | ✅ |
+| Custom Express / Node.js server | ✅ (use `isrHandler` directly) |
+
+The in-memory ISR cache is per-process. On platforms that spin up multiple instances (Vercel, Netlify), each instance maintains its own cache — this is consistent with how Next.js and other frameworks handle ISR at the edge.
+
+**Custom Node.js server (Express):**
 ```ts
 import express from 'express'
 import sirv from 'sirv'

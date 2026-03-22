@@ -96,8 +96,15 @@ describe('runVercelAdapter — SSR mode', () => {
     await runVercelAdapter(root)
     expect(existsSync(join(root, '.vercel/output/functions/index.func/index.js'))).toBe(true)
     const launcher = readText(root, '.vercel/output/functions/index.func/index.js')
-    expect(launcher).toContain("import { handler, apiRoutes, runServerMiddleware, runWithRequestContext } from './server/server.js'")
+    expect(launcher).toContain("import { handler, isrHandler, apiRoutes, runServerMiddleware, runWithRequestContext } from './server/server.js'")
     expect(launcher).toContain('export default async function cerAppHandler')
+  })
+
+  it('launcher uses isrHandler for SSR fallback (enables ISR stale-while-revalidate)', async () => {
+    await runVercelAdapter(root)
+    const launcher = readText(root, '.vercel/output/functions/index.func/index.js')
+    expect(launcher).toContain('isrHandler')
+    expect(launcher).toContain('await isrHandler(req, res)')
   })
 
   it('launcher routes /api/* requests to apiRoutes', async () => {

@@ -51,6 +51,13 @@ describe('runNetlifyAdapter — SSR mode', () => {
     expect(bridge).toContain("from '../../dist/server/server.js'")
   })
 
+  it('bridge imports isrHandler and uses it for SSR fallback (enables ISR stale-while-revalidate)', async () => {
+    await runNetlifyAdapter(root)
+    const bridge = readText(root, 'netlify/functions/ssr.mjs')
+    expect(bridge).toContain('isrHandler')
+    expect(bridge).toContain('isrHandler(nodeReq, res)')
+  })
+
   it('bridge exports a default async function', async () => {
     await runNetlifyAdapter(root)
     const bridge = readText(root, 'netlify/functions/ssr.mjs')
