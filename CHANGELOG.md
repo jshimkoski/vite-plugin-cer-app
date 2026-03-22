@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.10.0] - 2026-03-22
+
+- feat: add adapters for Vercel and Netlify deployment platforms (7112bf6)
+
 ## [v0.9.0] - 2026-03-21
 
 - feat: add useCookie and useSeoMeta composables with tests (6536902)
