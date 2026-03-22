@@ -67,7 +67,7 @@ import { Readable } from 'node:stream'
 // Must be set before the dynamic import below resolves.
 globalThis.__CER_CLIENT_TEMPLATE__ = \`${escaped}\`
 
-const { handler, isrHandler, apiRoutes, runServerMiddleware, runWithRequestContext } = await import('./server/server.js')
+const { isrHandler, apiRoutes, runServerMiddleware, runWithRequestContext } = await import('./server/server.js')
 
 function matchApiPattern(pattern, urlPath) {
   const pp = pattern.split('/')

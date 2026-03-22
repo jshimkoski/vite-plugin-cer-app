@@ -58,6 +58,13 @@ describe('runNetlifyAdapter — SSR mode', () => {
     expect(bridge).toContain('isrHandler(nodeReq, res)')
   })
 
+  it('bridge does not import unused handler export (only isrHandler is needed)', async () => {
+    await runNetlifyAdapter(root)
+    const bridge = readText(root, 'netlify/functions/ssr.mjs')
+    // isrHandler wraps handler internally — the bridge only needs isrHandler
+    expect(bridge).not.toMatch(/import\s*\{[^}]*\bhandler\b[^}]*\}/)
+  })
+
   it('bridge exports a default async function', async () => {
     await runNetlifyAdapter(root)
     const bridge = readText(root, 'netlify/functions/ssr.mjs')
@@ -77,6 +84,14 @@ describe('runNetlifyAdapter — SSR mode', () => {
     expect(bridge).toContain('new Response(readable,')
     expect(bridge).toContain('TransformStream')
     expect(bridge).not.toContain('Buffer.concat')
+  })
+
+  it('streaming Response carries status code and accumulated response headers', async () => {
+    await runNetlifyAdapter(root)
+    const bridge = readText(root, 'netlify/functions/ssr.mjs')
+    // end() resolves with new Response(readable, { status: res.statusCode, headers })
+    expect(bridge).toContain('res.statusCode')
+    expect(bridge).toContain('{ status: res.statusCode, headers }')
   })
 
   it('bridge streams chunks via writer.write() instead of buffering', async () => {

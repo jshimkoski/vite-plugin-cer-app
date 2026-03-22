@@ -83,6 +83,14 @@ describe('runCloudflareAdapter — SSR mode', () => {
     expect(worker).toContain('isrHandler(nodeReq, res)')
   })
 
+  it('worker does not destructure unused handler export (only isrHandler is needed)', async () => {
+    await runCloudflareAdapter(root)
+    const worker = readText(root, 'dist/_worker.js')
+    // isrHandler wraps handler internally — the worker only needs isrHandler
+    expect(worker).not.toMatch(/\{\s*handler\s*,/)
+    expect(worker).not.toMatch(/,\s*handler\s*[,}]/)
+  })
+
   it('worker handles /api/* routing via matchApiPattern', async () => {
     await runCloudflareAdapter(root)
     const worker = readText(root, 'dist/_worker.js')
@@ -110,6 +118,14 @@ describe('runCloudflareAdapter — SSR mode', () => {
     expect(worker).toContain('new Response(readable,')
     expect(worker).toContain('TransformStream')
     expect(worker).not.toContain('Buffer.concat')
+  })
+
+  it('streaming Response carries status code and accumulated response headers', async () => {
+    await runCloudflareAdapter(root)
+    const worker = readText(root, 'dist/_worker.js')
+    // end() resolves with new Response(readable, { status: res.statusCode, headers })
+    expect(worker).toContain('res.statusCode')
+    expect(worker).toContain('{ status: res.statusCode, headers }')
   })
 
   it('worker streams chunks via writer.write() instead of buffering', async () => {

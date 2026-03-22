@@ -107,6 +107,15 @@ describe('runVercelAdapter — SSR mode', () => {
     expect(launcher).toContain('await isrHandler(req, res)')
   })
 
+  it('launcher uses native Node.js streaming — passes real req/res directly, no TransformStream', async () => {
+    await runVercelAdapter(root)
+    const launcher = readText(root, '.vercel/output/functions/index.func/index.js')
+    // Vercel injects real Node.js req/res, so the launcher passes them straight through.
+    // No TransformStream mock is needed — Node.js handles chunked transfer natively.
+    expect(launcher).toContain('await isrHandler(req, res)')
+    expect(launcher).not.toContain('TransformStream')
+  })
+
   it('launcher routes /api/* requests to apiRoutes', async () => {
     await runVercelAdapter(root)
     const launcher = readText(root, '.vercel/output/functions/index.func/index.js')
