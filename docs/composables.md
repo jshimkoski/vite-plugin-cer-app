@@ -121,6 +121,7 @@ Built-in composables are auto-imported in the following directories:
 | `app/layouts/` | ✅ |
 | `app/components/` | ✅ |
 | `app/middleware/` | ✅ |
+| `app/composables/` | ✅ |
 | `server/middleware/` | ✅ |
 | `server/api/` | ❌ — import explicitly |
 
@@ -131,6 +132,50 @@ import { useSession, useCookie } from '@jasonshimmy/vite-plugin-cer-app/composab
 ```
 
 See [server-api.md](./server-api.md) for details and usage examples.
+
+### `useFetch<T>(url, options?)`
+
+Isomorphic data-fetching composable:
+
+- **Inside a `component()` render function** — returns reactive `data`, `pending`, and `error` refs that re-render the component automatically when the request settles.
+- **Inside a `loader` or other async context** — returns a thenable result you can `await` to block SSR rendering until data is ready.
+
+```ts
+component('page-posts', () => {
+  const { data: posts, pending, error } = useFetch<Post[]>('/api/posts')
+
+  return html`
+    ${pending.value ? html`<p>Loading…</p>` : ''}
+    ${error.value ? html`<p>Error: ${error.value.message}</p>` : ''}
+    <ul>${posts.value?.map(p => html`<li>${p.title}</li>`)}</ul>
+  `
+})
+```
+
+See [use-fetch.md](./use-fetch.md) for full documentation including options, lazy fetching, POST requests, and TypeScript types.
+
+---
+
+### `useAuth(sessionKey?)`
+
+Returns the authenticated user and helpers for login/logout. Works isomorphically — on the server it reads the auth session from the per-request context; on the client it reads from the value injected into the HTML at render time.
+
+```ts
+component('page-nav', () => {
+  const { user, loggedIn, login, logout } = useAuth()
+
+  return html`
+    ${loggedIn
+      ? html`<span>${user!.name}</span><button @click="${logout}">Log out</button>`
+      : html`<button @click="${() => login('github')}">Log in</button>`
+    }
+  `
+})
+```
+
+Requires `auth` configuration in `cer.config.ts`. See [authentication.md](./authentication.md) for setup, OAuth providers, middleware guards, and TypeScript types.
+
+---
 
 ### `useHead(input)`
 
@@ -451,3 +496,85 @@ import type { SessionOptions, SessionComposable } from '@jasonshimmy/vite-plugin
 
 
 See [Middleware](./middleware.md) for full documentation.
+
+---
+
+### `useRoute()`
+
+Returns the current route's `path`, `params`, `query`, and `meta` — works isomorphically in all rendering modes.
+
+- **Server (SSR/SSG)** — reads from the per-request `AsyncLocalStorage` context populated before the page renders.
+- **Client** — reads from the router instance exposed by the framework.
+
+```ts
+// app/layouts/default.ts — display page title from route meta
+component('layout-default', () => {
+  const route = useRoute()
+
+  return html`
+    <header>
+      <h1>${route.meta?.title ?? 'My App'}</h1>
+    </header>
+    <main><slot></slot></main>
+  `
+})
+```
+
+```ts
+// app/pages/post.ts — use dynamic route params
+component('page-post', () => {
+  const { params } = useRoute()
+  const { data: post } = useFetch(`/api/posts/${params.id}`)
+  return html`<h1>${post.value?.title}</h1>`
+})
+```
+
+#### `RouteInfo`
+
+| Field | Type | Description |
+|---|---|---|
+| `path` | `string` | Current URL path, e.g. `'/posts/42'` |
+| `params` | `Record<string, string>` | Dynamic route params, e.g. `{ id: '42' }` |
+| `query` | `Record<string, string>` | Parsed query string, e.g. `{ page: '2' }` |
+| `meta` | `Record<string, unknown> \| null` | Static `meta` object exported by the matched page |
+
+If you need it outside auto-imported directories:
+
+```ts
+import { useRoute } from '@jasonshimmy/vite-plugin-cer-app/composables'
+import type { RouteInfo } from '@jasonshimmy/vite-plugin-cer-app/composables'
+```
+
+---
+
+### `navigateTo(path)`
+
+Programmatic navigation — works isomorphically:
+
+- **Server context** (inside a loader or middleware): sends a `302` redirect immediately via the request's response object.
+- **Client context**: delegates to the framework router so the full navigation pipeline (middleware, loaders, loading indicator) runs normally.
+
+```ts
+// app/middleware/require-auth.ts
+export default defineMiddleware(() => {
+  const { loggedIn } = useAuth()
+  if (!loggedIn) return navigateTo('/login')
+})
+```
+
+```ts
+// app/pages/dashboard.ts — navigate programmatically on a button click
+component('page-dashboard', () => {
+  return html`
+    <button @click="${() => navigateTo('/settings')}">
+      Open Settings
+    </button>
+  `
+})
+```
+
+If you need it outside auto-imported directories:
+
+```ts
+import { navigateTo } from '@jasonshimmy/vite-plugin-cer-app/composables'
+```

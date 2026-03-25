@@ -100,6 +100,19 @@ function extractRender(source: string): 'static' | 'server' | 'spa' | null {
 }
 
 /**
+ * Extracts the `title` string from a page file's `meta` export.
+ * Returns null when not declared.
+ *
+ * Matches patterns like:
+ *   title: 'My Page Title'
+ *   title: "My Page Title"
+ */
+function extractTitle(source: string): string | null {
+  const match = source.match(/title\s*:\s*['"]([^'"]+)['"]/)
+  return match ? match[1] : null
+}
+
+/**
  * Resolves the layout chain for a page by walking its ancestor directories
  * inside pagesDir looking for `_layout.ts` files. Each `_layout.ts` must
  * export a default string naming a layout in `app/layouts/`.
@@ -199,6 +212,7 @@ export async function generateRoutesCode(pagesDir: string): Promise<string> {
     transition: string | boolean | null
     render: 'static' | 'server' | 'spa' | null
     hydrate: 'load' | 'idle' | 'visible' | 'none' | null
+    title: string | null
   }> = await Promise.all(
     sorted.map(async (entry) => {
       try {
@@ -213,9 +227,10 @@ export async function generateRoutesCode(pagesDir: string): Promise<string> {
           transition: extractTransition(src),
           render: extractRender(src),
           hydrate: extractHydrate(src),
+          title: extractTitle(src),
         }
       } catch {
-        return { middleware: [], layout: null, layoutChain: null, revalidate: null, transition: null, render: null, hydrate: null }
+        return { middleware: [], layout: null, layoutChain: null, revalidate: null, transition: null, render: null, hydrate: null, title: null }
       }
     }),
   )
@@ -224,7 +239,7 @@ export async function generateRoutesCode(pagesDir: string): Promise<string> {
 
   // Build routes array with lazy load() functions for code splitting.
   const routeItems = sorted.map((entry, i) => {
-    const { middleware: mw, layout, layoutChain, revalidate, transition, render, hydrate } = metaPerEntry[i]
+    const { middleware: mw, layout, layoutChain, revalidate, transition, render, hydrate, title } = metaPerEntry[i]
     const filePath = JSON.stringify(entry.filePath)
     const tagName = JSON.stringify(entry.tagName)
     const routePath = JSON.stringify(entry.routePath)
@@ -254,6 +269,9 @@ export async function generateRoutesCode(pagesDir: string): Promise<string> {
     // 'load' is the default — only emit non-default values to keep bundle lean.
     if (hydrate !== null && hydrate !== 'load') {
       metaFields.push(`hydrate: ${JSON.stringify(hydrate)}`)
+    }
+    if (title !== null) {
+      metaFields.push(`title: ${JSON.stringify(title)}`)
     }
     const metaStr = metaFields.length > 0 ? `    meta: { ${metaFields.join(', ')} },\n` : ''
 

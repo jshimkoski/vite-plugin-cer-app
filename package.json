@@ -41,6 +41,10 @@
     "./isr": {
       "import": "./dist/runtime/isr-handler.js",
       "types": "./dist/runtime/isr-handler.d.ts"
+    },
+    "./oauth": {
+      "import": "./dist/runtime/oauth/index.js",
+      "types": "./dist/runtime/oauth/index.d.ts"
     }
   },
   "bin": {

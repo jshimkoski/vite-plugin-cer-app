@@ -109,6 +109,7 @@ All documentation written in the docs directory should be:
 - ALWAYS add new unit and e2e/integration tests for any new functionality.
 - ALWAYS document new functionality in the project's documentation files.
 - ALWAYS have the user validate all changes with `npm run validate` and report results back to you.
+- NEVER run Cypress tests yourself. ONLY the user runs Cypress. Always ask the user to run Cypress and report the results.
 - A change can only be considered complete when it meets all the above criteria and has been thoroughly tested and reviewed. THIS IS NON-NEGOTIABLE.
 
 ## Methodology

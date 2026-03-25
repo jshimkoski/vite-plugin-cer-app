@@ -1,0 +1,46 @@
+────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                    
+  Running:  navigate.cy.ts                                                                (10 of 16)
+
+
+  navigateTo() — programmatic navigation
+    1) navigates to /about when button is clicked
+    ✓ navigates to /route-info when second button is clicked (58ms)
+
+  useRoute() — route information
+    ✓ returns the correct path (46ms)
+    ✓ returns route meta fields (44ms)
+
+
+  3 passing (4s)
+  1 failing
+
+  1) navigateTo() — programmatic navigation
+       navigates to /about when button is clicked:
+     AssertionError: Timed out retrying after 4000ms: expected 'http://localhost:4176/navigate-test' to include '/about'
+      at Context.eval (webpack://@jasonshimmy/vite-plugin-cer-app/./e2e/cypress/e2e/navigate.cy.ts:15:13)
+
+
+
+
+  (Results)
+
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ Tests:        4                                                                                │
+  │ Passing:      3                                                                                │
+  │ Failing:      1                                                                                │
+  │ Pending:      0                                                                                │
+  │ Skipped:      0                                                                                │
+  │ Screenshots:  1                                                                                │
+  │ Video:        false                                                                            │
+  │ Duration:     4 seconds                                                                        │
+  │ Spec Ran:     navigate.cy.ts                                                                   │
+  └────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+  (Screenshots)
+
+  -  /Users/jshimkoski/dev/vite-plugin-cer-app/e2e/cypress/screenshots/navigate.cy.ts    (2560x1440)
+     /navigateTo() — programmatic navigation -- navigates to about when button is cli               
+     cked (failed).png                                                                              
+

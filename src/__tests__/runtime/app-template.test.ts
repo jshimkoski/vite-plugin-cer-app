@@ -54,9 +54,29 @@ describe('APP_ENTRY_TEMPLATE — meta.hydrate', () => {
     expect(APP_ENTRY_TEMPLATE).toContain('await _doHydrate()')
   })
 
-  it('_doHydrate loads the route chunk and calls _replace', () => {
-    expect(APP_ENTRY_TEMPLATE).toContain('_initMatch?.route?.load')
-    expect(APP_ENTRY_TEMPLATE).toContain('await _replace(window.location.pathname')
+  it('_doHydrate pre-loads the page and calls _replace', () => {
+    expect(APP_ENTRY_TEMPLATE).toContain('await _loadPageForPath(_initPath)')
+    expect(APP_ENTRY_TEMPLATE).toContain('await _replace(_initPath)')
+  })
+
+  it('_doHydrate skips _replace if URL changed during async module load', () => {
+    // Guard: only call _replace when the URL hasn't changed during _loadPageForPath.
+    // This prevents _doHydrate from overriding a navigation that fired while the
+    // initial page module was being loaded asynchronously.
+    const doHydrateStart = APP_ENTRY_TEMPLATE.indexOf('const _doHydrate')
+    const doHydrateEnd = APP_ENTRY_TEMPLATE.indexOf('\n    }', doHydrateStart)
+    const doHydrateBlock = APP_ENTRY_TEMPLATE.slice(doHydrateStart, doHydrateEnd)
+    expect(doHydrateBlock).toContain('_currentPath === _initPath')
+    expect(doHydrateBlock).toContain('window.location.pathname')
+  })
+
+  it('guards direct page render with _currentPagePath === current.value.path', () => {
+    expect(APP_ENTRY_TEMPLATE).toContain('_currentPagePath')
+    expect(APP_ENTRY_TEMPLATE).toContain('_currentPagePath === current.value.path')
+  })
+
+  it('exposes router globally as __cerRouter', () => {
+    expect(APP_ENTRY_TEMPLATE).toContain('__cerRouter')
   })
 
   it('_doHydrate clears __CER_DATA__ after navigation', () => {

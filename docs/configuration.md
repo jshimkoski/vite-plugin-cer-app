@@ -201,7 +201,21 @@ import { when, each, match, anchorBlock } from '@jasonshimmy/custom-elements-run
 The following framework composables are **always** auto-imported when used, regardless of the `runtime` flag — they come from the plugin package:
 
 ```ts
-import { useHead, usePageData, useInject, useRuntimeConfig } from '@jasonshimmy/vite-plugin-cer-app/composables'
+import {
+  useHead,
+  usePageData,
+  useInject,
+  useRuntimeConfig,
+  useRoute,
+  useAuth,
+  useFetch,
+  useSeoMeta,
+  useCookie,
+  useSession,
+  defineMiddleware,
+  defineServerMiddleware,
+  navigateTo,
+} from '@jasonshimmy/vite-plugin-cer-app/composables'
 ```
 
 Set any flag to `false` to opt out and manage imports manually.

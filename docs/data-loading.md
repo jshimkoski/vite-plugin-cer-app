@@ -72,6 +72,39 @@ interface PageLoaderContext<P extends Record<string, string>> {
 
 ---
 
+## Client-side navigation and loaders
+
+Loaders run on the client too — before every navigation. This means `useProps()` and `usePageData()` both work correctly for client-side route transitions, not just on initial SSR/SSG load.
+
+When `router.push('/path')` is called:
+1. The route module is dynamically imported
+2. If the module exports a `loader`, it is called with `{ params, query }`
+3. Primitive return values (strings, numbers, booleans) are set as HTML attributes on the page element so `useProps()` can read them
+4. All return values are stored in `globalThis.__CER_DATA__` so `usePageData()` also returns them
+5. The page component renders with the correct data immediately — no loading flash or re-render
+
+```ts
+// app/pages/profile.ts
+component('page-profile', () => {
+  // Works on initial load AND client navigation
+  const props = useProps<{ username: string; bio: string }>({ username: '', bio: '' })
+
+  return html`
+    <h1>${props.username}</h1>
+    <p>${props.bio}</p>
+  `
+})
+
+export const loader = async ({ params }: { params: { id: string } }) => {
+  const user = await fetch(`/api/users/${params.id}`).then(r => r.json())
+  return { username: user.name, bio: user.bio }
+}
+```
+
+> **Note:** Only primitive values (strings, numbers, booleans) are forwarded as element attributes. Complex objects (arrays, nested objects) should be accessed via `usePageData()` instead of `useProps()`.
+
+---
+
 ## Accessing loader data in components
 
 The loader's return value is passed as props. Use `useProps` to receive them:

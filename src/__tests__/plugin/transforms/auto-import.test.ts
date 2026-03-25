@@ -11,9 +11,9 @@ const FRAMEWORK_PKG = `'@jasonshimmy/vite-plugin-cer-app/composables'`
 // ─── Target-directory gating ─────────────────────────────────────────────────
 
 describe('autoImportTransform — target directory gating', () => {
-  it('returns null for files outside pages/, layouts/, components/', () => {
+  it('returns null for files outside pages/, layouts/, components/, middleware/, composables/', () => {
     expect(
-      autoImportTransform("component('x', () => html``)", '/project/app/composables/useTheme.ts', opts),
+      autoImportTransform("component('x', () => html``)", '/project/app/plugins/my-plugin.ts', opts),
     ).toBeNull()
   })
 
@@ -66,10 +66,10 @@ describe('autoImportTransform — target directory gating', () => {
     expect(result).toContain('defineMiddleware')
   })
 
-  it('still returns null for composables/ (not in scope)', () => {
-    expect(
-      autoImportTransform("export default defineMiddleware(() => true)", '/project/app/composables/useTheme.ts', opts),
-    ).toBeNull()
+  it('injects framework imports for composables/ (in scope)', () => {
+    const result = autoImportTransform("export default defineMiddleware(() => true)", '/project/app/composables/useTheme.ts', opts)
+    expect(result).not.toBeNull()
+    expect(result).toContain('defineMiddleware')
   })
 })
 

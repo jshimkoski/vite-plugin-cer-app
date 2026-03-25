@@ -18,13 +18,13 @@ describe('generateServerApiCode', () => {
   it('returns empty apiRoutes when directory does not exist', async () => {
     vi.mocked(existsSync).mockReturnValue(false)
     const code = await generateServerApiCode(API)
-    expect(code).toContain('export const apiRoutes = []')
+    expect(code).toMatch(/export const apiRoutes\s*=\s*\[\s*\]/)
     expect(code).toContain('export default apiRoutes')
   })
 
   it('returns empty apiRoutes when no files found', async () => {
     const code = await generateServerApiCode(API)
-    expect(code).toContain('export const apiRoutes = []')
+    expect(code).toMatch(/export const apiRoutes\s*=\s*\[\s*\]/)
   })
 
   it('includes AUTO-GENERATED comment', async () => {

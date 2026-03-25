@@ -35,6 +35,63 @@ initRuntimeConfig(runtimeConfig)
 
 const router = initRouter({ routes })
 
+// Expose the router globally so useRoute() and navigateTo() can access it
+// from any composable without circular imports.
+;(globalThis).__cerRouter = router
+
+// ─── Page loader state ───────────────────────────────────────────────────────
+
+// Holds the pre-loaded page tag and loader-derived attrs for the current route.
+// Set by _loadPageForPath before every navigation so cer-layout-view can render
+// the page element directly with the correct attributes (enabling useProps()).
+let _currentPageTag = null
+let _currentPageAttrs = {}
+// The pathname this tag was loaded for — used to detect router-internal
+// redirects (e.g. middleware returning '/login') so cer-layout-view falls
+// back to <router-view> when the current route differs from what was pre-loaded.
+let _currentPagePath = null
+
+// Pre-loads the page module for \`path\`, calls its loader if present, and
+// stores the results so cer-layout-view can pass them as element attributes.
+async function _loadPageForPath(path) {
+  try {
+    const url = new URL(path, 'http://x')
+    const query = Object.fromEntries(url.searchParams)
+    const matched = router.matchRoute(url.pathname)
+    const route = matched?.route
+    if (!route?.load) {
+      _currentPageTag = null
+      _currentPageAttrs = {}
+      _currentPagePath = url.pathname
+      return
+    }
+    const mod = await route.load()
+    _currentPageTag = mod.default ?? null
+    _currentPagePath = url.pathname
+    const params = matched.params ?? {}
+    let loaderAttrs = { ...params }
+    if (typeof mod.loader === 'function') {
+      try {
+        const data = await mod.loader({ params, query })
+        if (data !== undefined && data !== null) {
+          // Make loader data available via usePageData() for this navigation.
+          ;(globalThis).__CER_DATA__ = data
+          // Merge primitive values as element attributes so useProps() works.
+          const primitives = Object.fromEntries(
+            Object.entries(data).filter(([, v]) => v !== null && v !== undefined && typeof v !== 'object' && typeof v !== 'function')
+          )
+          loaderAttrs = { ...loaderAttrs, ...primitives }
+        }
+      } catch { /* loader errors are non-fatal client-side */ }
+    }
+    _currentPageAttrs = loaderAttrs
+  } catch {
+    _currentPageTag = null
+    _currentPageAttrs = {}
+    _currentPagePath = null
+  }
+}
+
 // ─── Navigation state ────────────────────────────────────────────────────────
 
 const isNavigating = ref(false)
@@ -53,6 +110,7 @@ router.push = async (path) => {
   isNavigating.value = true
   currentError.value = null
   try {
+    await _loadPageForPath(path)
     await _push(path)
   } catch (err) {
     currentError.value = err instanceof Error ? err.message : String(err)
@@ -65,6 +123,7 @@ router.replace = async (path) => {
   isNavigating.value = true
   currentError.value = null
   try {
+    await _loadPageForPath(path)
     await _replace(path)
   } catch (err) {
     currentError.value = err instanceof Error ? err.message : String(err)
@@ -115,16 +174,26 @@ component('cer-layout-view', () => {
 
   const matched = router.matchRoute(current.value.path)
   const routeMeta = matched?.route?.meta
-  const routerView = { tag: 'router-view', props: {}, children: [] }
+
+  // Render the page component directly when a pre-loaded tag is available AND
+  // the loaded path matches the current route.  The path guard detects
+  // router-internal redirects (e.g. middleware returning '/login'): when the
+  // router redirects to a different path, _currentPagePath won't match
+  // current.value.path and we fall back to <router-view> so the correct page
+  // is rendered without stale pre-loaded state.
+  const _useDirectRender = _currentPageTag && _currentPagePath === current.value.path
+  const pageVnode = _useDirectRender
+    ? { tag: _currentPageTag, props: { attrs: _currentPageAttrs }, children: [] }
+    : { tag: 'router-view', props: {}, children: [] }
 
   // Support nested layout chains: meta.layoutChain = ['default', 'admin']
-  // renders <layout-default><layout-admin><router-view/></layout-admin></layout-default>
+  // renders <layout-default><layout-admin><page/></layout-admin></layout-default>
   const chain = routeMeta?.layoutChain
     ? routeMeta.layoutChain
     : [routeMeta?.layout ?? 'default']
 
   // Build nested vnodes from innermost to outermost.
-  let vnode = routerView
+  let vnode = pageVnode
   for (let i = chain.length - 1; i >= 0; i--) {
     const tag = layouts[chain[i]]
     if (tag) vnode = { tag, props: {}, children: [vnode] }
@@ -163,12 +232,20 @@ if (typeof window !== 'undefined') {
     delete (globalThis).__CER_DATA__
   } else {
     const _doHydrate = async () => {
-      if (_initMatch?.route?.load) {
-        try { await _initMatch.route.load() } catch { /* non-fatal */ }
+      const _initPath = window.location.pathname + window.location.search + window.location.hash
+      // Pre-load the page module and run the loader so cer-layout-view renders
+      // the page tag directly with loader attrs (enables useProps() on hydration).
+      await _loadPageForPath(_initPath)
+      // Only activate the initial route if the URL hasn't changed while we were
+      // loading the module asynchronously (e.g. a test or plugin navigated away
+      // before _doHydrate finished).  Calling _replace with a stale path would
+      // override any navigation that happened during the async gap.
+      const _currentPath = window.location.pathname + window.location.search + window.location.hash
+      if (_currentPath === _initPath) {
+        // Use the original (unwrapped) replace so isNavigating stays false during
+        // the initial paint — the loading component must not flash over pre-rendered content.
+        await _replace(_initPath)
       }
-      // Use the original (unwrapped) replace so isNavigating stays false during
-      // the initial paint — the loading component must not flash over pre-rendered content.
-      await _replace(window.location.pathname + window.location.search + window.location.hash)
       // Clear SSR loader data after initial navigation so subsequent client-side
       // navigations don't accidentally reuse stale server data.
       delete (globalThis).__CER_DATA__

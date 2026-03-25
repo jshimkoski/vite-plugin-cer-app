@@ -20,6 +20,7 @@ export interface ResolvedCerConfig {
   jitCss: { content: string[]; extendedColors: boolean }
   autoImports: { components: boolean; composables: boolean; directives: boolean; runtime: boolean }
   runtimeConfig: { public: Record<string, unknown>; private: Record<string, string> }
+  auth: import('../types/config.js').AuthConfig | null
 }
 
 /**

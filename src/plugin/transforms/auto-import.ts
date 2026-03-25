@@ -13,9 +13,9 @@ const RUNTIME_IMPORTS = `import { component, html, css, ref, computed, watch, wa
 
 const DIRECTIVE_IMPORTS = `import { when, each, match, anchorBlock } from '@jasonshimmy/custom-elements-runtime/directives';`
 
-const FRAMEWORK_IMPORTS = `import { useHead, usePageData, useInject, useRuntimeConfig, defineMiddleware, defineServerMiddleware, useSeoMeta, useCookie, useSession } from '@jasonshimmy/vite-plugin-cer-app/composables';`
+const FRAMEWORK_IMPORTS = `import { useHead, usePageData, useInject, useRuntimeConfig, defineMiddleware, defineServerMiddleware, useSeoMeta, useCookie, useSession, useAuth, useFetch, useRoute, navigateTo } from '@jasonshimmy/vite-plugin-cer-app/composables';`
 
-const FRAMEWORK_IDENTIFIERS = ['useHead', 'usePageData', 'useInject', 'useRuntimeConfig', 'defineMiddleware', 'defineServerMiddleware', 'useSeoMeta', 'useCookie', 'useSession']
+const FRAMEWORK_IDENTIFIERS = ['useHead', 'usePageData', 'useInject', 'useRuntimeConfig', 'defineMiddleware', 'defineServerMiddleware', 'useSeoMeta', 'useCookie', 'useSession', 'useAuth', 'useFetch', 'useRoute', 'navigateTo']
 
 const RUNTIME_IDENTIFIERS = [
   'component',
@@ -71,7 +71,8 @@ export function autoImportTransform(
     normalizedId.startsWith(srcDir + '/pages/') ||
     normalizedId.startsWith(srcDir + '/layouts/') ||
     normalizedId.startsWith(srcDir + '/components/') ||
-    normalizedId.startsWith(srcDir + '/middleware/')
+    normalizedId.startsWith(srcDir + '/middleware/') ||
+    normalizedId.startsWith(srcDir + '/composables/')
   // Files directly in srcDir root (e.g. app/loading.ts, app/error.ts)
   const isRootConventionFile =
     normalizedId.startsWith(srcDir + '/') &&
@@ -89,7 +90,10 @@ export function autoImportTransform(
   const needsRuntime = isRuntimeImportNeeded(code)
   const needsDirectives = isDirectiveImportNeeded(code)
   const needsFramework = isFrameworkImportNeeded(code)
-  const composableImport = buildComposableImport(code, opts.composableExports)
+  // Skip virtual:cer-composables injection for files inside app/composables/ to
+  // avoid circular imports (the virtual module re-exports from all composable files).
+  const isComposablesDir = normalizedId.startsWith(srcDir + '/composables/')
+  const composableImport = isComposablesDir ? null : buildComposableImport(code, opts.composableExports)
 
   if (!needsRuntime && !needsDirectives && !needsFramework && !composableImport) return null
 

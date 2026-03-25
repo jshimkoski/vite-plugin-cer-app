@@ -507,6 +507,44 @@ describe('generateRoutesCode — meta.hydrate', () => {
   })
 })
 
+// ─── meta.title ───────────────────────────────────────────────────────────────
+
+describe('generateRoutesCode — meta.title', () => {
+  beforeEach(() => {
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(scanDirectory).mockResolvedValue([])
+    vi.mocked(readFile).mockResolvedValue('' as never)
+  })
+
+  it('emits meta.title when declared in page source', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/about.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `export const meta = { title: 'About Us' }` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('title: "About Us"')
+  })
+
+  it('omits title meta when not declared', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/about.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `component('page-about', () => html\`<h1>About</h1>\`)` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).not.toContain('title:')
+  })
+
+  it('can combine title with layout', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/about.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `export const meta = { layout: 'minimal', title: 'About Us' }` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('layout: "minimal"')
+    expect(code).toContain('title: "About Us"')
+  })
+})
+
 // ─── nested layouts (layoutChain) ────────────────────────────────────────────
 
 describe('generateRoutesCode — layoutChain (nested layouts)', () => {

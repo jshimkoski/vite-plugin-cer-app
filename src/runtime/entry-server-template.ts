@@ -22,12 +22,12 @@ import layouts from 'virtual:cer-layouts'
 import plugins from 'virtual:cer-plugins'
 import apiRoutes from 'virtual:cer-server-api'
 import serverMiddleware from 'virtual:cer-server-middleware'
-import { runtimeConfig, _runtimePrivateDefaults } from 'virtual:cer-app-config'
+import { runtimeConfig, _runtimePrivateDefaults, _authSessionKey } from 'virtual:cer-app-config'
 import { registerBuiltinComponents } from '@jasonshimmy/custom-elements-runtime'
 import { registerEntityMap, renderToStreamWithJITCSSDSD, DSD_POLYFILL_SCRIPT } from '@jasonshimmy/custom-elements-runtime/ssr'
 import entitiesJson from '@jasonshimmy/custom-elements-runtime/entities.json'
 import { initRouter } from '@jasonshimmy/custom-elements-runtime/router'
-import { beginHeadCollection, endHeadCollection, serializeHeadTags, initRuntimeConfig, resolvePrivateConfig } from '@jasonshimmy/vite-plugin-cer-app/composables'
+import { beginHeadCollection, endHeadCollection, serializeHeadTags, initRuntimeConfig, resolvePrivateConfig, useSession } from '@jasonshimmy/vite-plugin-cer-app/composables'
 import { errorTag } from 'virtual:cer-error'
 import { createIsrHandler } from '@jasonshimmy/vite-plugin-cer-app/isr'
 
@@ -74,6 +74,23 @@ const _cerDataStore = new AsyncLocalStorage()
 // without prop-drilling the request context through the component tree.
 const _cerReqStore = new AsyncLocalStorage()
 ;(globalThis).__CER_REQ_STORE__ = _cerReqStore
+
+// Async-local storage for the authenticated user resolved before each render.
+// useAuth() reads this store server-side to return the current user synchronously.
+const _cerAuthStore = new AsyncLocalStorage()
+;(globalThis).__CER_AUTH_STORE__ = _cerAuthStore
+
+// Async-local storage for per-request useFetch() data.
+// useFetch() writes fetched results here; the handler serialises the map into
+// window.__CER_FETCH_DATA__ for client-side hydration.
+const _cerFetchStore = new AsyncLocalStorage()
+;(globalThis).__CER_FETCH_STORE__ = _cerFetchStore
+
+// Async-local storage for the current route info (path, params, query, meta).
+// useRoute() reads this on the server so layouts and components can access
+// route metadata without prop-drilling.
+const _cerRouteStore = new AsyncLocalStorage()
+;(globalThis).__CER_ROUTE_STORE__ = _cerRouteStore
 
 // Runs fn inside the per-request AsyncLocalStorage context so that isomorphic
 // composables (useCookie, useSession, etc.) can access req/res without prop-drilling.
@@ -192,6 +209,15 @@ const _prepareRequest = async (req) => {
   const current = router.getCurrent()
   const { route, params } = router.matchRoute(current.path)
 
+  // Store the current route info so useRoute() can read it synchronously
+  // from any layout or component during this render pass.
+  _cerRouteStore.enterWith({
+    path: current.path,
+    params,
+    query: current.query ?? {},
+    meta: route?.meta ?? null,
+  })
+
   // Pre-load the page module so we can embed the component tag directly.
   // This avoids the async router-view (which injects content via script tags
   // and breaks Declarative Shadow DOM on initial parse).
@@ -201,9 +227,12 @@ const _prepareRequest = async (req) => {
     try {
       const mod = await route.load()
       const pageTag = mod.default
-      if (pageTag) {
-        pageVnode = { tag: pageTag, props: { attrs: { ...params } }, children: [] }
-      }
+
+      // Run the loader before creating the page vnode so we can pass its
+      // primitive return values as HTML attributes.  useProps() in the page
+      // component reads element attributes, so merging loader data here makes
+      // both useProps() and usePageData() work in SSR / SSG.
+      let loaderAttrs = {}
       if (typeof mod.loader === 'function') {
         const query = current.query ?? {}
         const data = await mod.loader({ params, query, req })
@@ -212,7 +241,16 @@ const _prepareRequest = async (req) => {
           // concurrent renders (SSG concurrency > 1) never share data.
           _cerDataStore.enterWith(data)
           head = \`<script>window.__CER_DATA__ = \${JSON.stringify(data)}</script>\`
+          // Expose primitive loader values as element attributes so useProps()
+          // can read them.  Complex objects are only accessible via usePageData().
+          loaderAttrs = Object.fromEntries(
+            Object.entries(data).filter(([, v]) => v !== null && v !== undefined && typeof v !== 'object' && typeof v !== 'function')
+          )
         }
+      }
+
+      if (pageTag) {
+        pageVnode = { tag: pageTag, props: { attrs: { ...params, ...loaderAttrs } }, children: [] }
       }
     } catch (err) {
       // Loader threw — render the error page server-side if app/error.ts exists.
@@ -247,6 +285,15 @@ const _prepareRequest = async (req) => {
 export const handler = async (req, res) => {
   await _cerReqStore.run({ req, res }, async () => {
   await _cerDataStore.run(null, async () => {
+  // Fresh per-request fetch map — populated by useFetch() calls inside loaders.
+  const _fetchMap = new Map()
+  await _cerFetchStore.run(_fetchMap, async () => {
+  // Pre-resolve the authenticated user so useAuth() works synchronously during rendering.
+  let _authUser = null
+  if (_authSessionKey) {
+    try { _authUser = await useSession({ name: _authSessionKey }).get() } catch { /* no session secret */ }
+  }
+  await _cerAuthStore.run(_authUser, async () => {
     const { vnode, router, head, status } = await _prepareRequest(req)
     if (status != null) res.statusCode = status
 
@@ -274,8 +321,19 @@ export const handler = async (req, res) => {
     // Read the first (synchronous) chunk.
     const { value: firstChunk = '' } = await reader.read()
 
-    // Merge loader data script + useHead() tags into the document head.
-    const headContent = [head, headTags].filter(Boolean).join('\\n')
+    // Serialise useFetch() results collected during loader execution.
+    const _fetchObj = Object.fromEntries(_fetchMap)
+    const _fetchScript = Object.keys(_fetchObj).length > 0
+      ? \`<script>window.__CER_FETCH_DATA__ = \${JSON.stringify(_fetchObj)}</script>\`
+      : ''
+
+    // Serialise the auth user for client-side hydration via useAuth().
+    const _authScript = _authUser
+      ? \`<script>window.__CER_AUTH_USER__ = \${JSON.stringify(_authUser)}</script>\`
+      : ''
+
+    // Merge loader data script + useHead() tags + fetch/auth hydration scripts.
+    const headContent = [head, headTags, _fetchScript, _authScript].filter(Boolean).join('\\n')
 
     // Wrap the rendered body in a full HTML document and inject the head additions
     // (loader data script, useHead() tags, JIT styles). No polyfill in body yet.
@@ -304,8 +362,10 @@ export const handler = async (req, res) => {
 
     // Inject DSD polyfill immediately before </body>, then close the document.
     res.end(DSD_POLYFILL_SCRIPT + fromBodyClose)
-  })
-  })
+  })  // _cerAuthStore.run
+  })  // _cerFetchStore.run
+  })  // _cerDataStore.run
+  })  // _cerReqStore.run
 }
 
 // ISR-wrapped handler for production integrations (Express, Hono, Fastify).

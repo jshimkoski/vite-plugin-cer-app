@@ -96,6 +96,7 @@ export function resolveConfig(userConfig: CerAppConfig, root: string = process.c
       public: userConfig.runtimeConfig?.public ?? {},
       private: userConfig.runtimeConfig?.private ?? {},
     },
+    auth: userConfig.auth ?? null,
   }
 }
 
@@ -121,7 +122,7 @@ async function generateVirtualModule(
     case RESOLVED_IDS.middleware:
       return generateMiddlewareCode(config.middlewareDir)
     case RESOLVED_IDS.serverApi:
-      return generateServerApiCode(config.serverApiDir)
+      return generateServerApiCode(config.serverApiDir, config.auth)
     case RESOLVED_IDS.serverMiddleware:
       return generateServerMiddlewareCode(config.serverMiddlewareDir)
     case RESOLVED_IDS.appConfig:
@@ -157,6 +158,10 @@ function generateAppConfigModule(config: ResolvedCerConfig, ssr = false): string
   if (ssr) {
     const privateDefaults = config.runtimeConfig.private
     code += `\nexport const _runtimePrivateDefaults = ${JSON.stringify(privateDefaults, null, 2)}\n`
+    // Expose the auth session key so the entry-server template can pre-resolve
+    // the authenticated user without duplicating config knowledge.
+    const authSessionKey = config.auth?.sessionKey ?? (config.auth ? 'auth' : null)
+    code += `\nexport const _authSessionKey = ${JSON.stringify(authSessionKey)}\n`
   }
 
   return code

@@ -82,6 +82,30 @@ describe('Blog detail — dynamic route with loader', () => {
   })
 })
 
+describe('Loader props — useProps reads loader return values', () => {
+  // The loader returns { label: 'Hello from loader', count: '42' }.
+  // These primitive values are passed as HTML attributes so useProps() can
+  // read them in all render modes.
+
+  it('displays label from loader', () => {
+    cy.visit('/loader-props-test')
+    cy.get('[data-cy=loader-label]').should('contain', 'Hello from loader')
+  })
+
+  it('displays count from loader', () => {
+    cy.visit('/loader-props-test')
+    cy.get('[data-cy=loader-count]').should('contain', '42')
+  })
+
+  if (mode !== 'spa') {
+    it('loader values are pre-rendered in initial HTML (SSR/SSG)', () => {
+      cy.request('/loader-props-test').then((response) => {
+        expect(response.body).to.include('Hello from loader')
+      })
+    })
+  }
+})
+
 describe('Item detail — route params via useProps', () => {
   it('shows item ID 1 for /items/1', () => {
     cy.visit('/items/1')
