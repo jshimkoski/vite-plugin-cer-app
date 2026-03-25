@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.14.0] - 2026-03-25
+
+- feat: add programmatic navigation and route handling (37a583b)
+
 ## [v0.13.1] - 2026-03-22
 
 - fix: optimize imports in Cloudflare and Netlify adapters to remove unused handler export (cc74ce3)
