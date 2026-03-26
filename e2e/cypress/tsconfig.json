@@ -9,7 +9,6 @@
     "moduleResolution": "bundler",
     "module": "ESNext",
     "noEmit": true,
-    "ignoreDeprecations": "6.0"
   },
   "include": ["**/*.cy.ts", "support/**/*.ts"]
 }
