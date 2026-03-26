@@ -33,7 +33,7 @@ interface AppPlugin {
 interface AppContext {
   provide(key: PropertyKey, value: unknown): void
   router: Router
-  config: CerAppConfig
+  config: CerAppConfig  // always {} (empty object) at runtime
 }
 ```
 

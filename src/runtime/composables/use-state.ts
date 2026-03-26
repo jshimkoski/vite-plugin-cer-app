@@ -44,7 +44,7 @@ type StateMap = Map<string, ReactiveState<unknown>>
  * component('layout-default', () => {
  *   const title = useState('pageTitle', 'My App')  // fallback default
  *   return html`
- *     <title>${title.value}</title>
+ *     <h1>${title.value}</h1>
  *     <slot></slot>
  *   `
  * })

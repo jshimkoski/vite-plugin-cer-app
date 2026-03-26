@@ -52,7 +52,7 @@ The tag name is derived from the file path relative to `app/components/`, with p
 
 ## Auto-import behavior
 
-When `autoImports.components` is `true` (the default), the framework generates a `virtual:cer-components` module that side-effect-imports every file in `app/components/`. This module is imported in `app/app.ts` before the router initializes, ensuring all elements are defined before the first render.
+When `autoImports.components` is `true` (the default), the framework generates a `virtual:cer-components` module that side-effect-imports every file in `app/components/`. This module is imported in `.cer/app.ts` (the auto-generated framework entry) before the router initializes, ensuring all elements are defined before the first render.
 
 Generated module example:
 
@@ -76,9 +76,9 @@ export default defineConfig({
 ```
 
 ```ts
-// app/app.ts
-import './components/ui/my-button.ts'
-import './components/forms/text-input.ts'
+// app/plugins/components.ts — import from a plugin so they register before the first render
+import '../components/ui/my-button.ts'
+import '../components/forms/text-input.ts'
 ```
 
 ---

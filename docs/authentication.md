@@ -52,9 +52,9 @@ When `auth` is configured, the framework automatically registers:
 
 ---
 
-## `useAuth()`
+## `useAuth(sessionKey?)`
 
-`useAuth()` reads the authenticated user and provides helpers for login and logout. It works isomorphically:
+`useAuth()` reads the authenticated user and provides helpers for login and logout. The optional `sessionKey` parameter specifies which session cookie to read (defaults to the value of `auth.sessionKey` in `cer.config.ts`, which itself defaults to `'auth'`). It works isomorphically:
 
 - **Server (SSR/SSG)** — reads the auth session from the per-request `AsyncLocalStorage` context (populated by the entry-server handler before rendering).
 - **Client** — reads from `globalThis.__CER_AUTH_USER__` (injected into the HTML by the server and captured by the client entry before the app boots).
@@ -67,8 +67,8 @@ component('page-profile', () => {
   return html`
     ${loggedIn
       ? html`
-          <p>Hello, ${user!.name}</p>
-          <img src="${user!.avatar}" alt="avatar" />
+          <p>Hello, ${user?.name}</p>
+          <img src="${user?.avatar}" alt="avatar" />
           <button @click="${logout}">Log out</button>
         `
       : html`
@@ -87,7 +87,7 @@ component('page-profile', () => {
 | `user` | `AuthUser \| null` | The authenticated user, or `null` if not logged in |
 | `loggedIn` | `boolean` | `true` when a user is authenticated |
 | `login(provider)` | `void` | Redirects to `/api/auth/:provider` to start the OAuth flow (client only) |
-| `logout()` | `Promise<void>` | Client: redirects to `/api/auth/logout`. Server: clears the auth session cookie directly. |
+| `logout()` | `void` (client) / `Promise<void>` (server) | Client: assigns `window.location.href` to `/api/auth/logout` (synchronous, no promise). Server: clears the auth session cookie directly and returns a promise. |
 
 ### `AuthUser`
 
@@ -120,7 +120,7 @@ Attach it to a page via `meta.middleware`:
 // app/pages/dashboard.ts
 component('page-dashboard', () => {
   const { user } = useAuth()
-  return html`<h1>Welcome, ${user!.name}</h1>`
+  return html`<h1>Welcome, ${user?.name}</h1>`
 })
 
 export const meta = { middleware: ['require-auth'] }

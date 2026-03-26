@@ -38,6 +38,7 @@ type MiddlewareFn = (to: RouteState, from: RouteState | null) => GuardResult
 | `true` | Allow navigation |
 | `false` | Block navigation (stay on current route) |
 | `string` | Redirect to that path |
+| `void` / no return | Allow navigation (same as `true`) |
 
 ---
 
@@ -70,9 +71,9 @@ export const meta = {
 
 ### Execution order within a navigation
 
-1. `beforeEnter` fires on the matched route — runs all declared middleware in order
+1. Route middleware runs for the matched route — all declared middleware executes in order
 2. Route state updates (component renders)
-3. `afterEnter` fires (analytics, logging)
+3. Post-navigation hooks fire (analytics, logging)
 
 Redirect loop protection: the router stops after 10 consecutive redirects.
 

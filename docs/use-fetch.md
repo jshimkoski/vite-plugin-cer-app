@@ -45,14 +45,16 @@ When called outside a component context (e.g. in a `loader` or server middleware
 ## Options
 
 ```ts
-useFetch<T>(url, options?)
+useFetch<T>(url: string | (() => string), options?)
 ```
+
+The `url` argument can be a static string or a factory function that returns a string. Pass a factory when the URL depends on reactive state — the request will re-issue whenever the function returns a different value.
 
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `key` | `string` | URL string | Unique cache key for this request. On the server, requests with the same key within one SSR pass are de-duplicated. On the client, matching server-fetched data is consumed once for hydration. |
 | `lazy` | `boolean` | `false` | Skip the server fetch; only fetch on the client. In component context, also skips the auto-fetch on mount — call `refresh()` manually. |
-| `server` | `boolean` | `true` | Alias for `!lazy`. Set `server: false` to skip SSR. |
+| `server` | `boolean` | `true` | Equivalent to `lazy: true`. Set `server: false` to skip SSR. |
 | `default` | `() => T` | `() => null` | Factory that returns the initial value before the fetch completes. |
 | `transform` | `(data: unknown) => T` | — | Transform the raw JSON response before storing it. Applied after `pick`. |
 | `pick` | `string[]` | — | Pick a subset of keys from an object response. Applied before `transform`. |
@@ -95,9 +97,12 @@ Skip the automatic fetch and call `refresh()` manually:
 
 ```ts
 component('page-search', () => {
-  const { data: results, pending, refresh } = useFetch<Result[]>('/api/search', { lazy: true })
-
   const query = ref('')
+
+  const { data: results, pending, refresh } = useFetch<Result[]>(
+    () => `/api/search?q=${encodeURIComponent(query.value)}`,
+    { lazy: true }
+  )
 
   async function search() {
     await refresh()

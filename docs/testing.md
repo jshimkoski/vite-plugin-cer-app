@@ -193,8 +193,7 @@ EOF
 
 ```ts
 // app/pages/index.ts
-import { useGreeting } from 'virtual:cer-composables'
-
+// No import needed — useGreeting is auto-imported from virtual:cer-composables
 component('page-index', () => {
   const greeting = useGreeting('World')
   return html`<h1>${greeting}</h1>`
@@ -237,8 +236,8 @@ component('page-index', () => {
 ```sh
 cat > app/middleware/auth.ts << 'EOF'
 export default defineMiddleware((to, from) => {
-  const isLoggedIn = !!localStorage.getItem('token')
-  return isLoggedIn ? true : '/login'
+  const { loggedIn } = useAuth()
+  return loggedIn ? true : '/login'
 })
 EOF
 ```
@@ -305,10 +304,10 @@ curl -X POST http://localhost:3000/api/health \
 
 ```sh
 cat > server/middleware/cors.ts << 'EOF'
-export default (req, res, next) => {
+export default defineServerMiddleware((req, res, next) => {
   res.setHeader('X-Test-Header', 'middleware-works')
   next()
-}
+})
 EOF
 ```
 
@@ -321,8 +320,6 @@ EOF
 
 ```ts
 // app/pages/about.ts
-import { useHead } from '@jasonshimmy/vite-plugin-cer-app/composables'
-
 component('page-about', () => {
   useHead({
     title: 'About — My App',

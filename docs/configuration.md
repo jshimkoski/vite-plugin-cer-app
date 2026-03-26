@@ -207,6 +207,7 @@ import {
   useInject,
   useRuntimeConfig,
   useRoute,
+  useState,
   useAuth,
   useFetch,
   useSeoMeta,
@@ -301,7 +302,7 @@ export default defineConfig({
 // app/pages/data.ts — loader (server-only)
 export const loader = async () => {
   const { private: priv } = useRuntimeConfig()
-  const rows = await db.query(priv!.dbUrl)
+  const rows = await db.query(priv?.dbUrl)
   return { rows }
 }
 ```

@@ -22,9 +22,8 @@ component('page-blog-slug', () => {
 })
 
 export const loader: PageLoader = async ({ params }) => {
-  const post = await fetch(`https://api.example.com/posts/${params.slug}`)
-    .then(r => r.json())
-  return { title: post.title, body: post.body }
+  const { data: post } = await useFetch(`https://api.example.com/posts/${params.slug}`)
+  return { title: post?.title, body: post?.body }
 }
 ```
 
@@ -67,7 +66,7 @@ interface PageLoaderContext<P extends Record<string, string>> {
 
 1. Browser receives the full HTML — content is immediately visible via Declarative Shadow DOM before any JS runs
 2. Client JS boots; `usePageData()` reads `window.__CER_DATA__` and returns the hydrated values
-3. After the initial `router.replace()` in `app/app.ts` completes, `window.__CER_DATA__` is deleted so subsequent client-side navigations trigger a fresh fetch instead of reusing stale server data
+3. After the initial `router.replace()` in `.cer/app.ts` completes, `.cer/app.ts` deletes `window.__CER_DATA__` so subsequent client-side navigations trigger a fresh fetch instead of reusing stale server data
 4. Components that received SSR data skip their `useOnConnected` fetch — no duplicate request
 
 ---
@@ -96,8 +95,8 @@ component('page-profile', () => {
 })
 
 export const loader = async ({ params }: { params: { id: string } }) => {
-  const user = await fetch(`/api/users/${params.id}`).then(r => r.json())
-  return { username: user.name, bio: user.bio }
+  const { data: user } = await useFetch(`/api/users/${params.id}`)
+  return { username: user?.name, bio: user?.bio }
 }
 ```
 
@@ -302,8 +301,8 @@ component('page-blog-index', () => {
 
 // loader runs in SSR and SSG only
 export const loader = async () => {
-  const posts = await fetch('/api/posts').then(r => r.json())
-  return { posts }
+  const { data: posts } = await useFetch<Post[]>('/api/posts')
+  return { posts: posts ?? [] }
 }
 ```
 

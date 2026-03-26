@@ -173,6 +173,8 @@ useHead({
 
 Style tags are not deduplicated.
 
+> **Note:** `style` tag support via `useHead` is SSR/SSG only. Client-side `useHead({ style: [...] })` calls are no-ops — style tags are not injected into `document.head` on the client.
+
 ---
 
 ## SSR: collection and injection

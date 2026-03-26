@@ -140,7 +140,7 @@ export const meta: PageMeta = {
 
 ### `meta.layout`
 
-Which layout to wrap this page in. The value must match a filename (without extension) in `app/layouts/`. Set to `false` or omit if you don't want a layout.
+Which layout to wrap this page in. The value must match a filename (without extension) in `app/layouts/`. Set to `false` or `''` (empty string) to render the page without any layout, or omit to use the default layout.
 
 ### `meta.middleware`
 
@@ -154,7 +154,7 @@ Controls when the page component activates (hydrates) on the client after SSR. T
 |---|---|---|
 | `'load'` | Hydrates immediately on page load (default) | — |
 | `'idle'` | Defers until the browser has finished higher-priority work | `requestIdleCallback` (falls back to `setTimeout` in Safari) |
-| `'visible'` | Defers until `<cer-layout-view>` enters the viewport | `IntersectionObserver` |
+| `'visible'` | Defers until `<cer-layout-view>` enters the viewport (falls back to observing `document.body` if `<cer-layout-view>` is not found) | `IntersectionObserver` |
 | `'none'` | Never hydrates — SSR HTML stays as-is, no JS activation | — |
 
 ```ts
@@ -352,7 +352,7 @@ If `app/loading.ts` does not exist, navigation proceeds without any intermediate
 
 ## Virtual module
 
-The route list is exposed as the virtual module `virtual:cer-routes`, which you can import directly in `app/app.ts`:
+The route list is exposed as the virtual module `virtual:cer-routes`, which you can import in any plugin or composable:
 
 ```ts
 import routes from 'virtual:cer-routes'

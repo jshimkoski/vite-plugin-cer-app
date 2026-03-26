@@ -166,7 +166,7 @@ component('page-nav', () => {
 
   return html`
     ${loggedIn
-      ? html`<span>${user!.name}</span><button @click="${logout}">Log out</button>`
+      ? html`<span>${user?.name}</span><button @click="${logout}">Log out</button>`
       : html`<button @click="${() => login('github')}">Log in</button>`
     }
   `
@@ -185,7 +185,7 @@ Sets document head tags (`<title>`, `<meta>`, `<link>`, etc.). Works in SPA, SSR
 
 Returns the serialized loader data for the current page, hydrated from `window.__CER_DATA__` on the client or from the per-request `AsyncLocalStorage` context during SSR/SSG. See [data-loading.md](./data-loading.md).
 
-### `useInject<T>(key, defaultValue?)`
+### `useInject<T>(key, defaultValue?): T | undefined`
 
 Reads a value provided by a plugin via `app.provide(key, value)`. Works consistently in all rendering modes:
 
@@ -240,7 +240,7 @@ component('page-index', () => {
 // app/pages/data.ts — private config, server-only (loader)
 export const loader = async () => {
   const { private: priv } = useRuntimeConfig()
-  const rows = await db.query(priv!.dbUrl)
+  const rows = await db.query(priv?.dbUrl)
   return { rows }
 }
 ```
@@ -395,8 +395,8 @@ Identity helper that gives TypeScript the correct `MiddlewareFn` type. Auto-impo
 ```ts
 // app/middleware/auth.ts
 export default defineMiddleware(async (to, from) => {
-  const isLoggedIn = !!localStorage.getItem('token')
-  return isLoggedIn ? true : '/login'
+  const { loggedIn } = useAuth()
+  return loggedIn ? true : '/login'
 })
 ```
 
@@ -536,7 +536,7 @@ component('page-post', () => {
 | `path` | `string` | Current URL path, e.g. `'/posts/42'` |
 | `params` | `Record<string, string>` | Dynamic route params, e.g. `{ id: '42' }` |
 | `query` | `Record<string, string>` | Parsed query string, e.g. `{ page: '2' }` |
-| `meta` | `Record<string, unknown> \| null` | Static `meta` object exported by the matched page |
+| `meta` | `Record<string, unknown> \| null` | The raw `meta` object exported by the matched page file. Custom fields like `title`, `render`, `hydrate`, etc., are accessible here. |
 
 If you need it outside auto-imported directories:
 
@@ -648,12 +648,15 @@ export function useTheme() {
   const theme = useState<string>('theme', () =>
     (typeof localStorage !== 'undefined' ? localStorage.getItem('theme') : null) ?? 'light'
   )
-  watch(() => {
+
+  function setTheme(value: string) {
+    theme.value = value
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('theme', theme.value)
+      localStorage.setItem('theme', value)
     }
-  })
-  return { theme }
+  }
+
+  return { theme, setTheme }
 }
 ```
 
@@ -672,7 +675,7 @@ import { useState } from '@jasonshimmy/vite-plugin-cer-app/composables'
 
 ---
 
-### `navigateTo(path)`
+### `navigateTo(path): Promise<void>`
 
 Programmatic navigation — works isomorphically:
 
