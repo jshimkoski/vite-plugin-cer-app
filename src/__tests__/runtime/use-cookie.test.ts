@@ -146,6 +146,16 @@ describe('useCookie — SSR (via AsyncLocalStorage)', () => {
     })
   })
 
+  it('uses raw value when decodeURIComponent throws (malformed percent-encoding)', () => {
+    // '%ZZ' is invalid percent-encoding and causes decodeURIComponent to throw.
+    // The parser must fall back to the raw value instead of crashing.
+    const { req, res } = makeReqRes('bad=%ZZ; good=ok')
+    store.run({ req, res }, () => {
+      expect(useCookie('bad').value).toBe('%ZZ')
+      expect(useCookie('good').value).toBe('ok')
+    })
+  })
+
   it('returns undefined value outside a store context', () => {
     // store is registered but no run() context — getStore() returns null
     const cookie = useCookie('x')

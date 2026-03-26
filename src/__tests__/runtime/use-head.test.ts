@@ -132,11 +132,18 @@ describe('serializeHeadTags', () => {
     expect((html.match(/<script/g) ?? []).length).toBe(2)
   })
 
-  it('serializes style tags', () => {
+  it('serializes style tags with innerHTML', () => {
     const html = serializeHeadTags([{ style: [{ innerHTML: 'body { margin: 0 }' }] }])
     expect(html).toContain('<style')
     expect(html).toContain('body { margin: 0 }')
     expect(html).toContain('</style>')
+  })
+
+  it('serializes style tags without innerHTML as self-containing empty tag', () => {
+    const html = serializeHeadTags([{ style: [{ media: 'print' }] }])
+    expect(html).toContain('<style')
+    expect(html).toContain('media="print"')
+    expect(html).toContain('></style>')
   })
 
   it('escapes attribute values in meta content', () => {
@@ -239,5 +246,21 @@ describe('useHead — client-side DOM updates', () => {
     const before = document.head.querySelectorAll('link').length
     useHead({ link: [{ type: 'text/css' }] })
     expect(document.head.querySelectorAll('link').length).toBe(before)
+  })
+
+  it('adds script with src and sets extra attributes (type, async)', () => {
+    useHead({ script: [{ src: '/module.js', type: 'module', async: '' }] })
+    const el = document.querySelector('script[src="/module.js"]')
+    expect(el).not.toBeNull()
+    expect(el?.getAttribute('type')).toBe('module')
+    // async attribute is present (empty string)
+    expect(el?.hasAttribute('async')).toBe(true)
+  })
+
+  it('adds inline script with extra attributes (type)', () => {
+    useHead({ script: [{ innerHTML: 'window.x = 2', type: 'application/json' }] })
+    const scripts = document.querySelectorAll('script[type="application/json"]')
+    expect(scripts.length).toBe(1)
+    expect(scripts[0].textContent).toBe('window.x = 2')
   })
 })

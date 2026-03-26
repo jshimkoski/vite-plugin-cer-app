@@ -284,4 +284,25 @@ describe('useFetch() — client fetch path', () => {
     const calledUrl = (mockFn.mock.calls[0] as unknown[])[0] as string
     expect(calledUrl).toBe('/api/items/1')
   })
+
+  it('refresh() on a hydrated-state result issues a new fetch', async () => {
+    // Pre-populate __CER_FETCH_DATA__ so the first call uses the hydrated path
+    g['__CER_FETCH_DATA__'] = { '/api/item': { id: 1 } }
+
+    let callCount = 0
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      callCount++
+      return { ok: true, json: async () => ({ id: callCount + 10 }) }
+    }))
+
+    const result = await useFetch<{ id: number }>('/api/item')
+    // Should have consumed the hydrated value, not fetched
+    expect(result.data).toEqual({ id: 1 })
+    expect(callCount).toBe(0)
+
+    // refresh() should now issue a real fetch
+    await result.refresh()
+    expect(callCount).toBe(1)
+    expect(result.data).toEqual({ id: 11 })
+  })
 })

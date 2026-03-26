@@ -220,10 +220,46 @@ const user = await session.get<AuthUser>()
 
 ---
 
+## `defineOAuthProvider(config)`
+
+A type-safe helper for declaring providers in `cer.config.ts`. It is an identity function — it returns the config unchanged and exists purely so TypeScript infers the correct type for each field.
+
+Built-in providers (`google`, `github`, `discord`) only require `clientId` and `clientSecret`. Any endpoint URL or scope can be overridden. For a fully custom provider, all three endpoint URLs are required.
+
+```ts
+// cer.config.ts
+import { defineConfig } from '@jasonshimmy/vite-plugin-cer-app'
+import { defineOAuthProvider } from '@jasonshimmy/vite-plugin-cer-app/oauth'
+
+export default defineConfig({
+  auth: {
+    providers: {
+      github: defineOAuthProvider({
+        clientId: process.env.GITHUB_CLIENT_ID!,
+        clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+        scope: ['read:user', 'user:email'],  // override default scopes
+      }),
+      myProvider: defineOAuthProvider({
+        clientId: process.env.MY_CLIENT_ID!,
+        clientSecret: process.env.MY_CLIENT_SECRET!,
+        authorizationUrl: 'https://auth.example.com/authorize',
+        tokenUrl: 'https://auth.example.com/token',
+        userInfoUrl: 'https://auth.example.com/userinfo',
+      }),
+    },
+  },
+})
+```
+
+Using `defineOAuthProvider` is optional — a plain object literal is also accepted. The helper exists only for TypeScript inference convenience.
+
+---
+
 ## TypeScript
 
 ```ts
 import { useAuth } from '@jasonshimmy/vite-plugin-cer-app/composables'
+import { defineOAuthProvider } from '@jasonshimmy/vite-plugin-cer-app/oauth'
 import type { AuthUser, AuthComposable } from '@jasonshimmy/vite-plugin-cer-app/composables'
 import type { AuthConfig, OAuthProviderConfig } from '@jasonshimmy/vite-plugin-cer-app/types'
 ```

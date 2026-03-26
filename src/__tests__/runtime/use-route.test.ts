@@ -30,6 +30,7 @@ describe('useRoute() — server path (__CER_ROUTE_STORE__)', () => {
 
   afterEach(() => {
     g['__CER_ROUTE_STORE__'] = _orig
+    delete g['__cerRouter']
   })
 
   it('returns route info from the ALS store', () => {
@@ -40,6 +41,21 @@ describe('useRoute() — server path (__CER_ROUTE_STORE__)', () => {
     expect(route.path).toBe('/posts/42')
     expect(route.params).toEqual({ id: '42' })
     expect(route.meta).toEqual({ title: 'Post' })
+  })
+
+  it('falls through to client router when routeStore.getStore() returns null', () => {
+    // Store is present but no active context (getStore returns null)
+    const { AsyncLocalStorage } = require('node:async_hooks')
+    const emptyStore = new AsyncLocalStorage()
+    g['__CER_ROUTE_STORE__'] = emptyStore
+    // Provide a client router so we get a real result instead of the fallback
+    g['__cerRouter'] = {
+      getCurrent: () => ({ path: '/client-path', query: {} }),
+      matchRoute: () => ({ route: { meta: null }, params: {} }),
+    }
+
+    const route = useRoute()
+    expect(route.path).toBe('/client-path')
   })
 
   it('returns query params from route info', () => {
@@ -79,6 +95,16 @@ describe('useRoute() — client path (__cerRouter)', () => {
     expect(route.path).toBe('/about')
     expect(route.query).toEqual({ ref: 'nav' })
     expect(route.meta).toEqual({ title: 'About' })
+  })
+
+  it('defaults query to {} when getCurrent() omits the query property', () => {
+    g['__cerRouter'] = {
+      getCurrent: () => ({ path: '/home' }),
+      matchRoute: () => ({ route: { meta: null }, params: {} }),
+    }
+
+    const route = useRoute()
+    expect(route.query).toEqual({})
   })
 
   it('extracts params from matched route', () => {

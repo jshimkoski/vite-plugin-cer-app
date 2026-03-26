@@ -83,3 +83,82 @@ describe('generateServerApiCode', () => {
     expect(code).toContain('export default apiRoutes')
   })
 })
+
+describe('generateServerApiCode — OAuth routes', () => {
+  beforeEach(() => {
+    vi.mocked(existsSync).mockReturnValue(false)
+    vi.mocked(scanDirectory).mockResolvedValue([])
+  })
+
+  const authConfig = {
+    providers: {
+      google: { clientId: 'gid', clientSecret: 'gsecret' },
+    },
+  }
+
+  it('imports OAuth handlers when authConfig has providers', async () => {
+    const code = await generateServerApiCode(API, authConfig)
+    expect(code).toContain("import { handleOAuthInitiate, handleOAuthCallback, handleOAuthLogout } from '@jasonshimmy/vite-plugin-cer-app/oauth'")
+  })
+
+  it('serialises the auth config as _authCfg', async () => {
+    const code = await generateServerApiCode(API, authConfig)
+    expect(code).toContain('const _authCfg =')
+    expect(code).toContain('"clientId":"gid"')
+    expect(code).toContain('"clientSecret":"gsecret"')
+  })
+
+  it('prepends OAuth initiate route before user routes', async () => {
+    const code = await generateServerApiCode(API, authConfig)
+    expect(code).toContain("path: '/api/auth/:provider'")
+    expect(code).toContain('handleOAuthInitiate')
+  })
+
+  it('prepends OAuth callback route', async () => {
+    const code = await generateServerApiCode(API, authConfig)
+    expect(code).toContain("path: '/api/auth/callback/:provider'")
+    expect(code).toContain('handleOAuthCallback')
+  })
+
+  it('prepends OAuth logout route', async () => {
+    const code = await generateServerApiCode(API, authConfig)
+    expect(code).toContain("path: '/api/auth/logout'")
+    expect(code).toContain('handleOAuthLogout')
+  })
+
+  it('uses redirectAfterLogin from config or defaults to /', async () => {
+    const code = await generateServerApiCode(API, { ...authConfig, redirectAfterLogin: '/dashboard' })
+    expect(code).toContain('"redirectAfterLogin":"/dashboard"')
+  })
+
+  it('defaults redirectAfterLogin and redirectAfterLogout to / when not set', async () => {
+    const code = await generateServerApiCode(API, authConfig)
+    expect(code).toContain('"redirectAfterLogin":"/"')
+    expect(code).toContain('"redirectAfterLogout":"/"')
+  })
+
+  it('uses sessionKey from config or defaults to auth', async () => {
+    const code = await generateServerApiCode(API, authConfig)
+    expect(code).toContain('"sessionKey":"auth"')
+  })
+
+  it('does not add OAuth routes when authConfig is null', async () => {
+    const code = await generateServerApiCode(API, null)
+    expect(code).not.toContain('handleOAuthInitiate')
+    expect(code).not.toContain("'/api/auth/:provider'")
+  })
+
+  it('does not add OAuth routes when providers object is empty', async () => {
+    const code = await generateServerApiCode(API, { providers: {} })
+    expect(code).not.toContain('handleOAuthInitiate')
+  })
+
+  it('OAuth routes appear before user API routes', async () => {
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(scanDirectory).mockResolvedValue([`${API}/health.ts`])
+    const code = await generateServerApiCode(API, authConfig)
+    const oauthIdx = code.indexOf("'/api/auth/:provider'")
+    const userIdx = code.indexOf('"/api/health"')
+    expect(oauthIdx).toBeLessThan(userIdx)
+  })
+})
