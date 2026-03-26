@@ -1,6 +1,11 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.14.1] - 2026-03-26
+
+- fix: downgrade typescript (0278d24)
+- fix: add missing dts definitions for composables chore: update dependencies and improve type declarations (546c99c)
+
 ## [v0.14.0] - 2026-03-25
 
 - feat: add programmatic navigation and route handling (37a583b)
