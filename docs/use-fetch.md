@@ -125,7 +125,7 @@ component('page-new-post', () => {
   })
 
   return html`
-    <button @click="${submit}" ?disabled="${pending.value}">
+    <button @click="${submit}" :disabled="${pending.value}">
       ${pending.value ? 'Saving…' : 'Save'}
     </button>
     ${error.value ? html`<p>Error: ${error.value.message}</p>` : ''}

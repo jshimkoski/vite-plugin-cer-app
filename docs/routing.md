@@ -233,7 +233,7 @@ Example — apply a CSS class during navigation using a plugin:
 // app/plugins/transitions.ts
 export default {
   setup({ router }) {
-    router.beforeEach((to) => {
+    router.subscribe((to) => {
       const name = to.meta?.transition
       if (name) document.documentElement.setAttribute('data-transition', String(name))
       else document.documentElement.removeAttribute('data-transition')

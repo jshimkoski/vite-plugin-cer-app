@@ -236,14 +236,10 @@ component('page-index', () => {
 
 ```sh
 cat > app/middleware/auth.ts << 'EOF'
-export default (to, from, next) => {
+export default defineMiddleware((to, from) => {
   const isLoggedIn = !!localStorage.getItem('token')
-  if (!isLoggedIn) {
-    next('/login')
-  } else {
-    next()
-  }
-}
+  return isLoggedIn ? true : '/login'
+})
 EOF
 ```
 

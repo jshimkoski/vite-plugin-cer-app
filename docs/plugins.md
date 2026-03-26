@@ -110,9 +110,8 @@ Register global navigation guards via `app.router`:
 export default {
   name: 'analytics',
   setup(app) {
-    app.router.beforeEach((to, from, next) => {
+    app.router.subscribe((to) => {
       trackPageView(to.path)
-      next()
     })
   },
 }
