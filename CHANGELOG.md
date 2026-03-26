@@ -1,6 +1,11 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.15.0] - 2026-03-26
+
+- feat: implement useState composable for globally-keyed reactive state management (f8aae38)
+- docs: update inaccuracies (69b807d)
+
 ## [v0.14.1] - 2026-03-26
 
 - fix: downgrade typescript (0278d24)
