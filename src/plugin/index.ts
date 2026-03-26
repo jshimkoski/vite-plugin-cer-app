@@ -386,16 +386,19 @@ export function cerApp(userConfig: CerAppConfig = {}): Plugin[] {
       await writeAutoImportDts(config.root, config.composablesDir, composableExports)
       writeTsconfigPaths(config.root, config.srcDir)
       // Warm the virtual module cache.
-      // virtual:cer-app-config is cached under separate :client/:ssr keys (SSR
-      // build omits _runtimePrivateDefaults from the client variant), so use the
-      // correct key suffix here so load() hits the cache instead of regenerating.
+      // virtual:cer-app-config is cached under separate :client/:ssr keys because
+      // the SSR variant includes _runtimePrivateDefaults (private env var defaults)
+      // that must never appear in the client bundle.  Warm both variants here so
+      // neither the client build nor the SSR build incurs a cache miss on first load.
       for (const resolvedId of Object.values(RESOLVED_IDS)) {
-        const code = await generateVirtualModule(resolvedId, config)
-        if (code !== null) {
-          const cacheKey = resolvedId === RESOLVED_IDS.appConfig
-            ? `${resolvedId}:client`
-            : resolvedId
-          moduleCache.set(cacheKey, code)
+        if (resolvedId === RESOLVED_IDS.appConfig) {
+          const clientCode = await generateVirtualModule(resolvedId, config, false)
+          if (clientCode !== null) moduleCache.set(`${resolvedId}:client`, clientCode)
+          const ssrCode = await generateVirtualModule(resolvedId, config, true)
+          if (ssrCode !== null) moduleCache.set(`${resolvedId}:ssr`, ssrCode)
+        } else {
+          const code = await generateVirtualModule(resolvedId, config)
+          if (code !== null) moduleCache.set(resolvedId, code)
         }
       }
     },

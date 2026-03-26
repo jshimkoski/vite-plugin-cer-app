@@ -106,6 +106,33 @@ describe('Loader props — useProps reads loader return values', () => {
   }
 })
 
+describe('Blog detail — client-side navigation loader', () => {
+  // These tests verify that navigating between pages via router.push correctly
+  // runs the new route's loader and clears stale data from the previous route.
+
+  it('navigating from /blog to /blog/first-post via router.push loads loader data', () => {
+    cy.visit('/blog')
+    cy.get('[data-cy=blog-list]').should('exist')
+    cy.window().then((win) => {
+      return (win as any).__cerRouter?.push('/blog/first-post')
+    })
+    cy.url().should('include', '/blog/first-post')
+    cy.get('[data-cy=post-title]', { timeout: 8000 }).should('contain', 'First Post')
+    cy.get('[data-cy=post-body]', { timeout: 8000 }).should('contain', 'First post body content')
+  })
+
+  it('navigating between blog posts via router.push loads new loader data', () => {
+    cy.visit('/blog/first-post')
+    cy.get('[data-cy=post-title]').should('contain', 'First Post')
+    cy.window().then((win) => {
+      return (win as any).__cerRouter?.push('/blog/second-post')
+    })
+    cy.url().should('include', '/blog/second-post')
+    cy.get('[data-cy=post-title]', { timeout: 8000 }).should('contain', 'Second Post')
+    cy.get('[data-cy=post-body]', { timeout: 8000 }).should('contain', 'Second post body content')
+  })
+})
+
 describe('Item detail — route params via useProps', () => {
   it('shows item ID 1 for /items/1', () => {
     cy.visit('/items/1')
@@ -120,16 +147,12 @@ describe('Item detail — route params via useProps', () => {
   it('shows correct ID for client-side nav to /items/2 from /items/1', () => {
     cy.visit('/items/1')
     cy.get('[data-cy=item-id]').should('contain', '1')
-    // Navigate via browser history pushState via the router
+    // Navigate via the framework router (same pattern as navigate.cy.ts).
+    // __cerRouter is exposed on globalThis by app-template.ts.
     cy.window().then((win) => {
-      // Trigger client-side navigation
-      const router = (win as any).__cer_router__ ?? (win as any).router
-      if (router?.push) {
-        router.push('/items/2')
-      }
+      return (win as any).__cerRouter?.push('/items/2')
     })
-    // Fallback: visit directly
-    cy.visit('/items/2')
+    cy.url().should('include', '/items/2')
     cy.get('[data-cy=item-id]').should('contain', '2')
   })
 })

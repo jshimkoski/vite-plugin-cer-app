@@ -76,7 +76,7 @@ const RUNTIME_GLOBALS = [
 
 const DIRECTIVE_GLOBALS = ['when', 'each', 'match', 'anchorBlock']
 
-const FRAMEWORK_GLOBALS = ['useHead', 'usePageData', 'useInject', 'useRuntimeConfig', 'defineMiddleware', 'defineServerMiddleware', 'useSeoMeta', 'useCookie', 'useSession']
+const FRAMEWORK_GLOBALS = ['useHead', 'usePageData', 'useInject', 'useRuntimeConfig', 'defineMiddleware', 'defineServerMiddleware', 'useSeoMeta', 'useCookie', 'useSession', 'useAuth', 'useFetch', 'useRoute', 'navigateTo']
 
 /**
  * Scans a composables directory and returns a map of export name → file path.
@@ -225,6 +225,8 @@ export async function generateVirtualModuleDts(
   lines.push(`  export const runtimeConfig: { public: RuntimePublicConfig }`)
   lines.push(`  /** Server-only — present only in the SSR bundle. Always \`undefined\` in the client bundle. */`)
   lines.push(`  export const _runtimePrivateDefaults: RuntimePrivateConfig | undefined`)
+  lines.push(`  /** Cookie/session key for the auth session. Derived from the app name. */`)
+  lines.push(`  export const _authSessionKey: string`)
   lines.push(`  export default appConfig`)
   lines.push(`}`)
   lines.push('')

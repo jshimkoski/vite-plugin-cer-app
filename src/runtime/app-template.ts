@@ -110,6 +110,10 @@ router.push = async (path) => {
   isNavigating.value = true
   currentError.value = null
   try {
+    // Clear stale loader data from the previous route before loading the new one.
+    // If the new route has no loader, __CER_DATA__ stays undefined so usePageData()
+    // correctly returns null instead of leaking the previous page's data.
+    delete (globalThis).__CER_DATA__
     await _loadPageForPath(path)
     await _push(path)
   } catch (err) {
@@ -123,6 +127,8 @@ router.replace = async (path) => {
   isNavigating.value = true
   currentError.value = null
   try {
+    // Clear stale loader data from the previous route before loading the new one.
+    delete (globalThis).__CER_DATA__
     await _loadPageForPath(path)
     await _replace(path)
   } catch (err) {

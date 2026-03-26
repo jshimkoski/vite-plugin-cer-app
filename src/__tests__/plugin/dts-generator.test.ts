@@ -198,6 +198,26 @@ describe('generateAutoImportDts', () => {
     expect(dts).toContain("const useSession: typeof import('@jasonshimmy/vite-plugin-cer-app/composables')['useSession']")
   })
 
+  it('declares useAuth as a framework global', async () => {
+    const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain("const useAuth: typeof import('@jasonshimmy/vite-plugin-cer-app/composables')['useAuth']")
+  })
+
+  it('declares useFetch as a framework global', async () => {
+    const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain("const useFetch: typeof import('@jasonshimmy/vite-plugin-cer-app/composables')['useFetch']")
+  })
+
+  it('declares useRoute as a framework global', async () => {
+    const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain("const useRoute: typeof import('@jasonshimmy/vite-plugin-cer-app/composables')['useRoute']")
+  })
+
+  it('declares navigateTo as a framework global', async () => {
+    const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain("const navigateTo: typeof import('@jasonshimmy/vite-plugin-cer-app/composables')['navigateTo']")
+  })
+
   it('declares when directive as a global', async () => {
     const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
     expect(dts).toContain("const when: typeof import('@jasonshimmy/custom-elements-runtime/directives')['when']")
@@ -276,6 +296,11 @@ describe('generateVirtualModuleDts', () => {
   it('declares RuntimePublicConfig in virtual:cer-app-config', async () => {
     const dts = await generateVirtualModuleDts(ROOT, COMPOSABLES_DIR)
     expect(dts).toContain('RuntimePublicConfig')
+  })
+
+  it('declares _authSessionKey in virtual:cer-app-config', async () => {
+    const dts = await generateVirtualModuleDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain('_authSessionKey')
   })
 
   it('declares virtual:cer-server-middleware module', async () => {

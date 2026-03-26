@@ -1,46 +1,261 @@
 ────────────────────────────────────────────────────────────────────────────────────────────────────
                                                                                                     
-  Running:  navigate.cy.ts                                                                (10 of 16)
+  Running:  api.cy.ts                                                                      (1 of 16)
 
+Oops...we found an error preparing this test file:
 
-  navigateTo() — programmatic navigation
-    1) navigates to /about when button is clicked
-    ✓ navigates to /route-info when second button is clicked (58ms)
+  > e2e/cypress/e2e/api.cy.ts
 
-  useRoute() — route information
-    ✓ returns the correct path (46ms)
-    ✓ returns route meta fields (44ms)
+The error was:
 
+Error: Webpack Compilation Error
+[tsl] ERROR
+      TS5101: Option 'downlevelIteration' is deprecated and will stop functioning in TypeScript 7.0. Specify compilerOption '"ignoreDeprecations": "6.0"' to silence this error.
 
-  3 passing (4s)
-  1 failing
+[tsl] ERROR
+      TS5101: Option 'downlevelIteration' is deprecated and will stop functioning in TypeScript 7.0. Specify compilerOption '"ignoreDeprecations": "6.0"' to silence this error.
+    at handle (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/packages/server/node_modules/@cypress/webpack-preprocessor/dist/index.js:296:23)
+    at finalCallback (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:500:32)
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:578:17
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/HookWebpackError.js:67:2
+    at Hook.eval [as callAsync] (eval at create (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/tapable/lib/HookCodeFactory.js:33:10), <anonymous>:6:1)
+    at Hook.CALL_ASYNC_DELEGATE [as _callAsync] (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/tapable/lib/Hook.js:18:14)
+    at Cache.storeBuildDependencies (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Cache.js:126:37)
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:574:19
+    at Hook.eval [as callAsync] (eval at create (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/tapable/lib/HookCodeFactory.js:33:10), <anonymous>:6:1)
+    at Hook.CALL_ASYNC_DELEGATE [as _callAsync] (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/tapable/lib/Hook.js:18:14)
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:570:23
+    at Compiler.emitRecords (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:1046:4)
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:560:11
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:1009:14
+    at Hook.eval [as callAsync] (eval at create (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/tapable/lib/HookCodeFactory.js:33:10), <anonymous>:6:1)
+    at Hook.CALL_ASYNC_DELEGATE [as _callAsync] (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/tapable/lib/Hook.js:18:14)
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:1006:27
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/neo-async/async.js:2818:7
+    at done (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/neo-async/async.js:3522:9)
+    at alreadyWritten (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:811:8)
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:922:17
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/graceful-fs/graceful-fs.js:123:16
 
-  1) navigateTo() — programmatic navigation
-       navigates to /about when button is clicked:
-     AssertionError: Timed out retrying after 4000ms: expected 'http://localhost:4176/navigate-test' to include '/about'
-      at Context.eval (webpack://@jasonshimmy/vite-plugin-cer-app/./e2e/cypress/e2e/navigate.cy.ts:15:13)
+This occurred while Cypress was compiling and bundling your test code. This is usually caused by:
 
+- A missing file or dependency
+- A syntax error in the file or one of its dependencies
 
-
+Fix the error in your code and re-run your tests.
 
   (Results)
 
   ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │ Tests:        4                                                                                │
-  │ Passing:      3                                                                                │
+  │ Tests:        0                                                                                │
+  │ Passing:      0                                                                                │
   │ Failing:      1                                                                                │
   │ Pending:      0                                                                                │
   │ Skipped:      0                                                                                │
-  │ Screenshots:  1                                                                                │
+  │ Screenshots:  0                                                                                │
   │ Video:        false                                                                            │
-  │ Duration:     4 seconds                                                                        │
-  │ Spec Ran:     navigate.cy.ts                                                                   │
+  │ Duration:     0 seconds                                                                        │
+  │ Spec Ran:     api.cy.ts                                                                        │
   └────────────────────────────────────────────────────────────────────────────────────────────────┘
 
 
-  (Screenshots)
+Oops...we found an error preparing this test file:
 
-  -  /Users/jshimkoski/dev/vite-plugin-cer-app/e2e/cypress/screenshots/navigate.cy.ts    (2560x1440)
-     /navigateTo() — programmatic navigation -- navigates to about when button is cli               
-     cked (failed).png                                                                              
+  > e2e/cypress/support/e2e.ts
 
+The error was:
+
+Error: Webpack Compilation Error
+[tsl] ERROR
+      TS5101: Option 'downlevelIteration' is deprecated and will stop functioning in TypeScript 7.0. Specify compilerOption '"ignoreDeprecations": "6.0"' to silence this error.
+
+[tsl] ERROR
+      TS5101: Option 'downlevelIteration' is deprecated and will stop functioning in TypeScript 7.0. Specify compilerOption '"ignoreDeprecations": "6.0"' to silence this error.
+
+[tsl] ERROR
+      TS5101: Option 'downlevelIteration' is deprecated and will stop functioning in TypeScript 7.0. Specify compilerOption '"ignoreDeprecations": "6.0"' to silence this error.
+    at handle (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/packages/server/node_modules/@cypress/webpack-preprocessor/dist/index.js:296:23)
+    at finalCallback (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:500:32)
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:578:17
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/HookWebpackError.js:67:2
+    at Hook.eval [as callAsync] (eval at create (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/tapable/lib/HookCodeFactory.js:33:10), <anonymous>:6:1)
+    at Hook.CALL_ASYNC_DELEGATE [as _callAsync] (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/tapable/lib/Hook.js:18:14)
+    at Cache.storeBuildDependencies (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Cache.js:126:37)
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:574:19
+    at Hook.eval [as callAsync] (eval at create (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/tapable/lib/HookCodeFactory.js:33:10), <anonymous>:6:1)
+    at Hook.CALL_ASYNC_DELEGATE [as _callAsync] (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/tapable/lib/Hook.js:18:14)
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:570:23
+    at Compiler.emitRecords (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:1046:4)
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:560:11
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:1009:14
+    at Hook.eval [as callAsync] (eval at create (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/tapable/lib/HookCodeFactory.js:33:10), <anonymous>:6:1)
+    at Hook.CALL_ASYNC_DELEGATE [as _callAsync] (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/tapable/lib/Hook.js:18:14)
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:1006:27
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/neo-async/async.js:2818:7
+    at done (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/neo-async/async.js:3522:9)
+    at alreadyWritten (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:811:8)
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:922:17
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/graceful-fs/graceful-fs.js:123:16
+
+This occurred while Cypress was compiling and bundling your test code. This is usually caused by:
+
+- A missing file or dependency
+- A syntax error in the file or one of its dependencies
+
+Fix the error in your code and re-run your tests.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                    
+  Running:  cookie.cy.ts                                                                   (2 of 16)
+
+  (Results)
+
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ Tests:        0                                                                                │
+  │ Passing:      0                                                                                │
+  │ Failing:      1                                                                                │
+  │ Pending:      0                                                                                │
+  │ Skipped:      0                                                                                │
+  │ Screenshots:  0                                                                                │
+  │ Video:        false                                                                            │
+  │ Duration:     0 seconds                                                                        │
+  │ Spec Ran:     cookie.cy.ts                                                                     │
+  └────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+Oops...we found an error preparing this test file:
+
+  > e2e/cypress/support/e2e.ts
+
+The error was:
+
+Error: Webpack Compilation Error
+[tsl] ERROR
+      TS5101: Option 'downlevelIteration' is deprecated and will stop functioning in TypeScript 7.0. Specify compilerOption '"ignoreDeprecations": "6.0"' to silence this error.
+
+[tsl] ERROR
+      TS5101: Option 'downlevelIteration' is deprecated and will stop functioning in TypeScript 7.0. Specify compilerOption '"ignoreDeprecations": "6.0"' to silence this error.
+
+[tsl] ERROR
+      TS5101: Option 'downlevelIteration' is deprecated and will stop functioning in TypeScript 7.0. Specify compilerOption '"ignoreDeprecations": "6.0"' to silence this error.
+    at handle (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/packages/server/node_modules/@cypress/webpack-preprocessor/dist/index.js:296:23)
+    at finalCallback (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:500:32)
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:578:17
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/HookWebpackError.js:67:2
+    at Hook.eval [as callAsync] (eval at create (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/tapable/lib/HookCodeFactory.js:33:10), <anonymous>:6:1)
+    at Hook.CALL_ASYNC_DELEGATE [as _callAsync] (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/tapable/lib/Hook.js:18:14)
+    at Cache.storeBuildDependencies (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Cache.js:126:37)
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:574:19
+    at Hook.eval [as callAsync] (eval at create (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/tapable/lib/HookCodeFactory.js:33:10), <anonymous>:6:1)
+    at Hook.CALL_ASYNC_DELEGATE [as _callAsync] (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/tapable/lib/Hook.js:18:14)
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:570:23
+    at Compiler.emitRecords (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:1046:4)
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:560:11
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:1009:14
+    at Hook.eval [as callAsync] (eval at create (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/tapable/lib/HookCodeFactory.js:33:10), <anonymous>:6:1)
+    at Hook.CALL_ASYNC_DELEGATE [as _callAsync] (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/tapable/lib/Hook.js:18:14)
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:1006:27
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/neo-async/async.js:2818:7
+    at done (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/neo-async/async.js:3522:9)
+    at alreadyWritten (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:811:8)
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:922:17
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/graceful-fs/graceful-fs.js:123:16
+
+This occurred while Cypress was compiling and bundling your test code. This is usually caused by:
+
+- A missing file or dependency
+- A syntax error in the file or one of its dependencies
+
+Fix the error in your code and re-run your tests.
+
+Oops...we found an error preparing this test file:
+
+  > e2e/cypress/e2e/cookie.cy.ts
+
+The error was:
+
+Error: Webpack Compilation Error
+[tsl] ERROR
+      TS5101: Option 'downlevelIteration' is deprecated and will stop functioning in TypeScript 7.0. Specify compilerOption '"ignoreDeprecations": "6.0"' to silence this error.
+
+[tsl] ERROR
+      TS5101: Option 'downlevelIteration' is deprecated and will stop functioning in TypeScript 7.0. Specify compilerOption '"ignoreDeprecations": "6.0"' to silence this error.
+    at handle (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/packages/server/node_modules/@cypress/webpack-preprocessor/dist/index.js:296:23)
+    at finalCallback (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:500:32)
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:578:17
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/HookWebpackError.js:67:2
+    at Hook.eval [as callAsync] (eval at create (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/tapable/lib/HookCodeFactory.js:33:10), <anonymous>:6:1)
+    at Hook.CALL_ASYNC_DELEGATE [as _callAsync] (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/tapable/lib/Hook.js:18:14)
+    at Cache.storeBuildDependencies (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Cache.js:126:37)
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:574:19
+    at Hook.eval [as callAsync] (eval at create (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/tapable/lib/HookCodeFactory.js:33:10), <anonymous>:6:1)
+    at Hook.CALL_ASYNC_DELEGATE [as _callAsync] (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/tapable/lib/Hook.js:18:14)
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:570:23
+    at Compiler.emitRecords (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:1046:4)
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:560:11
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:1009:14
+    at Hook.eval [as callAsync] (eval at create (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/tapable/lib/HookCodeFactory.js:33:10), <anonymous>:6:1)
+    at Hook.CALL_ASYNC_DELEGATE [as _callAsync] (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/tapable/lib/Hook.js:18:14)
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:1006:27
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/neo-async/async.js:2818:7
+    at done (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/neo-async/async.js:3522:9)
+    at alreadyWritten (/Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:811:8)
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/webpack/lib/Compiler.js:922:17
+    at /Users/jshimkoski/Library/Caches/Cypress/15.13.0/Cypress.app/Contents/Resources/app/node_modules/graceful-fs/graceful-fs.js:123:16
+
+This occurred while Cypress was compiling and bundling your test code. This is usually caused by:
+
+- A missing file or dependency
+- A syntax error in the file or one of its dependencies
+
+Fix the error in your code and re-run your tests.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                    
+  Running:  data.cy.ts                                                                     (3 of 16)
+
+  (Results)
+
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ Tests:        0                                                                                │
+  │ Passing:      0                                                                                │
+  │ Failing:      1                                                                                │
+  │ Pending:      0                                                                                │
+  │ Skipped:      0                                                                                │
+  │ Screenshots:  0                                                                                │
+  │ Video:        false                                                                            │
+  │ Duration:     0 seconds                                                                        │
+  │ Spec Ran:     data.cy.ts                                                                       │
+  └────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+Target.getTargets will not run as browser CRI connection was reset
+Error: Target.getTargets will not run as browser CRI connection was reset
+    at c.send (<embedded>:2618:536323)
+    at async y._onAttachToTarget (<embedded>:2618:675238)
+    at async EventEmitter.<anonymous> (<embedded>:2618:673931)
+ERR_FAILED (-2) loading 'about:blank'
+Error: ERR_FAILED (-2) loading 'about:blank'
+    at rejectAndCleanup (node:electron/js2c/browser_init:2:79724)
+    at finishListener (node:electron/js2c/browser_init:2:79886)
+    at WebContents.stopLoadingListener (node:electron/js2c/browser_init:2:80273)
+    at WebContents.emit (node:events:531:35)
+[cer-app] Received SIGINT, shutting down gracefully...
+Error: Command failed with exit code 1: npm run e2e:run:ssr
+    at makeError (/Users/jshimkoski/dev/vite-plugin-cer-app/node_modules/start-server-and-test/node_modules/execa/lib/error.js:60:11)
+    at handlePromise (/Users/jshimkoski/dev/vite-plugin-cer-app/node_modules/start-server-and-test/node_modules/execa/index.js:118:26)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5) {
+  shortMessage: 'Command failed with exit code 1: npm run e2e:run:ssr',
+  command: 'npm run e2e:run:ssr',
+  escapedCommand: '"npm run e2e:run:ssr"',
+  exitCode: 1,
+  signal: undefined,
+  signalDescription: undefined,
+  stdout: undefined,
+  stderr: undefined,
+  failed: true,
+  timedOut: false,
+  isCanceled: false,
+  killed: false
+}
+[cer-app] Server closed.
+➜  vite-plugin-cer-app git:(main) ✗ 

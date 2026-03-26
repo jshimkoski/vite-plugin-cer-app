@@ -87,3 +87,67 @@ describe('APP_ENTRY_TEMPLATE — meta.hydrate', () => {
     expect(doHydrateBlock).toContain('delete (globalThis).__CER_DATA__')
   })
 })
+
+// ─── Loader sequence ──────────────────────────────────────────────────────────
+
+describe('APP_ENTRY_TEMPLATE — loader sequence', () => {
+  it('_loadPageForPath calls mod.loader with { params, query }', () => {
+    expect(APP_ENTRY_TEMPLATE).toContain('mod.loader({ params, query })')
+  })
+
+  it('_loadPageForPath sets globalThis.__CER_DATA__ from loader result', () => {
+    expect(APP_ENTRY_TEMPLATE).toContain('(globalThis).__CER_DATA__ = data')
+  })
+
+  it('_loadPageForPath merges loader primitive values into _currentPageAttrs', () => {
+    expect(APP_ENTRY_TEMPLATE).toContain('_currentPageAttrs = loaderAttrs')
+  })
+
+  it('_currentPageAttrs is passed as attrs in the direct-render page vnode', () => {
+    // The direct-render path passes _currentPageAttrs to the page element attrs
+    // so useProps() in the page component can read loader-returned primitives.
+    expect(APP_ENTRY_TEMPLATE).toContain('attrs: _currentPageAttrs')
+  })
+
+  it('router.push deletes __CER_DATA__ before loading the new page', () => {
+    // Prevents stale loader data from leaking to pages without a loader.
+    const pushStart = APP_ENTRY_TEMPLATE.indexOf('router.push = async')
+    const pushEnd = APP_ENTRY_TEMPLATE.indexOf('\n}', pushStart)
+    const pushBlock = APP_ENTRY_TEMPLATE.slice(pushStart, pushEnd)
+    expect(pushBlock).toContain('delete (globalThis).__CER_DATA__')
+    // The delete must appear before _loadPageForPath is called.
+    const deleteIdx = pushBlock.indexOf('delete (globalThis).__CER_DATA__')
+    const loadIdx = pushBlock.indexOf('_loadPageForPath')
+    expect(deleteIdx).toBeLessThan(loadIdx)
+  })
+
+  it('router.replace deletes __CER_DATA__ before loading the new page', () => {
+    const replaceStart = APP_ENTRY_TEMPLATE.indexOf('router.replace = async')
+    const replaceEnd = APP_ENTRY_TEMPLATE.indexOf('\n}', replaceStart)
+    const replaceBlock = APP_ENTRY_TEMPLATE.slice(replaceStart, replaceEnd)
+    expect(replaceBlock).toContain('delete (globalThis).__CER_DATA__')
+    const deleteIdx = replaceBlock.indexOf('delete (globalThis).__CER_DATA__')
+    const loadIdx = replaceBlock.indexOf('_loadPageForPath')
+    expect(deleteIdx).toBeLessThan(loadIdx)
+  })
+
+  it('router.push awaits _loadPageForPath before _push', () => {
+    const pushStart = APP_ENTRY_TEMPLATE.indexOf('router.push = async')
+    const pushEnd = APP_ENTRY_TEMPLATE.indexOf('\n}', pushStart)
+    const pushBlock = APP_ENTRY_TEMPLATE.slice(pushStart, pushEnd)
+    const loadIdx = pushBlock.indexOf('await _loadPageForPath')
+    const pushIdx = pushBlock.indexOf('await _push')
+    expect(loadIdx).toBeGreaterThanOrEqual(0)
+    expect(pushIdx).toBeGreaterThan(loadIdx)
+  })
+
+  it('router.replace awaits _loadPageForPath before _replace', () => {
+    const replaceStart = APP_ENTRY_TEMPLATE.indexOf('router.replace = async')
+    const replaceEnd = APP_ENTRY_TEMPLATE.indexOf('\n}', replaceStart)
+    const replaceBlock = APP_ENTRY_TEMPLATE.slice(replaceStart, replaceEnd)
+    const loadIdx = replaceBlock.indexOf('await _loadPageForPath')
+    const replaceIdx = replaceBlock.indexOf('await _replace')
+    expect(loadIdx).toBeGreaterThanOrEqual(0)
+    expect(replaceIdx).toBeGreaterThan(loadIdx)
+  })
+})
