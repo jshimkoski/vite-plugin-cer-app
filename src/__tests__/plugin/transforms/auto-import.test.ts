@@ -302,6 +302,28 @@ describe('autoImportTransform — framework composable injection', () => {
     expect(result).toContain(`from ${FRAMEWORK_PKG}`)
     expect(result).toContain('useSession')
   })
+
+  it('injects useState import when useState is used', () => {
+    const code = "component('layout-default', () => { const title = useState('pageTitle', 'My App'); return html`<title>${title.value}</title><slot></slot>` })"
+    const result = autoImportTransform(code, '/project/app/layouts/default.ts', opts)!
+    expect(result).toContain(`from ${FRAMEWORK_PKG}`)
+    expect(result).toContain('useState')
+  })
+
+  it('does not inject useState when not used', () => {
+    const code = "component('layout-default', () => html`<slot></slot>`)"
+    const result = autoImportTransform(code, '/project/app/layouts/default.ts', opts)
+    expect(result === null || !result!.includes('useState')).toBe(true)
+  })
+
+  it('injects useState alongside other framework composables in a single import', () => {
+    const code = "component('layout-x', () => { useHead({ title: 'x' }); const title = useState('t', ''); return html`` })"
+    const result = autoImportTransform(code, '/project/app/layouts/x.ts', opts)!
+    expect(result).toContain('useHead')
+    expect(result).toContain('useState')
+    const count = result.split(`from ${FRAMEWORK_PKG}`).length - 1
+    expect(count).toBe(1)
+  })
 })
 
 describe('autoImportTransform — server/middleware/ directory', () => {

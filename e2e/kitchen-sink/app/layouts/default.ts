@@ -1,13 +1,17 @@
 component('layout-default', () => {
+  const pageTitle = useState('pageTitle', 'Kitchen Sink')
+
   return html`
     <div>
       <header data-cy="site-header">
+        <span data-cy="layout-page-title">${pageTitle.value}</span>
         <nav data-cy="site-nav">
           <a data-cy="nav-home" href="/">Home</a>
           <a data-cy="nav-about" href="/about">About</a>
           <a data-cy="nav-counter" href="/counter">Counter</a>
           <a data-cy="nav-blog" href="/blog">Blog</a>
           <a data-cy="nav-protected" href="/protected">Protected</a>
+          <a data-cy="nav-use-state-test" href="/use-state-test">useState Test</a>
         </nav>
       </header>
       <main data-cy="site-main">

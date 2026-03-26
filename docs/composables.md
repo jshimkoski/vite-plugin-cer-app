@@ -547,6 +547,131 @@ import type { RouteInfo } from '@jasonshimmy/vite-plugin-cer-app/composables'
 
 ---
 
+### `useState<T>(key, init?)`
+
+Globally-keyed reactive state shared across layouts, pages, and components. Any two components that call `useState` with the same key get the **same reactive ref** — mutating `.value` in one component automatically re-renders all components that read it.
+
+Works isomorphically:
+- **SSR/SSG** — state is scoped per-request via `AsyncLocalStorage`. Set initial values inside a page `loader` (which runs before rendering) so the layout can read them synchronously during the server render pass. After rendering, all state values are serialized into `window.__CER_STATE_INIT__` and hydrated on the client.
+- **Client** — state lives in a singleton `Map` on `globalThis`. On first use, the Map is pre-populated from `window.__CER_STATE_INIT__` (the SSR snapshot) so there is no flash to default values after hydration. Mutations propagate reactively to all components sharing the key.
+
+**Key contract:** the `init` value (or factory) is only evaluated when the key does not yet exist. Subsequent calls with the same key return the existing ref; `init` is ignored.
+
+> **SSR → client:** State set in a page `loader` is serialized from server to client via `window.__CER_STATE_INIT__`. On first `useState()` call, the client Map is pre-populated from this snapshot — the layout renders with the correct value immediately after hydration, with no flash to default values.
+>
+> State set in a component render function IS included in the snapshot (render functions execute during SSR before state is serialized), but the layout's initial HTML will still show its fallback value — the layout has already rendered its HTML by the time the page component executes. The reactive system updates the layout after client hydration.
+>
+> State set in `useOnConnected` is **not** in the snapshot — `useOnConnected` never fires during SSR since there is no DOM. **Always set page-specific state in the `loader`** — it runs before rendering begins, so both the initial SSR HTML and the hydration snapshot contain the correct value.
+
+#### Page-to-layout communication
+
+The primary use case is passing reactive metadata (title, breadcrumbs, etc.) from a page to its layout:
+
+```ts
+// app/pages/about.ts
+// Set in the loader so it's available during SSR rendering (layout renders before page)
+export const loader = async () => {
+  useState<string>('pageTitle').value = 'About Us'
+  return {}
+}
+
+component('page-about', () => {
+  const title = useState<string>('pageTitle')
+  return html`<h1>${title.value}</h1>`
+})
+```
+
+```ts
+// app/layouts/default.ts
+component('layout-default', () => {
+  // 'My App' is the fallback shown before any page sets a title
+  const pageTitle = useState('pageTitle', 'My App')
+
+  return html`
+    <header><h1>${pageTitle.value}</h1></header>
+    <slot></slot>
+  `
+})
+```
+
+On **SSR/SSG**: the loader runs first → sets the state → layout reads it synchronously → initial HTML already contains the correct title.
+On **client**: the page sets the state → the layout's reactive dependency fires → layout re-renders.
+
+#### Shared counter across components
+
+```ts
+// app/composables/useSharedCount.ts
+export function useSharedCount() {
+  const count = useState('sharedCount', 0)
+  const increment = () => { count.value++ }
+  return { count, increment }
+}
+```
+
+```ts
+// app/components/counter-a.ts
+component('counter-a', () => {
+  const { count, increment } = useSharedCount()
+  return html`<button @click="${increment}">Count: ${count.value}</button>`
+})
+
+// app/components/counter-b.ts — same key, same ref, same value
+component('counter-b', () => {
+  const { count } = useSharedCount()
+  return html`<p>Count seen by B: ${count.value}</p>`
+})
+```
+
+Clicking the button in `counter-a` updates `counter-b` automatically.
+
+#### SSR rendering order
+
+On SSR, layouts render **before** pages (outer-to-inner vnode tree). If state is set inside a page's `component()` render function it will be too late for the layout to read it during SSR. **Always set page-specific state in the `loader`** so it is written before rendering begins.
+
+#### Hard refresh behavior
+
+`useState` is **in-memory only**. A hard browser refresh wipes `globalThis.__CER_STATE__` and starts fresh — exactly like the first page load. Whether values are available immediately after a refresh depends on where they are set:
+
+| Where value is set | Available to layout on SSR? | Available after hard refresh? |
+|---|---|---|
+| Page `loader` | ✅ | ✅ (loader re-runs) |
+| `init` param of `useState` | ✅ (fallback default) | ✅ (init re-evaluated) |
+| Component render function | ❌ (layout renders first) | ✅ (brief flash, then reactive update) |
+| `useOnConnected` | ❌ (never fires during SSR) | ✅ (brief flash, then reactive update) |
+
+**Values are not persisted across hard refreshes.** If a user changes a theme from `'light'` to `'dark'` and then hard-refreshes, they get `'light'` (the init) again.
+
+To persist state across refreshes, seed the init from a persistent store using the **factory form** — it is only evaluated once per session (when the key does not yet exist in the Map):
+
+```ts
+export function useTheme() {
+  const theme = useState<string>('theme', () =>
+    (typeof localStorage !== 'undefined' ? localStorage.getItem('theme') : null) ?? 'light'
+  )
+  watch(() => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('theme', theme.value)
+    }
+  })
+  return { theme }
+}
+```
+
+#### TypeScript
+
+```ts
+const pageTitle = useState<string>('pageTitle', 'My App')
+// pageTitle.value is typed as string
+```
+
+If you need it outside auto-imported directories:
+
+```ts
+import { useState } from '@jasonshimmy/vite-plugin-cer-app/composables'
+```
+
+---
+
 ### `navigateTo(path)`
 
 Programmatic navigation — works isomorphically:

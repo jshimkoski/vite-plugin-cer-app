@@ -218,6 +218,11 @@ describe('generateAutoImportDts', () => {
     expect(dts).toContain("const navigateTo: typeof import('@jasonshimmy/vite-plugin-cer-app/composables')['navigateTo']")
   })
 
+  it('declares useState as a framework global', async () => {
+    const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain("const useState: typeof import('@jasonshimmy/vite-plugin-cer-app/composables')['useState']")
+  })
+
   it('declares when directive as a global', async () => {
     const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
     expect(dts).toContain("const when: typeof import('@jasonshimmy/custom-elements-runtime/directives')['when']")
@@ -226,6 +231,11 @@ describe('generateAutoImportDts', () => {
   it('declares __CER_DATA__ global variable', async () => {
     const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
     expect(dts).toContain('var __CER_DATA__')
+  })
+
+  it('declares __CER_STATE_INIT__ global variable', async () => {
+    const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain('var __CER_STATE_INIT__')
   })
 
   it('wraps declarations in declare global block', async () => {

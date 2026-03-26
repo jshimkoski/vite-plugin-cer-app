@@ -92,6 +92,12 @@ const _cerFetchStore = new AsyncLocalStorage()
 const _cerRouteStore = new AsyncLocalStorage()
 ;(globalThis).__CER_ROUTE_STORE__ = _cerRouteStore
 
+// Async-local storage for per-request useState() reactive state.
+// Each request gets a fresh Map so concurrent SSR/SSG renders never share
+// reactive state set by different pages or loaders.
+const _cerStateStore = new AsyncLocalStorage()
+;(globalThis).__CER_STATE_STORE__ = _cerStateStore
+
 // Runs fn inside the per-request AsyncLocalStorage context so that isomorphic
 // composables (useCookie, useSession, etc.) can access req/res without prop-drilling.
 // Call this for every API handler invocation — not just SSR renders.
@@ -283,6 +289,7 @@ const _prepareRequest = async (req) => {
 }
 
 export const handler = async (req, res) => {
+  await _cerStateStore.run(new Map(), async () => {
   await _cerReqStore.run({ req, res }, async () => {
   await _cerDataStore.run(null, async () => {
   // Fresh per-request fetch map — populated by useFetch() calls inside loaders.
@@ -332,8 +339,21 @@ export const handler = async (req, res) => {
       ? \`<script>window.__CER_AUTH_USER__ = \${JSON.stringify(_authUser)}</script>\`
       : ''
 
-    // Merge loader data script + useHead() tags + fetch/auth hydration scripts.
-    const headContent = [head, headTags, _fetchScript, _authScript].filter(Boolean).join('\\n')
+    // Serialise useState() values for client-side hydration.
+    // The state Map is populated by loader calls (in _prepareRequest) and by component
+    // render functions (during renderToStreamWithJITCSSDSD above). Both run before this
+    // point. Injected as window.__CER_STATE_INIT__ so the client useState() can
+    // pre-populate its singleton Map on first use — no flash to default values.
+    const _stateMap = _cerStateStore.getStore()
+    let _stateScript = ''
+    if (_stateMap && _stateMap.size > 0) {
+      const _stateObj = {}
+      for (const [k, v] of _stateMap) { _stateObj[k] = v.value }
+      _stateScript = \`<script>window.__CER_STATE_INIT__ = \${JSON.stringify(_stateObj)}</script>\`
+    }
+
+    // Merge loader data script + useHead() tags + fetch/auth/state hydration scripts.
+    const headContent = [head, headTags, _fetchScript, _authScript, _stateScript].filter(Boolean).join('\\n')
 
     // Wrap the rendered body in a full HTML document and inject the head additions
     // (loader data script, useHead() tags, JIT styles). No polyfill in body yet.
@@ -366,6 +386,7 @@ export const handler = async (req, res) => {
   })  // _cerFetchStore.run
   })  // _cerDataStore.run
   })  // _cerReqStore.run
+  })  // _cerStateStore.run
 }
 
 // ISR-wrapped handler for production integrations (Express, Hono, Fastify).

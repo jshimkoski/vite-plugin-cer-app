@@ -76,7 +76,7 @@ const RUNTIME_GLOBALS = [
 
 const DIRECTIVE_GLOBALS = ['when', 'each', 'match', 'anchorBlock']
 
-const FRAMEWORK_GLOBALS = ['useHead', 'usePageData', 'useInject', 'useRuntimeConfig', 'defineMiddleware', 'defineServerMiddleware', 'useSeoMeta', 'useCookie', 'useSession', 'useAuth', 'useFetch', 'useRoute', 'navigateTo']
+const FRAMEWORK_GLOBALS = ['useHead', 'usePageData', 'useInject', 'useRuntimeConfig', 'defineMiddleware', 'defineServerMiddleware', 'useSeoMeta', 'useCookie', 'useSession', 'useAuth', 'useFetch', 'useRoute', 'navigateTo', 'useState']
 
 /**
  * Scans a composables directory and returns a map of export name → file path.
@@ -151,6 +151,10 @@ export async function generateAutoImportDts(
   lines.push('  // Consumed once by usePageData() during client hydration.')
   lines.push('  // eslint-disable-next-line @typescript-eslint/no-explicit-any')
   lines.push('  var __CER_DATA__: any')
+  lines.push('  // SSR useState() values injected as window.__CER_STATE_INIT__ by the server.')
+  lines.push('  // Pre-populates the client useState() Map on first use.')
+  lines.push('  // eslint-disable-next-line @typescript-eslint/no-explicit-any')
+  lines.push('  var __CER_STATE_INIT__: any')
   lines.push('}')
   lines.push('')
 

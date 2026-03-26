@@ -19,3 +19,4 @@ export type { UseFetchOptions, UseFetchReturn, UseFetchResult, UseFetchReactiveR
 export { useRoute } from './use-route.js'
 export type { RouteInfo } from './use-route.js'
 export { navigateTo } from './use-navigate.js'
+export { useState } from './use-state.js'
