@@ -324,6 +324,28 @@ describe('autoImportTransform — framework composable injection', () => {
     const count = result.split(`from ${FRAMEWORK_PKG}`).length - 1
     expect(count).toBe(1)
   })
+
+  it('injects useLocale import when useLocale is used', () => {
+    const code = "component('page-about', () => { const { locale } = useLocale(); return html`<p>${locale}</p>` })"
+    const result = autoImportTransform(code, '/project/app/pages/about.ts', opts)!
+    expect(result).toContain(`from ${FRAMEWORK_PKG}`)
+    expect(result).toContain('useLocale')
+  })
+
+  it('does not inject useLocale when not used', () => {
+    const code = "component('page-about', () => html`<h1>About</h1>`)"
+    const result = autoImportTransform(code, '/project/app/pages/about.ts', opts)
+    expect(result === null || !result!.includes('useLocale')).toBe(true)
+  })
+
+  it('injects useLocale alongside other framework composables in a single import', () => {
+    const code = "component('page-x', () => { useHead({ title: 'x' }); const { locale } = useLocale(); return html`` })"
+    const result = autoImportTransform(code, '/project/app/pages/x.ts', opts)!
+    expect(result).toContain('useHead')
+    expect(result).toContain('useLocale')
+    const count = result.split(`from ${FRAMEWORK_PKG}`).length - 1
+    expect(count).toBe(1)
+  })
 })
 
 describe('autoImportTransform — server/middleware/ directory', () => {

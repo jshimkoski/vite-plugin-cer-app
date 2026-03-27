@@ -675,6 +675,75 @@ import { useState } from '@jasonshimmy/vite-plugin-cer-app/composables'
 
 ---
 
+### `useLocale()`
+
+Returns locale information for the current request and helpers to build locale-aware URLs. Works isomorphically — on the server it reads the URL path via `AsyncLocalStorage`; on the client it reads `window.location.pathname`.
+
+**Requires `i18n` configuration in `cer.config.ts`.** If `i18n` is not configured, `locale` and `defaultLocale` both return `'en'` and `locales` returns `['en']`.
+
+```ts
+const {
+  locale,           // 'fr'            — current locale code
+  locales,          // ['en', 'fr']    — all configured locales
+  defaultLocale,    // 'en'            — the default locale
+  switchLocalePath, // function        — build a URL in another locale
+} = useLocale()
+```
+
+#### `switchLocalePath(targetLocale, path?)`
+
+Returns the equivalent path in the target locale. When `path` is omitted the current pathname is used.
+
+```ts
+// On /fr/about
+switchLocalePath('en')              // → '/about'
+switchLocalePath('en', '/fr/about') // → '/about'
+switchLocalePath('de', '/fr/about') // → '/de/about'
+
+// On /about (default locale)
+switchLocalePath('fr')              // → '/fr/about'
+```
+
+#### Locale switcher example
+
+```ts
+// app/components/locale-switcher.ts
+component('locale-switcher', () => {
+  const { locale, locales, switchLocalePath } = useLocale()
+
+  return html`
+    <nav>
+      ${locales.map((l) => html`
+        <a
+          href="${switchLocalePath(l)}"
+          aria-current="${l === locale ? 'true' : 'false'}"
+        >${l.toUpperCase()}</a>
+      `)}
+    </nav>
+  `
+})
+```
+
+#### `LocaleComposable`
+
+| Field | Type | Description |
+|---|---|---|
+| `locale` | `string` | Current locale code detected from the URL |
+| `locales` | `string[]` | All configured locale codes |
+| `defaultLocale` | `string` | The configured default locale |
+| `switchLocalePath` | `(target: string, path?: string) => string` | Returns the path rewritten for `target` locale |
+
+If you need it outside auto-imported directories:
+
+```ts
+import { useLocale } from '@jasonshimmy/vite-plugin-cer-app/composables'
+import type { LocaleComposable } from '@jasonshimmy/vite-plugin-cer-app/types'
+```
+
+See [i18n.md](./i18n.md) for full documentation including strategies, SSR/SSG behavior, and edge cases.
+
+---
+
 ### `navigateTo(path): Promise<void>`
 
 Programmatic navigation — works isomorphically:

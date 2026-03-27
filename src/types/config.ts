@@ -53,6 +53,24 @@ export interface AuthConfig {
   sessionKey?: string
 }
 
+export interface I18nConfig {
+  /**
+   * All supported locale codes. e.g. `['en', 'fr', 'de']`.
+   */
+  locales: string[]
+  /**
+   * The default locale. Used as the fallback when no locale is detected in the URL.
+   */
+  defaultLocale: string
+  /**
+   * URL strategy for locale routing.
+   * - `'prefix'`                — every locale (including default) gets a URL prefix: `/en/about`, `/fr/about`
+   * - `'prefix_except_default'` — default locale has no prefix (`/about`), others do (`/fr/about`). **Default.**
+   * - `'no_prefix'`             — locale is not reflected in the URL (read from cookie or header only)
+   */
+  strategy?: 'prefix' | 'prefix_except_default' | 'no_prefix'
+}
+
 export interface SsgConfig {
   routes?: 'auto' | string[]
   concurrency?: number
@@ -109,6 +127,20 @@ export interface RuntimeConfig {
 export interface CerAppConfig {
   mode?: 'spa' | 'ssr' | 'ssg'
   srcDir?: string // defaults to 'app'
+  /**
+   * Internationalisation (i18n) routing configuration.
+   * When set, the framework generates locale-aware URL routes and enables `useLocale()`.
+   *
+   * @example
+   * ```ts
+   * i18n: {
+   *   locales: ['en', 'fr', 'de'],
+   *   defaultLocale: 'en',
+   *   strategy: 'prefix_except_default',
+   * }
+   * ```
+   */
+  i18n?: I18nConfig
   ssg?: SsgConfig
   router?: Pick<RouterConfig, 'base' | 'scrollToFragment'>
   jitCss?: JitCssConfig
@@ -125,13 +157,23 @@ export interface CerAppConfig {
    * When set, `cer-app build` automatically runs the adapter after the build
    * completes, producing the platform-specific output alongside `dist/`.
    *
+   * Built-in string values:
    * - `'vercel'`     — Vercel Build Output API v3 (`.vercel/output/`)
    * - `'netlify'`    — Netlify Functions v2 + `netlify.toml`
    * - `'cloudflare'` — Cloudflare Pages `_worker.js` + `wrangler.toml`
    *
-   * You can also run the adapter independently with `cer-app adapt --platform <name>`.
+   * Pass a function for a **custom adapter** (Railway, Fly.io, bare Node, Docker, …):
+   * ```ts
+   * adapter: async (root) => {
+   *   // root is the absolute project root directory
+   *   // dist/client/ and dist/server/ are already present after the build
+   *   await myPlatformDeploy(root)
+   * }
+   * ```
+   *
+   * You can also run the built-in adapters independently with `cer-app adapt --platform <name>`.
    */
-  adapter?: 'vercel' | 'netlify' | 'cloudflare'
+  adapter?: 'vercel' | 'netlify' | 'cloudflare' | ((root: string) => Promise<void>)
   /**
    * Authentication configuration.
    * Enables OAuth login flows via `useAuth()` and auto-generates

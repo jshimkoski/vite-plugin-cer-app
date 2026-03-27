@@ -65,8 +65,12 @@ async function loadCerConfig(root: string): Promise<CerAppConfig> {
   }
 }
 
-async function runAdapter(adapter: string | undefined, root: string): Promise<void> {
+async function runAdapter(adapter: CerAppConfig['adapter'], root: string): Promise<void> {
   if (!adapter) return
+  if (typeof adapter === 'function') {
+    await adapter(root)
+    return
+  }
   switch (adapter) {
     case 'vercel':
       await runVercelAdapter(root)

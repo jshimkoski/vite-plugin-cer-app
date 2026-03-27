@@ -12,4 +12,11 @@ export default {
       sessionSecret: 'kitchen-sink-e2e-test-secret-at-least-32-chars!',
     },
   },
+  // i18n: prefix_except_default keeps default-locale (en) URLs unchanged so all
+  // existing e2e tests continue to pass.  Only /fr-prefixed variants are new.
+  i18n: {
+    locales: ['en', 'fr'],
+    defaultLocale: 'en',
+    strategy: 'prefix_except_default',
+  },
 }

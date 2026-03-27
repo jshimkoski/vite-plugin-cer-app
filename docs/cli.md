@@ -202,13 +202,32 @@ cer-app adapt --platform vercel --root ./packages/my-app
 **Auto-run via `cer.config.ts`:**
 
 ```ts
-// cer.config.ts
+// cer.config.ts — built-in adapter
 export default defineConfig({
   mode: 'ssr',
-  adapter: 'cloudflare',  // 'vercel' | 'netlify' | 'cloudflare'
-  // runs automatically after cer-app build
+  adapter: 'vercel',  // 'vercel' | 'netlify' | 'cloudflare'
 })
 ```
+
+```ts
+// cer.config.ts — custom adapter (Railway, Fly.io, bare Node.js, Docker, …)
+export default defineConfig({
+  mode: 'ssr',
+  adapter: async (root) => {
+    const { cp, mkdir } = await import('node:fs/promises')
+    await mkdir(`${root}/deploy`, { recursive: true })
+    await cp(`${root}/dist`, `${root}/deploy/dist`, { recursive: true })
+  },
+})
+```
+
+Pass `--platform custom` to `cer-app adapt` to run a function adapter without re-building:
+
+```sh
+cer-app adapt --platform custom
+```
+
+See [`adapter` in configuration.md](./configuration.md#adapter) for the full options reference.
 
 ---
 

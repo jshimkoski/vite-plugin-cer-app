@@ -112,6 +112,40 @@ All documentation written in the docs directory should be:
 - NEVER run Cypress tests yourself. ONLY the user runs Cypress. Always ask the user to run Cypress and report the results.
 - A change can only be considered complete when it meets all the above criteria and has been thoroughly tested and reviewed. THIS IS NON-NEGOTIABLE.
 
+## Feature completion checklist (apply to every new feature or fix)
+
+Before declaring any change complete, ALL of the following must be satisfied:
+
+### Documentation
+- [ ] All new features are documented in the relevant `docs/*.md` file with options, API reference, and examples.
+- [ ] If a composable was added, it has a full entry in `docs/composables.md`.
+- [ ] If the feature affects auto-imports, `docs/configuration.md` is updated.
+- [ ] If the feature affects routing, `docs/routing.md` is updated.
+- [ ] If the feature affects middleware, `docs/middleware.md` is updated.
+- [ ] Documentation is 100% accurate with the actual implementation.
+
+### Unit tests
+- [ ] Vitest unit tests in `src/__tests__/` cover typical usage, edge cases, and error paths.
+- [ ] Existing test coverage has not been reduced.
+
+### E2e tests
+- [ ] Cypress specs in `e2e/cypress/e2e/` cover the feature across all applicable build modes (SPA, SSR, SSG, dev).
+- [ ] Required kitchen-sink fixtures are added to `e2e/kitchen-sink/`.
+- [ ] Cypress is NOT run by the AI — the user runs `npm run e2e` and reports results.
+
+### Auto-imports
+- [ ] New framework composables are added to `FRAMEWORK_IMPORTS` and `FRAMEWORK_IDENTIFIERS` in `src/plugin/transforms/auto-import.ts`.
+- [ ] Auto-import behavior is tested in `src/__tests__/plugin/transforms/auto-import.test.ts`.
+
+### TypeScript
+- [ ] All new code uses strict TypeScript — no `any`, no implicit `any`.
+- [ ] New public types are exported from `src/types/`.
+- [ ] `npm run build` completes without TypeScript errors.
+
+### Validation
+- [ ] `npm run lint && npm test && npm run build` passes clean before asking the user to run Cypress.
+- [ ] User runs `npm run validate` to confirm the full pipeline passes.
+
 ## Methodology
 
 1. **System 2 Thinking**: Approach the problem with analytical rigor. Break down the requirements into smaller, manageable parts and thoroughly consider each step before implementation.

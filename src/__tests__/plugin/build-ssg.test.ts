@@ -433,3 +433,54 @@ describe('writeRenderedPath', () => {
     expect(String(writePath)).not.toMatch(/\/\//)
   })
 })
+
+// ─── i18n locale path expansion ───────────────────────────────────────────────
+
+describe('buildSSG — i18n locale path expansion', () => {
+  function makeI18nConfig(strategy: 'prefix' | 'prefix_except_default' | 'no_prefix') {
+    return makeConfig({
+      i18n: { locales: ['en', 'fr'], defaultLocale: 'en', strategy },
+      ssg: { routes: ['/about'], concurrency: 1 },
+    } as Partial<ResolvedCerConfig>)
+  }
+
+  it('prefix_except_default: expands /about to /about and /fr/about', async () => {
+    await buildSSG(makeI18nConfig('prefix_except_default'))
+    const manifestCall = vi.mocked(writeFile).mock.calls.find(([p]) =>
+      String(p).includes('ssg-manifest.json'),
+    )
+    const manifest = JSON.parse(String(manifestCall![1]))
+    const total = manifest.paths.length + manifest.errors.length
+    expect(total).toBe(2) // /about + /fr/about
+  })
+
+  it('prefix: expands /about to /en/about and /fr/about', async () => {
+    await buildSSG(makeI18nConfig('prefix'))
+    const manifestCall = vi.mocked(writeFile).mock.calls.find(([p]) =>
+      String(p).includes('ssg-manifest.json'),
+    )
+    const manifest = JSON.parse(String(manifestCall![1]))
+    const total = manifest.paths.length + manifest.errors.length
+    expect(total).toBe(2) // /en/about + /fr/about
+  })
+
+  it('no_prefix: does not expand paths', async () => {
+    await buildSSG(makeI18nConfig('no_prefix'))
+    const manifestCall = vi.mocked(writeFile).mock.calls.find(([p]) =>
+      String(p).includes('ssg-manifest.json'),
+    )
+    const manifest = JSON.parse(String(manifestCall![1]))
+    const total = manifest.paths.length + manifest.errors.length
+    expect(total).toBe(1) // /about only
+  })
+
+  it('no i18n config: behaves as before (no expansion)', async () => {
+    const config = makeConfig({ ssg: { routes: ['/about'], concurrency: 1 } } as Partial<ResolvedCerConfig>)
+    await buildSSG(config)
+    const manifestCall = vi.mocked(writeFile).mock.calls.find(([p]) =>
+      String(p).includes('ssg-manifest.json'),
+    )
+    const manifest = JSON.parse(String(manifestCall![1]))
+    expect(manifest.paths.length + manifest.errors.length).toBe(1)
+  })
+})

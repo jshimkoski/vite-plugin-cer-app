@@ -1,11 +1,36 @@
 /**
- * Tests for the SSR error boundary.
+ * Tests for the error boundary.
  *
- * When a page loader throws, the server renders `page-error` (from app/error.ts)
+ * SSR: when a page loader throws, the server renders `page-error` (from app/error.ts)
  * instead of crashing, and returns the correct HTTP status code.
+ *
+ * Client-side: when navigating to a page whose loader throws, currentError is set
+ * and the error boundary component is displayed.
  */
 
 const mode = Cypress.env('mode') as 'spa' | 'ssr' | 'ssg'
+
+// Client-side loader error boundary — works in all modes via client-side navigation
+describe('Client-side error boundary — loader throws during navigation', () => {
+  it('shows the error boundary after navigating to a page whose loader throws', () => {
+    cy.visit('/')
+    // Navigate via the router so the client-side loader runs (not a hard page load)
+    cy.window().then((win) => {
+      // @ts-expect-error cerRouter is a private global
+      win.__cerRouter?.push('/loader-error-test')
+    })
+    cy.get('[data-cy=error-boundary]', { timeout: 5000 }).should('exist')
+  })
+
+  it('error message contains the loader error text after client-side navigation', () => {
+    cy.visit('/')
+    cy.window().then((win) => {
+      // @ts-expect-error cerRouter is a private global
+      win.__cerRouter?.push('/loader-error-test')
+    })
+    cy.get('[data-cy=error-message]', { timeout: 5000 }).should('contain', 'Loader intentionally failed')
+  })
+})
 
 // SSR loader error boundary — only meaningful when a server render happens
 if (mode === 'ssr') {

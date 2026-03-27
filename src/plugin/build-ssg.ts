@@ -20,6 +20,30 @@ interface SsgManifest {
  *   plus any dynamic routes that provide ssg.paths().
  * For explicit string[] mode: uses those paths directly.
  */
+/**
+ * Expands a set of base paths into locale-prefixed variants when i18n is
+ * configured. Skips expansion for `no_prefix` strategy.
+ */
+function _expandWithLocales(
+  paths: string[],
+  i18n: ResolvedCerConfig['i18n'],
+): string[] {
+  if (!i18n || i18n.strategy === 'no_prefix') return paths
+  const { locales, defaultLocale, strategy } = i18n
+  const expanded: string[] = []
+  for (const p of paths) {
+    for (const locale of locales) {
+      const isDefault = locale === defaultLocale
+      if (isDefault && strategy === 'prefix_except_default') {
+        expanded.push(p)
+      } else {
+        expanded.push(`/${locale}${p === '/' ? '' : p}`)
+      }
+    }
+  }
+  return [...new Set(expanded)]
+}
+
 async function collectSsgPaths(
   config: ResolvedCerConfig,
   viteUserConfig: UserConfig,
@@ -27,7 +51,7 @@ async function collectSsgPaths(
   const ssgConfig = config.ssg
 
   if (Array.isArray(ssgConfig.routes) && ssgConfig.routes.length > 0) {
-    return ssgConfig.routes
+    return _expandWithLocales(ssgConfig.routes, config.i18n)
   }
 
   // Auto-discover paths
@@ -100,6 +124,27 @@ async function collectSsgPaths(
     } finally {
       await viteServer.close()
     }
+  }
+
+  // When i18n is configured, expand every collected path into locale-prefixed
+  // variants so each locale gets its own pre-rendered HTML file.
+  //   strategy 'prefix'                → /en/about, /fr/about
+  //   strategy 'prefix_except_default' → /about, /fr/about
+  //   strategy 'no_prefix'             → no expansion (locale detected from header/cookie only)
+  if (config.i18n && config.i18n.strategy !== 'no_prefix') {
+    const { locales, defaultLocale, strategy } = config.i18n
+    const expanded: string[] = []
+    for (const p of paths) {
+      for (const locale of locales) {
+        const isDefault = locale === defaultLocale
+        if (isDefault && strategy === 'prefix_except_default') {
+          expanded.push(p)
+        } else {
+          expanded.push(`/${locale}${p === '/' ? '' : p}`)
+        }
+      }
+    }
+    return [...new Set(expanded)]
   }
 
   return [...new Set(paths)] // deduplicate

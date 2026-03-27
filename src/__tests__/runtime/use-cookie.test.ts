@@ -57,6 +57,17 @@ describe('useCookie — SSR (via AsyncLocalStorage)', () => {
     const value = Array.isArray(header) ? header[0] : header
     expect(value).toContain('session=s1')
     expect(value).toContain('Path=/')
+    expect(value).toContain('SameSite=Lax')
+  })
+
+  it('defaults SameSite to Lax when no sameSite option is provided', () => {
+    const { req, res } = makeReqRes()
+    store.run({ req, res }, () => {
+      useCookie('tok').set('v')
+    })
+    const header = res.getHeader('Set-Cookie') as string[]
+    const value = Array.isArray(header) ? header[0] : header
+    expect(value).toContain('SameSite=Lax')
   })
 
   it('appends to existing Set-Cookie headers', () => {

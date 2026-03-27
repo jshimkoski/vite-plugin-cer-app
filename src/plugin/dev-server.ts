@@ -21,6 +21,7 @@ export interface ResolvedCerConfig {
   autoImports: { components: boolean; composables: boolean; directives: boolean; runtime: boolean }
   runtimeConfig: { public: Record<string, unknown>; private: Record<string, string> }
   auth: import('../types/config.js').AuthConfig | null
+  i18n: { locales: string[]; defaultLocale: string; strategy: 'prefix' | 'prefix_except_default' | 'no_prefix' } | null
 }
 
 /**

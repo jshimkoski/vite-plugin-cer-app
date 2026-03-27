@@ -106,6 +106,57 @@ app/pages/
 
 Route groups are useful for collocating related pages without affecting their URLs.
 
+### Nested route groups
+
+Multiple route-group segments can be nested. All parenthesised segments are stripped when computing the URL path:
+
+```
+app/pages/
+  (auth)/
+    (admin)/
+      settings.ts   → /settings
+  (marketing)/
+    about.ts        → /about
+```
+
+The component tag name is also derived from the full file path — group segments are stripped from the tag name as well:
+
+| File | Route path | Component tag |
+|---|---|---|
+| `(auth)/login.ts` | `/login` | `page-login` |
+| `(auth)/(admin)/settings.ts` | `/settings` | `page-settings` |
+
+---
+
+## i18n routing
+
+When `i18n` is configured in `cer.config.ts`, the build system automatically generates locale-prefixed route variants for every page. You do not need to duplicate your page files.
+
+```ts
+// cer.config.ts
+export default defineConfig({
+  i18n: {
+    locales: ['en', 'fr', 'de'],
+    defaultLocale: 'en',
+    strategy: 'prefix_except_default',
+  },
+})
+```
+
+With the above config, `app/pages/about.ts` produces:
+
+| Path | Locale |
+|---|---|
+| `/about` | `en` (default) |
+| `/fr/about` | `fr` |
+| `/de/about` | `de` |
+
+Both routes load the same page component — only the detected locale differs.
+
+Use `useLocale()` inside your pages and components to read the current locale and generate locale-aware links. `useLocale()` is auto-imported — no import statement is needed.
+
+See [i18n.md](./i18n.md) for full configuration options, strategies, `switchLocalePath`, SSR/SSG behavior, and a locale switcher example.
+
 ---
 
 ## Page metadata (`meta` export)

@@ -30,7 +30,11 @@ any runtime overhead. It is auto-imported, so you don't need to import it manual
 ```ts
 type GuardResult = boolean | string | Promise<boolean | string>
 
-type MiddlewareFn = (to: RouteState, from: RouteState | null) => GuardResult
+type MiddlewareFn = (
+  to: RouteState,
+  from: RouteState | null,
+  next: () => Promise<void>,
+) => GuardResult | void
 ```
 
 | Return value | Effect |
@@ -39,6 +43,42 @@ type MiddlewareFn = (to: RouteState, from: RouteState | null) => GuardResult
 | `false` | Block navigation (stay on current route) |
 | `string` | Redirect to that path |
 | `void` / no return | Allow navigation (same as `true`) |
+
+---
+
+### `next()` chaining — wrapper middleware
+
+The third parameter `next` lets you build **wrapper middleware** that executes logic both _before_ and _after_ the remaining middleware chain runs. This is useful for logging, timing, and instrumentation.
+
+When you call `next()`, the remaining middleware in the chain runs before `next()` resolves. If you do **not** call `next()`, you take full control of the guard result via your return value.
+
+```ts
+// app/middleware/logger.ts
+export default defineMiddleware(async (to, from, next) => {
+  console.log('[nav] start:', to.path)
+  const start = Date.now()
+
+  await next()  // run the rest of the middleware chain
+
+  console.log('[nav] done:', to.path, `(${Date.now() - start}ms)`)
+  // No return value — navigation proceeds based on the downstream result
+})
+```
+
+```ts
+// app/pages/admin.ts
+export const meta = {
+  middleware: ['logger', 'auth'],
+  // Execution: logger (before) → auth (guard) → logger (after)
+}
+```
+
+**Key rules:**
+
+- If you call `next()` and return no value, the chain result from downstream middleware wins.
+- If you call `next()` but also return `false` or a redirect string, your return value takes precedence.
+- If you do **not** call `next()`, the remaining middleware in the chain is skipped. Your return value controls navigation as normal.
+- If a middleware throws, navigation is blocked (`false`) and the chain stops.
 
 ---
 

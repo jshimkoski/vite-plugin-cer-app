@@ -65,4 +65,21 @@ if (mode === 'ssr') {
       })
     })
   })
+
+  describe('useCookie() — SameSite=Lax default (security)', () => {
+    it('Set-Cookie header includes SameSite=Lax by default when no sameSite option is passed', () => {
+      // The session cookie written by useSession() (which delegates to useCookie())
+      // must default to SameSite=Lax to prevent CSRF on older browsers.
+      cy.request({ url: '/session-test', failOnStatusCode: false }).then((response) => {
+        // The session endpoint sets a session cookie — verify the header
+        const setCookie = response.headers['set-cookie']
+        if (setCookie) {
+          const cookieStr = Array.isArray(setCookie) ? setCookie.join('; ') : String(setCookie)
+          // SameSite=Lax must be present; SameSite=None would be a security regression
+          expect(cookieStr).to.match(/SameSite=Lax/i)
+          expect(cookieStr).not.to.match(/SameSite=None/i)
+        }
+      })
+    })
+  })
 }

@@ -36,8 +36,29 @@ describe('defineMiddleware', () => {
     })
     const to = { path: '/dashboard', params: {}, query: {} }
     const from = { path: '/login', params: {}, query: {} }
-    await mw(to as never, from as never)
+    await mw(to as never, from as never, async () => {})
     expect(capturedTo).toBe(to)
     expect(capturedFrom).toBe(from)
+  })
+
+  it('the returned function receives a next() callback as the third argument', async () => {
+    let nextCalled = false
+    const mw = defineMiddleware(async (_to, _from, next) => {
+      await next()
+      nextCalled = true
+    })
+    await mw({} as never, null, async () => { nextCalled = false /* reset before wrapper code runs */ })
+    expect(nextCalled).toBe(true)
+  })
+
+  it('wrapper middleware can run code before and after next()', async () => {
+    const order: string[] = []
+    const mw = defineMiddleware(async (_to, _from, next) => {
+      order.push('before')
+      await next()
+      order.push('after')
+    })
+    await mw({} as never, null, async () => { order.push('next') })
+    expect(order).toEqual(['before', 'next', 'after'])
   })
 })

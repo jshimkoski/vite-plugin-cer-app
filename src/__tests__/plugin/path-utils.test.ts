@@ -51,6 +51,14 @@ describe('fileToRoutePath', () => {
     expect(fileToRoutePath(`${PAGES}/(group)/sub/page.ts`, PAGES)).toBe('/sub/page')
   })
 
+  it('strips multiple nested route groups: (auth)/(admin)/settings.ts → /settings', () => {
+    expect(fileToRoutePath(`${PAGES}/(auth)/(admin)/settings.ts`, PAGES)).toBe('/settings')
+  })
+
+  it('strips multiple nested route groups with path: (auth)/(admin)/users/[id].ts → /users/:id', () => {
+    expect(fileToRoutePath(`${PAGES}/(auth)/(admin)/users/[id].ts`, PAGES)).toBe('/users/:id')
+  })
+
   it('maps [id]/edit.ts → /:id/edit', () => {
     expect(fileToRoutePath(`${PAGES}/[id]/edit.ts`, PAGES)).toBe('/:id/edit')
   })
@@ -99,6 +107,10 @@ describe('fileToTagName', () => {
 
   it('strips route group from tag name', () => {
     expect(fileToTagName(`${PAGES}/(auth)/login.ts`, PAGES)).toBe('page-login')
+  })
+
+  it('strips multiple nested route groups from tag name: (auth)/(admin)/settings.ts → page-settings', () => {
+    expect(fileToTagName(`${PAGES}/(auth)/(admin)/settings.ts`, PAGES)).toBe('page-settings')
   })
 
   it('converts to lowercase', () => {

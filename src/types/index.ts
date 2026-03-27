@@ -1,6 +1,7 @@
-export type { CerAppConfig, SsgConfig, JitCssConfig, AutoImportsConfig, RuntimeConfig, RuntimePublicConfig, RuntimePrivateConfig } from './config.js'
+export type { CerAppConfig, SsgConfig, JitCssConfig, AutoImportsConfig, RuntimeConfig, RuntimePublicConfig, RuntimePrivateConfig, I18nConfig } from './config.js'
 export { defineConfig } from './config.js'
 export type { HydrateStrategy, SsgPathsContext, PageSsgConfig, PageMeta, PageLoaderContext, PageLoader } from './page.js'
 export type { ApiRequest, ApiResponse, ApiHandler, ApiContext } from './api.js'
 export type { AppContext, AppPlugin } from './plugin.js'
 export type { MiddlewareFn, GuardResult, ServerMiddleware } from './middleware.js'
+export type { LocaleComposable } from '../runtime/composables/use-locale.js'

@@ -82,7 +82,12 @@ async function _loadPageForPath(path) {
           )
           loaderAttrs = { ...loaderAttrs, ...primitives }
         }
-      } catch { /* loader errors are non-fatal client-side */ }
+      } catch (err) {
+        // Loader errors are surfaced through currentError so the error boundary
+        // (app/error.ts) can display a meaningful message — consistent with how
+        // the server-side handler behaves when a loader throws.
+        currentError.value = err instanceof Error ? err.message : String(err)
+      }
     }
     _currentPageAttrs = loaderAttrs
   } catch {

@@ -136,8 +136,29 @@ describe('generateRoutesCode', () => {
       `component('page-dashboard', () => html\`<div/>\`)\nexport const meta = { middleware: ['auth'] }` as never,
     )
     const code = await generateRoutesCode(PAGES)
-    expect(code).toContain('await handler(to, from)')
+    expect(code).toContain('await handler(to, from, next)')
     expect(code).not.toContain('new Promise')
+  })
+
+  it('passes a next() function as third arg to each middleware handler', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/dashboard.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `component('page-dashboard', () => html\`<div/>\`)\nexport const meta = { middleware: ['auth'] }` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('const next = async () =>')
+    expect(code).toContain('_calledNext = true')
+  })
+
+  it('runs downstream middleware when next() is called', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/dashboard.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `component('page-dashboard', () => html\`<div/>\`)\nexport const meta = { middleware: ['logger', 'auth'] }` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('_runNext')
+    expect(code).toContain('"logger"')
+    expect(code).toContain('"auth"')
   })
 
   it('wraps handler call in try-catch (blocks navigation on error)', async () => {
@@ -148,7 +169,8 @@ describe('generateRoutesCode', () => {
     const code = await generateRoutesCode(PAGES)
     expect(code).toContain('try {')
     expect(code).toContain('} catch (err) {')
-    expect(code).toContain('return false')
+    // New chain pattern: sets _guardResult = false and returns from the inner _runNext
+    expect(code).toContain('_guardResult = false')
   })
 
   it('logs the middleware name in the error message', async () => {
@@ -603,5 +625,66 @@ describe('generateRoutesCode — layoutChain (nested layouts)', () => {
     vi.mocked(readFile).mockResolvedValue('' as never)
     const code = await generateRoutesCode(PAGES)
     expect(code).not.toContain('layoutChain')
+  })
+})
+
+// ─── i18n route prefixing ─────────────────────────────────────────────────────
+
+describe('generateRoutesCode — i18n route prefixing', () => {
+  const i18nPrefix = { locales: ['en', 'fr'], defaultLocale: 'en', strategy: 'prefix' as const }
+  const i18nPrefixExcept = { locales: ['en', 'fr'], defaultLocale: 'en', strategy: 'prefix_except_default' as const }
+  const i18nNoPrefix = { locales: ['en', 'fr'], defaultLocale: 'en', strategy: 'no_prefix' as const }
+
+  beforeEach(() => {
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(scanDirectory).mockResolvedValue([])
+    vi.mocked(readFile).mockResolvedValue('' as never)
+  })
+
+  it('prefix strategy: generates /en/about and /fr/about for about.ts', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/about.ts`])
+    const code = await generateRoutesCode(PAGES, i18nPrefix)
+    expect(code).toContain('"/en/about"')
+    expect(code).toContain('"/fr/about"')
+    expect(code).not.toContain('path: "/about"')
+  })
+
+  it('prefix_except_default strategy: generates /about and /fr/about for about.ts', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/about.ts`])
+    const code = await generateRoutesCode(PAGES, i18nPrefixExcept)
+    expect(code).toContain('"/about"')
+    expect(code).toContain('"/fr/about"')
+    expect(code).not.toContain('"/en/about"')
+  })
+
+  it('no_prefix strategy: does not add locale prefixes', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/about.ts`])
+    const code = await generateRoutesCode(PAGES, i18nNoPrefix)
+    expect(code).toContain('"/about"')
+    expect(code).not.toContain('"/en/about"')
+    expect(code).not.toContain('"/fr/about"')
+  })
+
+  it('catch-all routes are never prefixed', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/404.ts`])
+    const code = await generateRoutesCode(PAGES, i18nPrefix)
+    expect(code).toContain('"/:all*"')
+    expect(code).not.toContain('"/en/:all*"')
+    expect(code).not.toContain('"/fr/:all*"')
+  })
+
+  it('emits meta.locale for each generated locale route', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/about.ts`])
+    const code = await generateRoutesCode(PAGES, i18nPrefix)
+    expect(code).toContain('locale: "en"')
+    expect(code).toContain('locale: "fr"')
+  })
+
+  it('without i18n config, generates a single route as before', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/about.ts`])
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('"/about"')
+    expect(code).not.toContain('"/en/about"')
+    expect(code).not.toContain('locale:')
   })
 })

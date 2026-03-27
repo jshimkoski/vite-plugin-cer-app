@@ -48,7 +48,12 @@ function serializeCookie(name: string, value: string, options: CookieOptions = {
   if (options.expires) str += `; Expires=${options.expires.toUTCString()}`
   if (options.httpOnly) str += '; HttpOnly'
   if (options.secure) str += '; Secure'
-  if (options.sameSite) str += `; SameSite=${options.sameSite}`
+  // Default SameSite to 'Lax' to prevent CSRF exposure on browsers that do not
+  // enforce a default (older Safari, Firefox < 79). 'Lax' allows top-level
+  // navigations while blocking third-party POSTs — the right default for most apps.
+  // Callers can override with sameSite: 'None' (requires Secure) or 'Strict'.
+  const sameSite = options.sameSite ?? 'Lax'
+  str += `; SameSite=${sameSite}`
   return str
 }
 

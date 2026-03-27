@@ -150,4 +150,15 @@ describe('APP_ENTRY_TEMPLATE — loader sequence', () => {
     expect(loadIdx).toBeGreaterThanOrEqual(0)
     expect(replaceIdx).toBeGreaterThan(loadIdx)
   })
+
+  it('surfaces loader errors to currentError so the error boundary is shown', () => {
+    // The catch block must set currentError.value instead of silently swallowing errors.
+    // This is consistent with how the server-side handler renders the error component.
+    const loadPageStart = APP_ENTRY_TEMPLATE.indexOf('async function _loadPageForPath')
+    const loadPageEnd = APP_ENTRY_TEMPLATE.indexOf('\n}', loadPageStart)
+    const loadPageBlock = APP_ENTRY_TEMPLATE.slice(loadPageStart, loadPageEnd)
+    expect(loadPageBlock).toContain('currentError.value =')
+    // Must not silently swallow — the old pattern was `catch { /* ... */ }`
+    expect(loadPageBlock).not.toContain('/* loader errors are non-fatal')
+  })
 })

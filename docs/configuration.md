@@ -213,6 +213,7 @@ import {
   useSeoMeta,
   useCookie,
   useSession,
+  useLocale,
   defineMiddleware,
   defineServerMiddleware,
   navigateTo,
@@ -220,6 +221,107 @@ import {
 ```
 
 Set any flag to `false` to opt out and manage imports manually.
+
+---
+
+## `adapter`
+
+**Type:** `'vercel' | 'netlify' | 'cloudflare' | ((root: string) => Promise<void>)`
+**Default:** `undefined`
+
+When set, `cer-app build` automatically runs the adapter after the build completes, producing the platform-specific deployment output alongside `dist/`.
+
+### Built-in adapters
+
+```ts
+export default defineConfig({
+  mode: 'ssr',
+  adapter: 'vercel',    // or 'netlify' | 'cloudflare'
+})
+```
+
+| Value | Output | Deploy command |
+|---|---|---|
+| `'vercel'` | `.vercel/output/` (Build Output API v3) | `vercel deploy --prebuilt` |
+| `'netlify'` | `netlify/functions/ssr.mjs` + `netlify.toml` | `netlify deploy` |
+| `'cloudflare'` | `dist/_worker.js` + `wrangler.toml` | `wrangler pages deploy dist` |
+
+### Custom adapter
+
+Pass an async function to target any platform (Railway, Fly.io, bare Node.js, Docker, etc.). `root` is the absolute path to the project root. Both `dist/client/` and `dist/server/` are already present by the time your function is called.
+
+```ts
+export default defineConfig({
+  mode: 'ssr',
+  adapter: async (root) => {
+    // Example: copy the server bundle to a custom output location
+    const { cp, mkdir } = await import('node:fs/promises')
+    await mkdir(`${root}/deploy`, { recursive: true })
+    await cp(`${root}/dist`, `${root}/deploy/dist`, { recursive: true })
+    console.log('[my-adapter] done')
+  },
+})
+```
+
+### Running adapters manually
+
+Adapters can also be run independently (without re-building) using `cer-app adapt`:
+
+```sh
+cer-app adapt --platform vercel
+cer-app adapt --platform netlify
+cer-app adapt --platform cloudflare
+cer-app adapt --platform custom   # runs the function adapter from cer.config.ts
+```
+
+See [cli.md](./cli.md#cer-app-adapt) for full details.
+
+---
+
+## `i18n` options
+
+Enables locale-aware URL routing and the `useLocale()` composable. No external package is required.
+
+```ts
+export default defineConfig({
+  i18n: {
+    locales: ['en', 'fr', 'de'],
+    defaultLocale: 'en',
+    strategy: 'prefix_except_default',
+  },
+})
+```
+
+### `i18n.locales`
+
+**Type:** `string[]`
+**Required**
+
+All supported locale codes. These must be BCP 47 language tags or short codes (e.g. `'en'`, `'fr'`, `'zh-Hant'`).
+
+### `i18n.defaultLocale`
+
+**Type:** `string`
+**Required**
+
+The fallback locale. Used when no locale can be detected from the URL.
+
+### `i18n.strategy`
+
+**Type:** `'prefix' | 'prefix_except_default' | 'no_prefix'`
+**Default:** `'prefix_except_default'`
+
+Controls how locales appear in URLs:
+
+| Strategy | Default locale URL | Other locale URL |
+|---|---|---|
+| `'prefix'` | `/en/about` | `/fr/about` |
+| `'prefix_except_default'` | `/about` | `/fr/about` |
+| `'no_prefix'` | `/about` | `/about` (locale from cookie/header only) |
+
+> **Recommendation:** Use `'prefix_except_default'` for most projects. It keeps your existing default-locale URLs intact while adding locale prefixes for other languages.
+
+See [i18n.md](./i18n.md) for full documentation of routing, `useLocale()`, SSR/SSG behavior, and the locale switcher pattern.
 
 ---
 
@@ -351,5 +453,6 @@ import type {
   AutoImportsConfig,
   RuntimeConfig,
   RuntimePublicConfig,
+  I18nConfig,
 } from '@jasonshimmy/vite-plugin-cer-app/types'
 ```
