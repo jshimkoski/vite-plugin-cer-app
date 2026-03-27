@@ -1,6 +1,12 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.16.0] - 2026-03-27
+
+- feat: add internationalization (i18n) support with locale-aware routing (a38407c)
+- docs: add defineOAuthProvider helper and tests for OAuth configuration test: enhance useRoute and useCookie tests for better error handling test: implement tests for defineServerMiddleware functionality test: add tests for OAuth routes in generateServerApiCode test: improve useFetch tests with refresh functionality test: update useHead tests for new script handling (797ef05)
+- docs: update authentication, components, composables, configuration, data loading, head management, middleware, plugins, routing, testing, use-fetch, and use-state documentation for clarity and accuracy (322d181)
+
 ## [v0.15.0] - 2026-03-26
 
 - feat: implement useState composable for globally-keyed reactive state management (f8aae38)
