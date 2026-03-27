@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.17.0] - 2026-03-27
+
+- feat: add component code-splitting and tests (db7c4c7)
+
 ## [v0.16.0] - 2026-03-27
 
 - feat: add internationalization (i18n) support with locale-aware routing (a38407c)
