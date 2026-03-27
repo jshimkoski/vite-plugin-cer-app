@@ -1,9 +1,9 @@
-import { resolve, join } from 'pathe'
+import { resolve, join, dirname } from 'pathe'
 import { existsSync, readFileSync } from 'node:fs'
 import type { Plugin, ViteDevServer } from 'vite'
 import type { CerAppConfig } from '../types/config.js'
 import type { ResolvedCerConfig } from './dev-server.js'
-import { cerPlugin } from '@jasonshimmy/custom-elements-runtime/vite-plugin'
+import { cerPlugin, cerComponentImports } from '@jasonshimmy/custom-elements-runtime/vite-plugin'
 import { autoImportTransform } from './transforms/auto-import.js'
 import { scanComposableExports, writeAutoImportDts, writeTsconfigPaths } from './dts-generator.js'
 import { configureCerDevServer } from './dev-server.js'
@@ -11,7 +11,6 @@ import { writeGeneratedDir, getGeneratedDir } from './generated-dir.js'
 import { APP_ENTRY_TEMPLATE } from '../runtime/app-template.js'
 import { generateRoutesCode } from './virtual/routes.js'
 import { generateLayoutsCode } from './virtual/layouts.js'
-import { generateComponentsCode } from './virtual/components.js'
 import { generateComposablesCode } from './virtual/composables.js'
 import { generatePluginsCode } from './virtual/plugins.js'
 import { generateMiddlewareCode } from './virtual/middleware.js'
@@ -25,7 +24,6 @@ import { createWatcher } from './scanner.js'
 const VIRTUAL_IDS = {
   routes: 'virtual:cer-routes',
   layouts: 'virtual:cer-layouts',
-  components: 'virtual:cer-components',
   composables: 'virtual:cer-composables',
   plugins: 'virtual:cer-plugins',
   middleware: 'virtual:cer-middleware',
@@ -121,8 +119,6 @@ async function generateVirtualModule(
       return generateRoutesCode(config.pagesDir, config.i18n)
     case RESOLVED_IDS.layouts:
       return generateLayoutsCode(config.layoutsDir)
-    case RESOLVED_IDS.components:
-      return generateComponentsCode(config.componentsDir)
     case RESOLVED_IDS.composables:
       return generateComposablesCode(config.composablesDir)
     case RESOLVED_IDS.plugins:
@@ -211,9 +207,6 @@ function getDirtyVirtualIds(filePath: string, config: ResolvedCerConfig): string
   }
   if (filePath.startsWith(config.layoutsDir)) {
     dirty.push(RESOLVED_IDS.layouts)
-  }
-  if (filePath.startsWith(config.componentsDir)) {
-    dirty.push(RESOLVED_IDS.components)
   }
   if (filePath.startsWith(config.composablesDir)) {
     dirty.push(RESOLVED_IDS.composables)
@@ -449,5 +442,71 @@ export function cerApp(userConfig: CerAppConfig = {}): Plugin[] {
     },
   })
 
-  return [cerAppPlugin, ...jitPlugins]
+  // cerComponentImports must be initialized lazily — it needs the root-resolved
+  // config.componentsDir and config.srcDir, which are only available after Vite
+  // calls configResolved (where `config` is finalized with the correct root).
+  // Initializing with resolvedForJit (which uses process.cwd() as root) would
+  // point to wrong paths when the CLI builds with --root pointing elsewhere.
+  let _componentImports: Plugin | null = null
+
+  const componentImportsProxy: Plugin = {
+    name: 'cer-component-imports',
+    enforce: 'pre' as const,
+    resolveId(id: string, importer: string | undefined) {
+      // The library root package.json has "sideEffects": ["**/*.css"], which causes
+      // Rollup to tree-shake side-effect-only imports of .ts files (e.g. component
+      // registrations) when those files reside inside the same package boundary.
+      // Override this for all app .ts files so their component() calls are retained.
+      //
+      // Two import forms need coverage:
+      //   1. Relative imports from page/component files: e.g. './ks-badge.ts'
+      //   2. Absolute imports from virtual modules: e.g. virtual:cer-layouts generates
+      //      `import "/abs/path/app/layouts/default.ts"` as a side-effect import.
+      if (!importer || !config) return null
+      const appRoot = config.srcDir.replace(/\\/g, '/').replace(/\/?$/, '/')
+      let resolved: string
+      if (id.startsWith('/')) {
+        // Absolute path (used by virtual module generators like virtual:cer-layouts)
+        resolved = id.replace(/\\/g, '/')
+      } else if (id.startsWith('.')) {
+        // Relative path from the importing file
+        const importerDir = dirname(importer.split('?')[0])
+        resolved = resolve(importerDir, id).replace(/\\/g, '/')
+      } else {
+        return null
+      }
+      if (resolved.startsWith(appRoot) && resolved.endsWith('.ts')) {
+        return { id: resolved, moduleSideEffects: true }
+      }
+      return null
+    },
+    buildStart(opts) {
+      // Initialize here so config is guaranteed to be fully resolved.
+      // All configResolved hooks (including cerAppPlugin's) fire before any buildStart.
+      _componentImports = cerComponentImports({
+        componentsDir: config.componentsDir,
+        appRoot: config.srcDir,
+      }) as Plugin
+      return (_componentImports?.buildStart as ((this: unknown, o: unknown) => void) | undefined)
+        ?.call(this, opts)
+    },
+    watchChange(id: string, change: { event: 'create' | 'update' | 'delete' }) {
+      return (_componentImports?.watchChange as ((this: unknown, id: string, change: unknown) => void) | undefined)
+        ?.call(this, id, change)
+    },
+    transform(code: string, id: string) {
+      return (_componentImports?.transform as ((this: unknown, code: string, id: string) => unknown) | undefined)
+        ?.call(this, code, id) ?? null
+    },
+    handleHotUpdate(ctx: unknown) {
+      ;(_componentImports?.handleHotUpdate as ((this: unknown, ctx: unknown) => void) | undefined)
+        ?.call(this, ctx)
+    },
+  }
+
+  return [
+    cerAppPlugin,
+    ...jitPlugins,
+    ...(userConfig.autoImports?.components !== false ? [componentImportsProxy] : []),
+  ]
 }

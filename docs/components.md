@@ -32,7 +32,7 @@ component('page-index', () => {
 })
 ```
 
-No import is needed. The framework's auto-import system handles registration before any page code runs.
+No import is needed. The framework scans each file's `html\`` templates and injects static `import` statements automatically.
 
 ---
 
@@ -46,21 +46,36 @@ The tag name is derived from the file path relative to `app/components/`, with p
 | `app/components/ui/card.ts` | `ui-card` (or any name — tag name is from the `component()` call, not the path) |
 | `app/components/forms/text-input.ts` | `forms-text-input` |
 
-> **Note:** The framework scans `app/components/` for files and registers them via side-effect imports. The actual custom element tag name comes from the `component('tag-name', …)` call inside the file — the file path does not enforce a specific tag name.
+> **Note:** The tag name comes from the `component('tag-name', …)` call inside the file — the file path does not enforce a specific tag name.
+
+---
+
+## Code splitting
+
+Components are automatically code-split per page. Only the components a given page actually uses are loaded when that page is visited.
+
+The framework's build plugin (`cerComponentImports`) scans each page, layout, and component file for custom element tags in `html\`` template literals. For every tag it finds, it injects a static `import` at the top of that file pointing to the component's source file. Rollup then uses these graph edges to split components into the chunk for the page that uses them.
+
+**Example:** A project with 500 components where `/home` uses `<ks-badge>` and `/about` uses nothing will produce:
+
+- `home` chunk: includes `ks-badge.ts` + transitive deps
+- `about` chunk: does not include any component files
+
+Transitive dependencies are handled automatically: if `ks-card` uses `<ks-badge>` in its own template, the transform injects a `ks-badge` import into `ks-card.ts`, and Rollup traces the full dependency graph.
+
+**Components used in layouts** load eagerly by design. Since layouts are imported for every route, their component imports are always included in the initial bundle.
 
 ---
 
 ## Auto-import behavior
 
-When `autoImports.components` is `true` (the default), the framework generates a `virtual:cer-components` module that side-effect-imports every file in `app/components/`. This module is imported in `.cer/app.ts` (the auto-generated framework entry) before the router initializes, ensuring all elements are defined before the first render.
+When `autoImports.components` is `true` (the default), the framework's Vite transform hook:
 
-Generated module example:
+1. Builds a manifest mapping tag names → source files by scanning `app/components/`
+2. Transforms each page, layout, and component file: reads its `html\`` templates, extracts custom element tag names, and prepends static `import` statements for the matching source files
+3. Rollup uses these imports as graph edges for automatic chunk splitting
 
-```ts
-// virtual:cer-components (auto-generated)
-import "/project/app/components/ui/my-button.ts"
-import "/project/app/components/forms/text-input.ts"
-```
+No generated virtual module is involved. Component registration is purely driven by the module graph.
 
 ---
 
@@ -166,6 +181,8 @@ component('app-card', () => {
 
 ## HMR
 
-When a file is added to or removed from `app/components/`, the `virtual:cer-components` module is invalidated and the browser performs a full reload to re-register the updated element list.
+Changes to a component file's render logic trigger standard Vite HMR — no full reload required, because the static import edge is already in Vite's module graph.
 
-Changes to the contents of an existing component file trigger standard Vite HMR (hot module replacement) without a full reload.
+If a component file's registered tag name changes (e.g. the `component('old-name', …)` call is edited to `component('new-name', …)`), the framework detects the manifest change and sends a full-reload so all pages pick up the updated import graph.
+
+When a new component file is added to `app/components/`, the manifest is updated synchronously via `watchChange`, and a full reload is triggered so the new tag becomes available.

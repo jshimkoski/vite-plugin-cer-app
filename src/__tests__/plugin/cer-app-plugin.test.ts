@@ -2,6 +2,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest'
 
 vi.mock('@jasonshimmy/custom-elements-runtime/vite-plugin', () => ({
   cerPlugin: vi.fn().mockReturnValue([{ name: 'cer-runtime-plugin' }]),
+  cerComponentImports: vi.fn().mockReturnValue({ name: 'cer-component-imports' }),
 }))
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs')>()
@@ -26,7 +27,6 @@ vi.mock('../../plugin/generated-dir.js', () => ({
 }))
 vi.mock('../../plugin/virtual/routes.js', () => ({ generateRoutesCode: vi.fn().mockResolvedValue('// routes') }))
 vi.mock('../../plugin/virtual/layouts.js', () => ({ generateLayoutsCode: vi.fn().mockResolvedValue('// layouts') }))
-vi.mock('../../plugin/virtual/components.js', () => ({ generateComponentsCode: vi.fn().mockResolvedValue('// components') }))
 vi.mock('../../plugin/virtual/composables.js', () => ({ generateComposablesCode: vi.fn().mockResolvedValue('// composables') }))
 vi.mock('../../plugin/virtual/plugins.js', () => ({ generatePluginsCode: vi.fn().mockResolvedValue('// plugins') }))
 vi.mock('../../plugin/virtual/middleware.js', () => ({ generateMiddlewareCode: vi.fn().mockResolvedValue('// middleware') }))
@@ -71,6 +71,24 @@ describe('cerApp()', () => {
     const plugin = getCerPlugin()
     expect(plugin.name).toBe('@jasonshimmy/vite-plugin-cer-app')
   })
+
+  it('includes cerComponentImports plugin when autoImports.components is unset', () => {
+    const plugins = cerApp()
+    const names = plugins.map((p) => (p as { name: string }).name)
+    expect(names).toContain('cer-component-imports')
+  })
+
+  it('includes cerComponentImports plugin when autoImports.components is true', () => {
+    const plugins = cerApp({ autoImports: { components: true } })
+    const names = plugins.map((p) => (p as { name: string }).name)
+    expect(names).toContain('cer-component-imports')
+  })
+
+  it('excludes cerComponentImports plugin when autoImports.components is false', () => {
+    const plugins = cerApp({ autoImports: { components: false } })
+    const names = plugins.map((p) => (p as { name: string }).name)
+    expect(names).not.toContain('cer-component-imports')
+  })
 })
 
 describe('cerApp plugin — config hook', () => {
@@ -112,12 +130,6 @@ describe('cerApp plugin — resolveId hook', () => {
     const plugin = getCerPlugin()
     plugin.config({ root: '/project' }, { command: 'serve', mode: 'development' })
     expect(plugin.resolveId('virtual:cer-layouts')).toBe('\0virtual:cer-layouts')
-  })
-
-  it('resolves virtual:cer-components', () => {
-    const plugin = getCerPlugin()
-    plugin.config({ root: '/project' }, { command: 'serve', mode: 'development' })
-    expect(plugin.resolveId('virtual:cer-components')).toBe('\0virtual:cer-components')
   })
 
   it('resolves virtual:cer-plugins', () => {
@@ -194,14 +206,6 @@ describe('cerApp plugin — load hook', () => {
     plugin.configResolved(FAKE_RESOLVED)
     const result = await plugin.load('\0virtual:cer-layouts')
     expect(result).toBe('// layouts')
-  })
-
-  it('loads virtual:cer-components module code', async () => {
-    const plugin = getCerPlugin()
-    plugin.config({ root: '/project' }, { command: 'serve', mode: 'development' })
-    plugin.configResolved(FAKE_RESOLVED)
-    const result = await plugin.load('\0virtual:cer-components')
-    expect(result).toBe('// components')
   })
 
   it('loads virtual:cer-loading module code', async () => {

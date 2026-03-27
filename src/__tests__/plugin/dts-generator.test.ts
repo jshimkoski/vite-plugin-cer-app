@@ -223,6 +223,11 @@ describe('generateAutoImportDts', () => {
     expect(dts).toContain("const useState: typeof import('@jasonshimmy/vite-plugin-cer-app/composables')['useState']")
   })
 
+  it('declares useLocale as a framework global', async () => {
+    const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain("const useLocale: typeof import('@jasonshimmy/vite-plugin-cer-app/composables')['useLocale']")
+  })
+
   it('declares when directive as a global', async () => {
     const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
     expect(dts).toContain("const when: typeof import('@jasonshimmy/custom-elements-runtime/directives')['when']")

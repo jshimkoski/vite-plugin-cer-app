@@ -8,7 +8,6 @@ declare module 'virtual:cer-routes' {
 }
 
 declare module 'virtual:cer-layouts' {}
-declare module 'virtual:cer-components' {}
 
 declare module 'virtual:cer-plugins' {
   import type { AppPlugin } from '@jasonshimmy/vite-plugin-cer-app/types'

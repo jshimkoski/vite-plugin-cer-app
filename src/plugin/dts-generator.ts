@@ -76,7 +76,7 @@ const RUNTIME_GLOBALS = [
 
 const DIRECTIVE_GLOBALS = ['when', 'each', 'match', 'anchorBlock']
 
-const FRAMEWORK_GLOBALS = ['useHead', 'usePageData', 'useInject', 'useRuntimeConfig', 'defineMiddleware', 'defineServerMiddleware', 'useSeoMeta', 'useCookie', 'useSession', 'useAuth', 'useFetch', 'useRoute', 'navigateTo', 'useState']
+const FRAMEWORK_GLOBALS = ['useHead', 'usePageData', 'useInject', 'useRuntimeConfig', 'defineMiddleware', 'defineServerMiddleware', 'useSeoMeta', 'useCookie', 'useSession', 'useAuth', 'useFetch', 'useRoute', 'navigateTo', 'useState', 'useLocale']
 
 /**
  * Scans a composables directory and returns a map of export name → file path.
@@ -184,7 +184,6 @@ export async function generateVirtualModuleDts(
     `}`,
     '',
     `declare module 'virtual:cer-layouts' {}`,
-    `declare module 'virtual:cer-components' {}`,
     '',
     `declare module 'virtual:cer-plugins' {`,
     `  import type { AppPlugin } from '@jasonshimmy/vite-plugin-cer-app/types'`,

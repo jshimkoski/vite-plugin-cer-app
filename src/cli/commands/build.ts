@@ -139,6 +139,8 @@ export function buildCommand(): Command {
           }
           await buildSSR(config, viteUserConfig)
           await runAdapter(userConfig.adapter, root)
+          // Force exit: the client (HTML) build may keep Node timers alive.
+          process.exit(0)
           break
         }
 

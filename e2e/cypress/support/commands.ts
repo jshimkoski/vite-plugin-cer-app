@@ -111,8 +111,6 @@ Cypress.Commands.add('getShadow', (selector: string) => {
 declare global {
   namespace Cypress {
     interface Chainable {
-      /** @deprecated Use assertDSDStructure instead */
-      assertNoDSD_FOUC(path: string): Chainable<void>
       assertDSDStructure(path: string): Chainable<void>
       assertDSDContains(path: string, expectedText: string): Chainable<void>
       assertShadowRootLive(selector: string): Chainable<void>
@@ -120,8 +118,3 @@ declare global {
     }
   }
 }
-
-// Keep old name as alias so any remaining callers don't break
-Cypress.Commands.add('assertNoDSD_FOUC', (path: string) => {
-  cy.assertDSDStructure(path)
-})

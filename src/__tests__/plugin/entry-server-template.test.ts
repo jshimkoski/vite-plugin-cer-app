@@ -8,8 +8,8 @@ const src = readFileSync(
 )
 
 describe('entry-server-template (ENTRY_SERVER_TEMPLATE content)', () => {
-  it('imports virtual:cer-components', () => {
-    expect(src).toContain('virtual:cer-components')
+  it('does not import virtual:cer-components (components injected per-file by cerComponentImports)', () => {
+    expect(src).not.toContain('virtual:cer-components')
   })
 
   it('imports virtual:cer-routes', () => {

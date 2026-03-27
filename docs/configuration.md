@@ -173,12 +173,18 @@ Controls which identifiers are automatically injected at the top of files in `ap
 
 ```ts
 autoImports: {
-  components: true,   // virtual:cer-components (auto-registers custom elements)
+  components: true,   // per-page component code splitting via cerComponentImports transform
   composables: true,  // virtual:cer-composables (re-exports app/composables/)
   directives: true,   // when, each, match, anchorBlock
   runtime: true,      // component, html, ref, computed, watch, etc.
 }
 ```
+
+### `autoImports.components`
+
+When `true` (default), the `cerComponentImports` Vite transform plugin is active. It scans each page, layout, and component file for custom element tags in `html\`` templates and automatically injects static `import` statements pointing to the corresponding source files in `app/components/`. This gives Rollup the module graph edges needed to code-split components per page — only the components a page actually uses are bundled into that page's chunk.
+
+When `false`, no transform runs and no component files are auto-imported. You must import component files manually (e.g. from a plugin or explicit import at the top of each file).
 
 When `runtime: true`, the following are injected if used and not already imported:
 
