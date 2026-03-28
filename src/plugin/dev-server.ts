@@ -1,6 +1,7 @@
 import type { ViteDevServer } from 'vite'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { resolve } from 'pathe'
+import { join } from 'pathe'
+import { getGeneratedDir } from './generated-dir.js'
 
 export interface ResolvedCerConfig {
   mode: 'spa' | 'ssr' | 'ssg'
@@ -261,9 +262,11 @@ export function configureCerDevServer(
           }
         } catch { /* module not ready — continue to SSR */ }
         try {
-          // Load the SSR entry module
+          // Load the SSR entry module from .cer/entry-server.ts (written by
+          // writeGeneratedDir). The production build uses a virtual plugin for
+          // the same template; the dev server needs a real file on disk.
           const ssrEntry = await server.ssrLoadModule(
-            resolve(config.srcDir, 'entry-server.ts'),
+            join(getGeneratedDir(config.root), 'entry-server.ts'),
           )
 
           const handler =

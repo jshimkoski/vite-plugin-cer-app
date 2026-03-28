@@ -105,6 +105,12 @@ describe('writeGeneratedDir', () => {
     expect(paths.some(p => p.endsWith('/.cer/app.ts'))).toBe(true)
   })
 
+  it('always writes .cer/entry-server.ts', () => {
+    writeGeneratedDir(mockConfig)
+    const paths = vi.mocked(writeFileSync).mock.calls.map(([p]) => String(p))
+    expect(paths.some(p => p.endsWith('/.cer/entry-server.ts'))).toBe(true)
+  })
+
   it('always writes .cer/index.html', () => {
     writeGeneratedDir(mockConfig)
     const paths = vi.mocked(writeFileSync).mock.calls.map(([p]) => String(p))
