@@ -303,84 +303,101 @@ export const handler = async (req, res) => {
     const { vnode, router, head, status } = await _prepareRequest(req)
     if (status != null) res.statusCode = status
 
-    // Begin collecting useHead() calls made during the synchronous render pass.
-    // IMPORTANT: the stream's start() function runs synchronously on construction,
-    // so ALL useHead() calls happen before the stream object is returned. We must
-    // call endHeadCollection() immediately — before any await — to avoid a race
-    // window where a concurrent request (e.g. SSG concurrency > 1) resets the
-    // shared globalThis collector while this handler is suspended at an await.
-    beginHeadCollection()
+    let _headCollectionOpen = false
+    try {
+      // Begin collecting useHead() calls made during the synchronous render pass.
+      // IMPORTANT: the stream's start() function runs synchronously on construction,
+      // so ALL useHead() calls happen before the stream object is returned. We must
+      // call endHeadCollection() immediately — before any await — to avoid a race
+      // window where a concurrent request (e.g. SSG concurrency > 1) resets the
+      // shared globalThis collector while this handler is suspended at an await.
+      _headCollectionOpen = true
+      beginHeadCollection()
 
-    // dsdPolyfill: false — we inject the polyfill manually after merging so it
-    // lands at the end of <body>, not inside <cer-layout-view> light DOM where
-    // scripts may not execute.
-    // The first chunk from the stream is the full synchronous render. Subsequent
-    // chunks are async component swap scripts streamed as they resolve.
-    const stream = renderToStreamWithJITCSSDSD(vnode, { dsdPolyfill: false, router })
+      // dsdPolyfill: false — we inject the polyfill manually after merging so it
+      // lands at the end of <body>, not inside <cer-layout-view> light DOM where
+      // scripts may not execute.
+      // The first chunk from the stream is the full synchronous render. Subsequent
+      // chunks are async component swap scripts streamed as they resolve.
+      const stream = renderToStreamWithJITCSSDSD(vnode, { dsdPolyfill: false, router })
 
-    // Collect head tags synchronously — all useHead() calls have already fired
-    // inside the stream constructor's start() before it returned.
-    const headTags = serializeHeadTags(endHeadCollection())
+      // Collect head tags synchronously — all useHead() calls have already fired
+      // inside the stream constructor's start() before it returned.
+      const headTags = serializeHeadTags(endHeadCollection())
+      _headCollectionOpen = false
 
-    const reader = stream.getReader()
+      const reader = stream.getReader()
 
-    // Read the first (synchronous) chunk.
-    const { value: firstChunk = '' } = await reader.read()
+      // Read the first (synchronous) chunk — rejects if the sync render failed.
+      const { value: firstChunk = '' } = await reader.read()
 
-    // Serialise useFetch() results collected during loader execution.
-    const _fetchObj = Object.fromEntries(_fetchMap)
-    const _fetchScript = Object.keys(_fetchObj).length > 0
-      ? \`<script>window.__CER_FETCH_DATA__ = \${JSON.stringify(_fetchObj)}</script>\`
-      : ''
+      // Serialise useFetch() results collected during loader execution.
+      const _fetchObj = Object.fromEntries(_fetchMap)
+      const _fetchScript = Object.keys(_fetchObj).length > 0
+        ? \`<script>window.__CER_FETCH_DATA__ = \${JSON.stringify(_fetchObj)}</script>\`
+        : ''
 
-    // Serialise the auth user for client-side hydration via useAuth().
-    const _authScript = _authUser
-      ? \`<script>window.__CER_AUTH_USER__ = \${JSON.stringify(_authUser)}</script>\`
-      : ''
+      // Serialise the auth user for client-side hydration via useAuth().
+      const _authScript = _authUser
+        ? \`<script>window.__CER_AUTH_USER__ = \${JSON.stringify(_authUser)}</script>\`
+        : ''
 
-    // Serialise useState() values for client-side hydration.
-    // The state Map is populated by loader calls (in _prepareRequest) and by component
-    // render functions (during renderToStreamWithJITCSSDSD above). Both run before this
-    // point. Injected as window.__CER_STATE_INIT__ so the client useState() can
-    // pre-populate its singleton Map on first use — no flash to default values.
-    const _stateMap = _cerStateStore.getStore()
-    let _stateScript = ''
-    if (_stateMap && _stateMap.size > 0) {
-      const _stateObj = {}
-      for (const [k, v] of _stateMap) { _stateObj[k] = v.value }
-      _stateScript = \`<script>window.__CER_STATE_INIT__ = \${JSON.stringify(_stateObj)}</script>\`
+      // Serialise useState() values for client-side hydration.
+      // The state Map is populated by loader calls (in _prepareRequest) and by component
+      // render functions (during renderToStreamWithJITCSSDSD above). Both run before this
+      // point. Injected as window.__CER_STATE_INIT__ so the client useState() can
+      // pre-populate its singleton Map on first use — no flash to default values.
+      const _stateMap = _cerStateStore.getStore()
+      let _stateScript = ''
+      if (_stateMap && _stateMap.size > 0) {
+        const _stateObj = {}
+        for (const [k, v] of _stateMap) { _stateObj[k] = v.value }
+        _stateScript = \`<script>window.__CER_STATE_INIT__ = \${JSON.stringify(_stateObj)}</script>\`
+      }
+
+      // Merge loader data script + useHead() tags + fetch/auth/state hydration scripts.
+      const headContent = [head, headTags, _fetchScript, _authScript, _stateScript].filter(Boolean).join('\\n')
+
+      // Wrap the rendered body in a full HTML document and inject the head additions
+      // (loader data script, useHead() tags, JIT styles). No polyfill in body yet.
+      const ssrHtml = \`<!DOCTYPE html><html><head>\${headContent}</head><body>\${firstChunk}</body></html>\`
+
+      const merged = _clientTemplate
+        ? _mergeWithClientTemplate(ssrHtml, _clientTemplate)
+        : ssrHtml
+
+      // Split at </body> so async swap scripts and the DSD polyfill can be streamed
+      // in before the document is closed.
+      const bodyCloseIdx = merged.lastIndexOf('</body>')
+      const beforeBodyClose = bodyCloseIdx >= 0 ? merged.slice(0, bodyCloseIdx) : merged
+      const fromBodyClose  = bodyCloseIdx >= 0 ? merged.slice(bodyCloseIdx) : ''
+
+      res.setHeader('Content-Type', 'text/html; charset=utf-8')
+      res.setHeader('Transfer-Encoding', 'chunked')
+      res.write(beforeBodyClose)
+
+      // Stream async component swap scripts through as-is.
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        res.write(value)
+      }
+
+      // Inject DSD polyfill immediately before </body>, then close the document.
+      res.end(DSD_POLYFILL_SCRIPT + fromBodyClose)
+    } catch (_renderErr) {
+      // Ensure the head collector is never left open on error.
+      if (_headCollectionOpen) { try { endHeadCollection() } catch { /* ignore */ } }
+      // If headers have not been flushed yet we can still send a proper 500 page.
+      // If writing has already started we can only close the connection cleanly.
+      if (!res.headersSent) {
+        res.statusCode = 500
+        res.setHeader('Content-Type', 'text/html; charset=utf-8')
+        res.end('<!DOCTYPE html><html><head></head><body><h1>500 Internal Server Error</h1><p>An unexpected error occurred while rendering this page.</p></body></html>')
+      } else {
+        res.end()
+      }
     }
-
-    // Merge loader data script + useHead() tags + fetch/auth/state hydration scripts.
-    const headContent = [head, headTags, _fetchScript, _authScript, _stateScript].filter(Boolean).join('\\n')
-
-    // Wrap the rendered body in a full HTML document and inject the head additions
-    // (loader data script, useHead() tags, JIT styles). No polyfill in body yet.
-    const ssrHtml = \`<!DOCTYPE html><html><head>\${headContent}</head><body>\${firstChunk}</body></html>\`
-
-    const merged = _clientTemplate
-      ? _mergeWithClientTemplate(ssrHtml, _clientTemplate)
-      : ssrHtml
-
-    // Split at </body> so async swap scripts and the DSD polyfill can be streamed
-    // in before the document is closed.
-    const bodyCloseIdx = merged.lastIndexOf('</body>')
-    const beforeBodyClose = bodyCloseIdx >= 0 ? merged.slice(0, bodyCloseIdx) : merged
-    const fromBodyClose  = bodyCloseIdx >= 0 ? merged.slice(bodyCloseIdx) : ''
-
-    res.setHeader('Content-Type', 'text/html; charset=utf-8')
-    res.setHeader('Transfer-Encoding', 'chunked')
-    res.write(beforeBodyClose)
-
-    // Stream async component swap scripts through as-is.
-    while (true) {
-      const { value, done } = await reader.read()
-      if (done) break
-      res.write(value)
-    }
-
-    // Inject DSD polyfill immediately before </body>, then close the document.
-    res.end(DSD_POLYFILL_SCRIPT + fromBodyClose)
   })  // _cerAuthStore.run
   })  // _cerFetchStore.run
   })  // _cerDataStore.run

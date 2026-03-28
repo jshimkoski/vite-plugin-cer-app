@@ -193,6 +193,37 @@ describe('entry-server-template (ENTRY_SERVER_TEMPLATE content)', () => {
     expect(src).toContain('status: null')
   })
 
+  // ─── Render error handling (P0-1) ────────────────────────────────────────────
+  // Note: the custom-elements runtime catches *component-level* render errors
+  // internally (see ssr-context.ts runComponentSSRRender). The try/catch here
+  // guards against *infrastructure-level* failures that escape the runtime.
+
+  it('wraps the render + stream loop in a try/catch block', () => {
+    expect(src).toContain('} catch (_renderErr) {')
+  })
+
+  it('calls endHeadCollection() in the catch block to prevent collector leaks', () => {
+    const catchIdx = src.indexOf('} catch (_renderErr) {')
+    const endCollectorInCatch = src.indexOf('endHeadCollection()', catchIdx)
+    expect(catchIdx).toBeGreaterThan(-1)
+    expect(endCollectorInCatch).toBeGreaterThan(catchIdx)
+  })
+
+  it('sends a 500 response when an infrastructure error occurs before headers are sent', () => {
+    expect(src).toContain('res.headersSent')
+    expect(src).toContain('res.statusCode = 500')
+  })
+
+  it('closes the connection with res.end() when headers were already sent during streaming', () => {
+    const catchIdx = src.indexOf('} catch (_renderErr) {')
+    const elseEndIdx = src.indexOf('res.end()', catchIdx)
+    expect(elseEndIdx).toBeGreaterThan(catchIdx)
+  })
+
+  it('includes an HTML error page body in the 500 infrastructure-error response', () => {
+    expect(src).toContain('500 Internal Server Error')
+  })
+
   // ─── ISR production export ───────────────────────────────────────────────────
 
   it('imports createIsrHandler from the isr subpath', () => {

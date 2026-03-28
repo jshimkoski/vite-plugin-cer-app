@@ -210,7 +210,7 @@ describe('createIsrHandler — stale-while-revalidate', () => {
     resolveHung?.() // clean up
   })
 
-  it('resets revalidating flag when background render fails', async () => {
+  it('releases the in-flight lock when background render fails', async () => {
     const routes = [{ path: '/page', meta: { ssg: { revalidate: 0 } } }]
     let callCount = 0
     const handler = vi.fn((_: IncomingMessage, res: ServerResponse) => {
@@ -234,30 +234,37 @@ describe('createIsrHandler — stale-while-revalidate', () => {
     expect(callCount).toBe(3) // a new render was triggered
   })
 
-  it('resets revalidating flag after 30s timeout (hung render)', async () => {
-    vi.useFakeTimers()
+  it('lock is released once the background render resolves, allowing a new revalidation', async () => {
+    // Promise-based lock: once the in-flight Promise settles the path is removed
+    // from the lock map, so the next stale request can start a new background render.
     const routes = [{ path: '/page', meta: { ssg: { revalidate: 0 } } }]
     let callCount = 0
+    let resolveSecond: (() => void) | undefined
     const handler = vi.fn((_: IncomingMessage, res: ServerResponse) => {
       callCount++
-      if (callCount === 1) res.end('<html>initial</html>')
-      // callCount >= 2: hung — never calls res.end()
+      if (callCount === 1) {
+        res.end('<html>initial</html>')
+      } else if (callCount === 2) {
+        // Second render completes after we release it.
+        new Promise<void>((r) => { resolveSecond = r }).then(() => res.end('<html>v2</html>'))
+      } else {
+        res.end('<html>v3</html>')
+      }
     })
     const wrapped = createIsrHandler(routes, handler)
-
-    // Prime the cache (synchronous handler, resolves immediately)
+    await wrapped(mockReq('/page'), mockRes()) // prime
+    await wrapped(mockReq('/page'), mockRes()) // stale → in-flight render #2
+    // While render #2 is in flight, a third request must NOT spawn render #3.
     await wrapped(mockReq('/page'), mockRes())
-    // Trigger stale + hung background render
+    expect(callCount).toBe(2) // still only 2
+
+    // Release render #2 — lock is freed after the Promise settles.
+    resolveSecond?.()
+    await new Promise((r) => setTimeout(r, 0)) // let the microtask queue drain
+
+    // Now the lock is gone — a new request should be able to start render #3.
     await wrapped(mockReq('/page'), mockRes())
-
-    // Advance clock past 30s — revalidating flag should be reset by timeout
-    vi.advanceTimersByTime(31_000)
-
-    // After timeout reset, a new request should be able to start a fresh revalidation
-    const res3 = mockRes()
-    await wrapped(mockReq('/page'), res3)
-    expect(callCount).toBeGreaterThan(2) // a new render attempt was made
-    expect(res3.header('x-cache')).toBe('STALE')
+    expect(callCount).toBe(3)
   })
 })
 

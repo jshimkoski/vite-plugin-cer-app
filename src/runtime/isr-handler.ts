@@ -23,7 +23,6 @@ export interface IsrCacheEntry {
   statusCode: number
   builtAt: number
   revalidate: number
-  revalidating: boolean
 }
 
 export type SsrHandlerFn = (req: IncomingMessage, res: ServerResponse) => unknown
@@ -88,7 +87,6 @@ async function _renderForCache(
           statusCode: capturedStatus,
           builtAt: Date.now(),
           revalidate,
-          revalidating: false,
         })
       },
     } as unknown as ServerResponse
@@ -135,6 +133,9 @@ export function createIsrHandler(
   handler: SsrHandlerFn,
 ): SsrHandlerFn {
   const cache = new Map<string, IsrCacheEntry>()
+  // True lock: stores the in-flight revalidation Promise per URL path.
+  // A path present in this map means a background render is already in progress.
+  const _inFlight = new Map<string, Promise<void>>()
 
   return async (req: IncomingMessage, res: ServerResponse): Promise<unknown> => {
     const urlPath = (req.url ?? '/').split('?')[0]
@@ -153,21 +154,19 @@ export function createIsrHandler(
         _serveFromCache(cached, res, 'HIT')
         return
       }
-      if (!cached.revalidating) {
-        cached.revalidating = true
-        _serveFromCache(cached, res, 'STALE')
-        const timeout = setTimeout(() => { if (cached) cached.revalidating = false }, 30_000)
-        _renderForCache(urlPath, handler, revalidate).then((entry) => {
-          clearTimeout(timeout)
-          if (entry) cache.set(urlPath, entry)
-          else if (cached) cached.revalidating = false
-        }).catch(() => {
-          clearTimeout(timeout)
-          if (cached) cached.revalidating = false
-        })
-        return
-      }
+      // Stale — serve immediately, then revalidate in the background if no
+      // revalidation is already in flight for this path.
       _serveFromCache(cached, res, 'STALE')
+      if (!_inFlight.has(urlPath)) {
+        const promise = _renderForCache(urlPath, handler, revalidate).then((entry) => {
+          if (entry) cache.set(urlPath, entry)
+        }).catch(() => {
+          // Background render failed — next request will try again.
+        }).finally(() => {
+          _inFlight.delete(urlPath)
+        })
+        _inFlight.set(urlPath, promise)
+      }
       return
     }
 

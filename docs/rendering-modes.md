@@ -80,7 +80,9 @@ The SSR server renders in two phases: a synchronous first chunk (the full page H
 
 **TTFB benefit:** The browser receives the first chunk (full page HTML, including all pre-rendered content) before async swap scripts are ready. Content is visible immediately — async scripts stream in afterward without blocking the initial paint.
 
-**Error recovery:** If the SSR handler throws after writing the first chunk, the catch handler sets `res.statusCode = 500` and calls `res.end('Internal Server Error')`. On Netlify/Cloudflare the `Response` status (committed at `end()` time) will be 500, and the partial HTML will be followed by the error string. Use `meta.render: 'server'` with no `revalidate` on routes where partial responses are unacceptable — errors on those routes are caught before any output is written.
+**Error recovery — component level:** The custom-elements runtime catches component render errors internally. If a component's render function throws, the runtime logs a warning, emits an empty DSD placeholder, and continues rendering the rest of the page. The server returns HTTP 200 with a valid HTML document; the broken component's shadow root is simply empty, and client-side hydration fills it in normally.
+
+**Error recovery — infrastructure level:** The SSR handler also wraps the entire render and streaming loop in a `try/catch` to guard against catastrophic failures that escape the runtime's internal protection. If such an error occurs before any output has been flushed (`!res.headersSent`), the server responds with HTTP 500 and a minimal HTML error page. If it occurs mid-stream (after `res.write()` has already been called), the server calls `res.end()` to close the connection cleanly. The `endHeadCollection()` cleanup function is always called in the catch path to prevent global state leaks between concurrent requests.
 
 **Client disconnects:** If the client closes the connection during streaming (Netlify/Cloudflare), `writer.write()` and `writer.close()` rejections are silently swallowed — the server continues handling other requests normally.
 
@@ -251,7 +253,7 @@ ISR is a per-route cache layer built into the SSR server bundle. Pages with `met
 1. **First request (HIT after fresh render):** Cache miss — render via SSR, store in memory cache with TTL, then serve from the newly-populated cache. `X-Cache: HIT` is set.
 2. **Within TTL (HIT):** Serve directly from cache. `X-Cache: HIT` header is set.
 3. **After TTL expires (STALE):** Serve the stale cached HTML immediately with `X-Cache: STALE`. Kick off a background re-render. When the re-render completes, update the cache.
-4. **While revalidating:** Continue serving stale HTML to new requests. If the background render takes longer than **30 seconds**, the revalidating lock is automatically released so the next request can trigger a fresh attempt.
+4. **While revalidating:** Continue serving stale HTML to new requests. The in-flight revalidation is tracked as a `Promise` per path — at most one background render runs per URL at any time. Once the Promise settles (success or failure), the lock is released and the next request can trigger a fresh attempt.
 
 ### Configuration
 

@@ -19,7 +19,7 @@ implementation steps, and required tests.
 
 ---
 
-## P0-1 — SSR render errors crash the response stream
+## P0-1 — SSR render errors crash the response stream ✅ IMPLEMENTED
 
 ### Diagnosis
 
@@ -122,9 +122,20 @@ a minimal HTML error string directly.
      markup (no connection reset)
    - `cy.visit('/render-error-test')` — assert page loads normally (no query param)
 
+### Implementation notes
+
+- Implemented as a single `try/catch (_renderErr)` wrapping the full render + stream block.
+- `_headCollectionOpen` flag ensures `endHeadCollection()` is always called to prevent global state leaks.
+- Before-headers path: sets `res.statusCode = 500`, sends a complete HTML error page.
+- After-headers path: calls `res.end()` to close cleanly.
+- Unit tests added to `src/__tests__/plugin/entry-server-template.test.ts`.
+- **Important clarification:** The custom-elements runtime already catches *component-level* render errors internally (`ssr-context.ts` `runComponentSSRRender` try/catch). A component throwing during render produces a warning log and an empty DSD placeholder — the server returns 200. The entry-server-template try/catch protects against *infrastructure-level* failures that escape the runtime (e.g., a crash in the SSR helper machinery itself).
+- Kitchen-sink page `e2e/kitchen-sink/app/pages/render-error-test.ts` throws unconditionally to verify graceful degradation.
+- Cypress spec `e2e/cypress/e2e/ssr-render-error.cy.ts` verifies: HTTP 200 response (runtime catches the component error), valid HTML body, component rendered as empty placeholder, server survives for subsequent requests.
+
 ---
 
-## P0-2 — ISR concurrent revalidation race condition
+## P0-2 — ISR concurrent revalidation race condition ✅ IMPLEMENTED
 
 ### Diagnosis
 
@@ -219,9 +230,17 @@ per path.
 4. **`e2e/kitchen-sink/`** — existing `isr-nested-runtime.cy.ts` may already cover ISR;
    verify it exercises the stale-while-revalidate path.
 
+### Implementation notes
+
+- Replaced `revalidating: boolean` in `IsrCacheEntry` with `Map<string, Promise<void>> _inFlight` inside `createIsrHandler`.
+- At most one background render runs per URL path at any time (true lock, not a soft boolean).
+- Lock is released via `.finally(() => _inFlight.delete(urlPath))` when the Promise settles — no 30s timer needed.
+- The "30s timeout" test was replaced with a "lock released after Promise resolves" test.
+- `revalidating` field removed from the `IsrCacheEntry` interface.
+
 ---
 
-## P0-3 — Async SSR components can hang indefinitely
+## P0-3 — Async SSR components can hang indefinitely ✅ IMPLEMENTED
 
 ### Diagnosis
 
@@ -279,9 +298,16 @@ environments).
 
 6. **`docs/configuration.md`** — document `ssrTimeout` option.
 
+### Implementation notes
+
+- Implemented as `asyncTimeout?: number` option (default `30_000` ms) on `renderToStream` and `renderToStreamWithJITCSSDSD` in `custom-elements/src/lib/ssr.ts`.
+- Each `await entry.promise` is wrapped with `Promise.race([entry.promise, timeoutPromise])` — timed-out entries leave their placeholders in the DOM for client-side hydration.
+- Unit tests in `custom-elements/test/render-to-stream.spec.ts` cover: basic streaming, timeout closes the stream, option threads through `renderToStreamWithJITCSSDSD`, sync render errors.
+- Note: The plan proposed `ssrTimeout` as the option name; the implementation uses `asyncTimeout` to better describe what is being timed (the async component Promises, not the overall SSR render).
+
 ---
 
-## P0-4 — Reactive subscriptions leak on component disconnect
+## P0-4 — Reactive subscriptions leak on component disconnect ✅ IMPLEMENTED
 
 ### Diagnosis
 
@@ -364,6 +390,14 @@ verify) and register themselves with the reactive system when a `componentId` is
 
 6. **`docs/components.md`** — add a note that manual cleanup in `onDisconnected` is no
    longer required for `watch`, `watchEffect`, and `computed` created during render.
+
+### Implementation notes
+
+- Fixed in `custom-elements/src/lib/runtime/reactive.ts` `cleanup()` method.
+- Before deleting the component's `componentData` entry, iterates `data.watchers` and calls `this.cleanup(wid)` recursively for each — identical to the pattern already used in `setCurrentComponent()` for re-renders.
+- This means `watch()`, `watchEffect()`, and `computed()` created during render are automatically unsubscribed when the component disconnects, without requiring manual `useOnDisconnected(stop)` calls.
+- Unit tests in `custom-elements/test/reactive-cleanup-cascade.spec.ts`.
+- Note: The plan described a more complex "subscription registry" approach. The actual fix leverages the existing `data.watchers` map that `registerWatcher()` already populates — no new data structure needed.
 
 ---
 
