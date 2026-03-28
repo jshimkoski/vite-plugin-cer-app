@@ -1,6 +1,6 @@
 {
   "name": "@jasonshimmy/vite-plugin-cer-app",
-  "version": "0.17.1",
+  "version": "0.18.0",
   "description": "Nuxt-style meta-framework for @jasonshimmy/custom-elements-runtime",
   "type": "module",
   "keywords": [
