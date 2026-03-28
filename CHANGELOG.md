@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.17.1] - 2026-03-28
+
+- fix: update dependencies and improve error handling in server templates (0f12ef5)
+
 ## [v0.17.0] - 2026-03-27
 
 - feat: add component code-splitting and tests (db7c4c7)
