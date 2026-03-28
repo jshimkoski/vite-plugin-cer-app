@@ -156,6 +156,14 @@ const _pluginProvides = new Map()
 
 // ─── <cer-layout-view> ───────────────────────────────────────────────────────
 
+// True until the initial page module has loaded and _replace has been called.
+// While true, cer-layout-view renders a <slot> so the SSR/SSG pre-rendered
+// light-DOM content stays visible and no FOUC occurs during the hydration gap.
+// Declared here (before component()) because customElements.define() upgrades
+// existing DOM elements synchronously, so the render function reads this ref
+// on the very first call — before _doHydrate has a chance to run.
+const _cerHydrating = ref(true)
+
 component('cer-layout-view', () => {
   // Forward plugin-provided values into the component context so inject() in
   // any descendant component can resolve them by walking up the DOM tree.
@@ -167,9 +175,26 @@ component('cer-layout-view', () => {
   let unsub
 
   useOnConnected(() => {
-    unsub = router.subscribe((s) => { current.value = s })
+    // Any router navigation (including the initial _replace in _doHydrate) will
+    // arrive here. If we are still in the hydration gap when a navigation fires
+    // (e.g. a redirect or user interaction before _doHydrate finishes), drop the
+    // slot immediately so the live render takes over.
+    unsub = router.subscribe((s) => {
+      if (_cerHydrating.value) _cerHydrating.value = false
+      current.value = s
+    })
   })
   useOnDisconnected(() => { unsub?.(); unsub = undefined })
+
+  // While the initial page module is being loaded, keep the SSR/SSG
+  // pre-rendered light-DOM content visible by forwarding it through a <slot>.
+  // This prevents the intermediate blank state that occurs when the shadow DOM
+  // renders layout-default with an empty <router-view> before the page chunk
+  // has arrived. In SPA mode (no pre-rendered content) the slot is empty, which
+  // is no worse than the current router-view behaviour.
+  if (_cerHydrating.value) {
+    return { tag: 'slot', props: {}, children: [] }
+  }
 
   const matched = router.matchRoute(current.value.path)
   const routeMeta = matched?.route?.meta
@@ -253,6 +278,10 @@ if (typeof window !== 'undefined') {
       // before _doHydrate finished).  Calling _replace with a stale path would
       // override any navigation that happened during the async gap.
       const _currentPath = window.location.pathname + window.location.search + window.location.hash
+      // Drop the hydration slot cover unconditionally: the page module is loaded
+      // and cer-layout-view must switch from the <slot> to live rendering whether
+      // or not a redirect changed the path during loading.
+      _cerHydrating.value = false
       if (_currentPath === _initPath) {
         // Use the original (unwrapped) replace so isNavigating stays false during
         // the initial paint — the loading component must not flash over pre-rendered content.

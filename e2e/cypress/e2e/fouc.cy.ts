@@ -27,6 +27,7 @@ const ALL_ROUTES = [
   '/items/1',
   '/items/2',
   '/login',
+  '/plugin-dsd-test',
 ]
 
 if (mode === 'spa') {
@@ -108,6 +109,60 @@ if (mode === 'spa') {
           expect(count, `${path}: should have at least 2 shadow templates`).to.be.at.least(2)
         })
       })
+    })
+  })
+
+  // ─── Plugin-registered components get DSD ────────────────────────────────
+  //
+  // Regression test for the "dual-instance registry" bug:
+  // When @jasonshimmy/custom-elements-runtime was in ssr.noExternal, the bundler
+  // inlined a separate copy of the runtime's component Map. Plugin files (treated
+  // as external) resolved the CER runtime from node_modules at runtime — a
+  // different Map instance. Components registered by plugins never appeared in
+  // the SSR renderer's registry, so renderToStreamWithJITCSSDSD emitted bare
+  // <custom-element> stubs with no DSD → FOUC when the browser upgraded them.
+  // The fix: keep @jasonshimmy/custom-elements-runtime external so all code
+  // (server bundle + plugin packages) shares one node_modules instance.
+
+  describe('Plugin-registered components — DSD in SSR/SSG', () => {
+    it('ks-plugin-card (registered via plugin, not auto-scanned) has a shadow template', () => {
+      cy.request('/plugin-dsd-test').then((resp) => {
+        const html: string = resp.body
+        expect(html, 'ks-plugin-card must appear in rendered HTML').to.include('ks-plugin-card')
+        // The component must have a shadow root template — not a bare stub
+        const pluginCardIdx = html.indexOf('ks-plugin-card')
+        const templateAfterCard = html.indexOf('<template shadowrootmode="open"', pluginCardIdx)
+        const nextTagClose = html.indexOf('</ks-plugin-card>', pluginCardIdx)
+        expect(templateAfterCard, 'ks-plugin-card must contain a <template shadowrootmode> (DSD)').to.be.greaterThan(-1)
+        expect(templateAfterCard, 'shadow template must appear before </ks-plugin-card>').to.be.lessThan(nextTagClose)
+      })
+    })
+
+    it('ks-plugin-card DSD contains the card CSS style', () => {
+      cy.request('/plugin-dsd-test').then((resp) => {
+        cy.assertDSDContains('/plugin-dsd-test', '.card')
+      })
+    })
+
+    it('ks-plugin-card has a live shadow root after hydration', () => {
+      // ks-plugin-card lives inside page-plugin-dsd-test's shadow root.
+      // page-plugin-dsd-test is light DOM of layout-default (slotted), so
+      // document.querySelector() can find it directly.
+      cy.visit('/plugin-dsd-test')
+      cy.get('[data-cy="plugin-dsd-test-page"]').should('exist')
+      cy.window().then((win) => {
+        const page = win.document.querySelector('page-plugin-dsd-test')
+        expect(page, 'page-plugin-dsd-test must exist').to.not.be.null
+        const card = page?.shadowRoot?.querySelector('ks-plugin-card')
+        expect(card, 'ks-plugin-card must exist inside page-plugin-dsd-test shadow root').to.not.be.null
+        expect((card as Element & { shadowRoot: ShadowRoot | null }).shadowRoot,
+          'ks-plugin-card must have a live shadow root after hydration').to.not.be.null
+      })
+    })
+
+    it('ks-plugin-card slot content is accessible after hydration', () => {
+      cy.visit('/plugin-dsd-test')
+      cy.get('[data-cy="plugin-card-content"]').should('have.text', 'Card content from plugin component')
     })
   })
 

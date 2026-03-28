@@ -108,7 +108,23 @@ export async function buildSSR(
       },
     },
     ssr: {
-      noExternal: ['@jasonshimmy/custom-elements-runtime', '@jasonshimmy/vite-plugin-cer-app'],
+      // Keep vite-plugin-cer-app inlined so its virtual-module composables
+      // (useRoute, useState, useFetch, etc.) are available in the server bundle.
+      //
+      // Do NOT add @jasonshimmy/custom-elements-runtime here. Inlining it
+      // creates a second, isolated copy of the component registry (the module-
+      // level Map in namespace-helpers). Third-party CER component libraries
+      // (e.g. @jasonshimmy/cer-material) are external and resolve the runtime
+      // from node_modules at runtime, giving them a *different* Map instance.
+      // That means components registered by plugins never appear in the
+      // renderer's registry → renderToStreamWithJITCSSDSD emits bare stubs
+      // with no DSD → FOUC when the browser upgrades those elements.
+      //
+      // By keeping the runtime external both the server bundle and all
+      // third-party plugins resolve it from node_modules at runtime, sharing
+      // one Map and one registry, so DSD is generated for all registered
+      // components regardless of which package called component().
+      noExternal: ['@jasonshimmy/vite-plugin-cer-app'],
     },
   })
 

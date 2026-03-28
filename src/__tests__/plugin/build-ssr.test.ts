@@ -74,6 +74,20 @@ describe('buildSSR', () => {
     const firstCall = buildMock.mock.calls[0][0] as Record<string, unknown>
     expect(firstCall.define).toEqual({ MY_FLAG: 'true' })
   })
+
+  it('server build keeps @jasonshimmy/vite-plugin-cer-app in ssr.noExternal', async () => {
+    await buildSSR(makeConfig())
+    const secondCall = buildMock.mock.calls[1][0] as Record<string, unknown>
+    const noExternal = (secondCall.ssr as Record<string, unknown>).noExternal as string[]
+    expect(noExternal).toContain('@jasonshimmy/vite-plugin-cer-app')
+  })
+
+  it('server build does NOT bundle @jasonshimmy/custom-elements-runtime so third-party component libraries share the same registry', async () => {
+    await buildSSR(makeConfig())
+    const secondCall = buildMock.mock.calls[1][0] as Record<string, unknown>
+    const noExternal = (secondCall.ssr as Record<string, unknown>).noExternal as string[]
+    expect(noExternal).not.toContain('@jasonshimmy/custom-elements-runtime')
+  })
 })
 
 // ─── resolveClientEntry fallback paths ───────────────────────────────────────
