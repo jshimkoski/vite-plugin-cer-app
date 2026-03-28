@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.18.1] - 2026-03-28
+
+- fix: update dependencies in package.json templates for SPA, SSG, and SSR (5729fe1)
+
 ## [v0.18.0] - 2026-03-28
 
 - chore: remove dead file (e01aab3)
