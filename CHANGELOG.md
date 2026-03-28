@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.19.2] - 2026-03-28
+
+- fix: add plugin DSD test cases and ensure shared component registry in SSR (ee3fffb)
+
 ## [v0.19.1] - 2026-03-28
 
 - fix: add entry-server.ts generation for SSR support in dev server (2f102c8)
