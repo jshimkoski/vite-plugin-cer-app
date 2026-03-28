@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.18.2] - 2026-03-28
+
+- fix: correct vite-plugin-cer-app version in generated package.json files (ae1ccc1)
+
 ## [v0.18.1] - 2026-03-28
 
 - fix: update dependencies in package.json templates for SPA, SSG, and SSR (5729fe1)
