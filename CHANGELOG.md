@@ -1,6 +1,11 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.18.0] - 2026-03-28
+
+- chore: remove dead file (e01aab3)
+- feat: production readiness hardening (5f64c49)
+
 ## [v0.17.1] - 2026-03-28
 
 - fix: update dependencies and improve error handling in server templates (0f12ef5)
