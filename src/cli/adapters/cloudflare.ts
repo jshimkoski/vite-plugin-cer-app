@@ -246,7 +246,27 @@ function _buildSSR(root: string, distDir: string): void {
     : ''
 
   // Write the worker bridge with inlined client HTML.
-  writeFileSync(join(distDir, '_worker.js'), generateWorkerBridge(clientHtml))
+  const workerPath = join(distDir, '_worker.js')
+  writeFileSync(workerPath, generateWorkerBridge(clientHtml))
+
+  // P1-4: Warn when the worker file approaches or exceeds Cloudflare's size limits.
+  // Free plan: 1 MB compressed; Paid plan: 10 MB compressed. Check uncompressed as
+  // a conservative proxy — the compressed size will always be smaller.
+  const workerSizeBytes = statSync(workerPath).size
+  const WARN_LIMIT = 900_000   // 900 KB — approaching Free plan limit
+  const ERROR_LIMIT = 9_000_000  // 9 MB — approaching Paid plan limit
+  if (workerSizeBytes > ERROR_LIMIT) {
+    console.error(
+      `[cer-app] Cloudflare _worker.js is ${(workerSizeBytes / 1e6).toFixed(1)} MB — ` +
+      `exceeds the ${(ERROR_LIMIT / 1e6).toFixed(0)} MB limit. Deployment will likely fail.`,
+    )
+    process.exit(1)
+  } else if (workerSizeBytes > WARN_LIMIT) {
+    console.warn(
+      `[cer-app] Cloudflare _worker.js is ${(workerSizeBytes / 1e3).toFixed(0)} KB — ` +
+      `approaching the Cloudflare Free plan 1 MB limit. Consider the Paid plan or reducing bundle size.`,
+    )
+  }
 
   // Copy assets from dist/client/ into dist/ (at the same URL paths).
   // Cloudflare Pages CDN serves files in the deploy directory as static first;

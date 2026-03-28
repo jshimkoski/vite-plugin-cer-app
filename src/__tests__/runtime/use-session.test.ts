@@ -220,6 +220,89 @@ describe('useSession() — SSR path', () => {
   })
 })
 
+// ─── P1-3: Session secret rotation ────────────────────────────────────────────
+
+describe('useSession() — secret rotation (P1-3)', () => {
+  let _origStore: unknown
+
+  beforeEach(() => {
+    _origStore = (globalThis as Record<string, unknown>).__CER_REQ_STORE__
+    const { AsyncLocalStorage } = require('node:async_hooks')
+    const store = new AsyncLocalStorage()
+    ;(globalThis as Record<string, unknown>).__CER_REQ_STORE__ = store
+  })
+
+  afterEach(() => {
+    ;(globalThis as Record<string, unknown>).__CER_REQ_STORE__ = _origStore
+  })
+
+  it('signs with the first secret in the array', async () => {
+    _mockSecret = ['new-secret-at-least-32-chars-long!!', 'old-secret-at-least-32-chars-long!!'] as unknown as string
+    const { req, res, setCookies } = makeCtx('')
+    await runInStore(req, res, async () => {
+      await useSession<{ userId: string }>().set({ userId: 'u1' })
+    })
+    const setCookie = setCookies.find((c) => c.startsWith('session='))
+    expect(setCookie).toBeTruthy()
+    const token = setCookie!.split(';')[0].slice('session='.length)
+    expect(token).toContain('.')
+  })
+
+  it('verifies tokens signed with the second (old) secret', async () => {
+    // First, sign with the old secret alone
+    _mockSecret = 'old-secret-at-least-32-chars-long!!'
+    const { req, res, setCookies } = makeCtx('')
+    await runInStore(req, res, async () => {
+      await useSession<{ userId: string }>().set({ userId: 'rotated' })
+    })
+    const setCookie = setCookies.find((c) => c.startsWith('session='))!
+    const oldToken = setCookie.split(';')[0].slice('session='.length)
+
+    // Now set secrets to [newSecret, oldSecret] — old token should still verify
+    _mockSecret = ['new-secret-at-least-32-chars-long!!', 'old-secret-at-least-32-chars-long!!'] as unknown as string
+    const { req: req2, res: res2 } = makeCtx(`session=${oldToken}`)
+    let data: { userId: string } | null = null
+    await runInStore(req2, res2, async () => {
+      data = await useSession<{ userId: string }>().get()
+    })
+    expect(data).toEqual({ userId: 'rotated' })
+  })
+
+  it('rejects a token when it matches neither secret in the array', async () => {
+    _mockSecret = 'old-secret-at-least-32-chars-long!!'
+    const { req, res, setCookies } = makeCtx('')
+    await runInStore(req, res, async () => {
+      await useSession<{ userId: string }>().set({ userId: 'gone' })
+    })
+    const setCookie = setCookies.find((c) => c.startsWith('session='))!
+    const token = setCookie.split(';')[0].slice('session='.length)
+
+    // Completely different secrets — token should fail
+    _mockSecret = ['completely-different-secret-one123', 'completely-different-secret-two123'] as unknown as string
+    const { req: req2, res: res2 } = makeCtx(`session=${token}`)
+    let data: unknown = 'sentinel'
+    await runInStore(req2, res2, async () => {
+      data = await useSession().get()
+    })
+    expect(data).toBeNull()
+  })
+
+  it('treats a single string as the only secret (no rotation)', async () => {
+    _mockSecret = 'single-secret-at-least-32-chars-!!'
+    const { req, res, setCookies } = makeCtx('')
+    await runInStore(req, res, async () => {
+      await useSession<{ userId: string }>().set({ userId: 'single' })
+    })
+    const token = setCookies.find((c) => c.startsWith('session='))!.split(';')[0].slice('session='.length)
+    const { req: req2, res: res2 } = makeCtx(`session=${token}`)
+    let data: { userId: string } | null = null
+    await runInStore(req2, res2, async () => {
+      data = await useSession<{ userId: string }>().get()
+    })
+    expect(data).toEqual({ userId: 'single' })
+  })
+})
+
 // ─── Client path ──────────────────────────────────────────────────────────────
 // On the client, useSession().get() can only read an already-set cookie value.
 // Signing is skipped (no crypto key on the client); get() returns null.

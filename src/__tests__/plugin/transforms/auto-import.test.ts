@@ -445,3 +445,52 @@ describe('autoImportTransform — composable import injection', () => {
     expect(result).toBeNull()
   })
 })
+
+// ─── P1-5: Per-identifier tree shaking ────────────────────────────────────────
+
+describe('autoImportTransform — per-identifier tree shaking (P1-5)', () => {
+  it('injects only used identifiers, not all runtime identifiers', () => {
+    const code = "const count = ref(0)"
+    const result = autoImportTransform(code, '/project/app/pages/counter.ts', opts)!
+    // Only ref should be imported, not component/html/computed etc.
+    expect(result).toContain('ref')
+    expect(result).not.toContain('computed')
+    expect(result).not.toContain('watchEffect')
+    expect(result).not.toContain('useEmit')
+  })
+
+  it('injects only the used directive, not all directives', () => {
+    const code = "const t = each(items, (i) => html`<li>${i}</li>`)"
+    const result = autoImportTransform(code, '/project/app/pages/list.ts', opts)!
+    expect(result).toContain('each')
+    expect(result).not.toContain('when')
+    expect(result).not.toContain('match')
+    expect(result).not.toContain('anchorBlock')
+  })
+
+  it('injects only the used framework composable, not the full framework set', () => {
+    const code = "component('page-x', () => { const r = useRoute(); return html`<div></div>` })"
+    const result = autoImportTransform(code, '/project/app/pages/x.ts', opts)!
+    expect(result).toContain('useRoute')
+    expect(result).not.toContain('useHead')
+    expect(result).not.toContain('useFetch')
+    expect(result).not.toContain('useState')
+  })
+
+  it('groups multiple used identifiers from the same module into one import statement', () => {
+    const code = "const a = ref(0)\nconst b = computed(() => a.value * 2)"
+    const result = autoImportTransform(code, '/project/app/pages/computed.ts', opts)!
+    // Both ref and computed are from the runtime — should be one import
+    const count = result.split(`from ${RUNTIME_PKG}`).length - 1
+    expect(count).toBe(1)
+    expect(result).toContain('ref')
+    expect(result).toContain('computed')
+  })
+
+  it('defineAsyncComponent is injected when used (P2-4 auto-import)', () => {
+    const code = "defineAsyncComponent('heavy-editor', () => import('./impl.ts').then(m => m.render))"
+    const result = autoImportTransform(code, '/project/app/components/heavy-editor.ts', opts)!
+    expect(result).toContain('defineAsyncComponent')
+    expect(result).toContain(`from ${RUNTIME_PKG}`)
+  })
+})

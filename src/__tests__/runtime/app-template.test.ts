@@ -161,4 +161,15 @@ describe('APP_ENTRY_TEMPLATE — loader sequence', () => {
     // Must not silently swallow — the old pattern was `catch { /* ... */ }`
     expect(loadPageBlock).not.toContain('/* loader errors are non-fatal')
   })
+
+  it('uses per-route errorTag over global errorTag in cer-layout-view error rendering', () => {
+    // routeMeta must be computed before the currentError check so the per-route
+    // error component can be selected (mirrors server-side _prepareRequest logic).
+    const template = APP_ENTRY_TEMPLATE
+    expect(template).toContain('routeMeta?.errorTag')
+    // Falls back to global errorTag when no per-route error component exists
+    expect(template).toContain('hasError ? errorTag : null')
+    // The effectiveErrorTag variable is used as the rendered tag
+    expect(template).toContain('effectiveErrorTag')
+  })
 })

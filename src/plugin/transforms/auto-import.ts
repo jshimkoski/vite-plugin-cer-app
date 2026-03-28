@@ -9,46 +9,114 @@ export interface AutoImportOptions {
   composableExports?: Map<string, string>
 }
 
-const RUNTIME_IMPORTS = `import { component, html, css, ref, computed, watch, watchEffect, useProps, useEmit, useOnConnected, useOnDisconnected, useOnAttributeChanged, useOnError, useStyle, useDesignTokens, useGlobalStyle, useExpose, useSlots, provide, inject, createComposable, nextTick, defineModel, getCurrentComponentContext, isReactiveState, unsafeHTML, decodeEntities, useTeleport } from '@jasonshimmy/custom-elements-runtime';`
+// P1-5: Per-identifier import maps. Only the identifiers actually referenced in
+// a file are injected — this eliminates the full-group injection that prevented
+// tree-shaking when a page used only one framework composable.
 
-const DIRECTIVE_IMPORTS = `import { when, each, match, anchorBlock } from '@jasonshimmy/custom-elements-runtime/directives';`
+/** Maps each runtime identifier to its source module. All from the main runtime package. */
+const RUNTIME_MAP: Record<string, string> = {
+  component: '@jasonshimmy/custom-elements-runtime',
+  defineAsyncComponent: '@jasonshimmy/custom-elements-runtime',
+  html: '@jasonshimmy/custom-elements-runtime',
+  css: '@jasonshimmy/custom-elements-runtime',
+  ref: '@jasonshimmy/custom-elements-runtime',
+  computed: '@jasonshimmy/custom-elements-runtime',
+  watch: '@jasonshimmy/custom-elements-runtime',
+  watchEffect: '@jasonshimmy/custom-elements-runtime',
+  useProps: '@jasonshimmy/custom-elements-runtime',
+  useEmit: '@jasonshimmy/custom-elements-runtime',
+  useOnConnected: '@jasonshimmy/custom-elements-runtime',
+  useOnDisconnected: '@jasonshimmy/custom-elements-runtime',
+  useOnAttributeChanged: '@jasonshimmy/custom-elements-runtime',
+  useOnError: '@jasonshimmy/custom-elements-runtime',
+  useStyle: '@jasonshimmy/custom-elements-runtime',
+  useDesignTokens: '@jasonshimmy/custom-elements-runtime',
+  useGlobalStyle: '@jasonshimmy/custom-elements-runtime',
+  useExpose: '@jasonshimmy/custom-elements-runtime',
+  useSlots: '@jasonshimmy/custom-elements-runtime',
+  provide: '@jasonshimmy/custom-elements-runtime',
+  inject: '@jasonshimmy/custom-elements-runtime',
+  createComposable: '@jasonshimmy/custom-elements-runtime',
+  nextTick: '@jasonshimmy/custom-elements-runtime',
+  defineModel: '@jasonshimmy/custom-elements-runtime',
+  getCurrentComponentContext: '@jasonshimmy/custom-elements-runtime',
+  isReactiveState: '@jasonshimmy/custom-elements-runtime',
+  unsafeHTML: '@jasonshimmy/custom-elements-runtime',
+  decodeEntities: '@jasonshimmy/custom-elements-runtime',
+  useTeleport: '@jasonshimmy/custom-elements-runtime',
+}
 
-const FRAMEWORK_IMPORTS = `import { useHead, usePageData, useInject, useRuntimeConfig, defineMiddleware, defineServerMiddleware, useSeoMeta, useCookie, useSession, useAuth, useFetch, useRoute, navigateTo, useState, useLocale } from '@jasonshimmy/vite-plugin-cer-app/composables';`
+/** Maps each directive identifier to its source module (directives sub-path). */
+const DIRECTIVE_MAP: Record<string, string> = {
+  when: '@jasonshimmy/custom-elements-runtime/directives',
+  each: '@jasonshimmy/custom-elements-runtime/directives',
+  match: '@jasonshimmy/custom-elements-runtime/directives',
+  anchorBlock: '@jasonshimmy/custom-elements-runtime/directives',
+}
 
-const FRAMEWORK_IDENTIFIERS = ['useHead', 'usePageData', 'useInject', 'useRuntimeConfig', 'defineMiddleware', 'defineServerMiddleware', 'useSeoMeta', 'useCookie', 'useSession', 'useAuth', 'useFetch', 'useRoute', 'navigateTo', 'useState', 'useLocale']
+/** Maps each framework composable to its source module. */
+const FRAMEWORK_MAP: Record<string, string> = {
+  useHead: '@jasonshimmy/vite-plugin-cer-app/composables',
+  usePageData: '@jasonshimmy/vite-plugin-cer-app/composables',
+  useInject: '@jasonshimmy/vite-plugin-cer-app/composables',
+  useRuntimeConfig: '@jasonshimmy/vite-plugin-cer-app/composables',
+  defineMiddleware: '@jasonshimmy/vite-plugin-cer-app/composables',
+  defineServerMiddleware: '@jasonshimmy/vite-plugin-cer-app/composables',
+  useSeoMeta: '@jasonshimmy/vite-plugin-cer-app/composables',
+  useCookie: '@jasonshimmy/vite-plugin-cer-app/composables',
+  useSession: '@jasonshimmy/vite-plugin-cer-app/composables',
+  useAuth: '@jasonshimmy/vite-plugin-cer-app/composables',
+  useFetch: '@jasonshimmy/vite-plugin-cer-app/composables',
+  useRoute: '@jasonshimmy/vite-plugin-cer-app/composables',
+  navigateTo: '@jasonshimmy/vite-plugin-cer-app/composables',
+  useState: '@jasonshimmy/vite-plugin-cer-app/composables',
+  useLocale: '@jasonshimmy/vite-plugin-cer-app/composables',
+}
 
-const RUNTIME_IDENTIFIERS = [
-  'component',
-  'html',
-  'css',
-  'ref',
-  'computed',
-  'watch',
-  'watchEffect',
-  'useProps',
-  'useEmit',
-  'useOnConnected',
-  'useOnDisconnected',
-  'useOnAttributeChanged',
-  'useOnError',
-  'useStyle',
-  'useDesignTokens',
-  'useGlobalStyle',
-  'useExpose',
-  'useSlots',
-  'provide',
-  'inject',
-  'createComposable',
-  'nextTick',
-  'defineModel',
-  'getCurrentComponentContext',
-  'isReactiveState',
-  'unsafeHTML',
-  'decodeEntities',
-  'useTeleport',
-]
+// All identifier maps — processed in order. Earlier maps take precedence for
+// the "already imported from this module" duplicate check.
+const ALL_MAPS = [RUNTIME_MAP, DIRECTIVE_MAP, FRAMEWORK_MAP]
 
-const DIRECTIVE_IDENTIFIERS = ['when', 'each', 'match', 'anchorBlock']
+/**
+ * Returns true if the file already manually imports from the given source module.
+ * When true, we skip auto-injecting identifiers from that module to avoid duplicates.
+ */
+function isAlreadyImported(code: string, sourceModule: string): boolean {
+  return (
+    code.includes(`from '${sourceModule}'`) ||
+    code.includes(`from "${sourceModule}"`)
+  )
+}
+
+/**
+ * Builds minimal import statements containing only the identifiers actually
+ * referenced in the file. Groups identifiers by source module. Skips modules
+ * that the file already imports from manually.
+ *
+ * Returns an array of import statement strings (one per source module used).
+ */
+function buildMinimalImportStatements(code: string, maps: Record<string, string>[]): string[] {
+  // Group identifier → source module, collecting only used ones.
+  const grouped = new Map<string, string[]>()
+
+  for (const map of maps) {
+    for (const [identifier, sourceModule] of Object.entries(map)) {
+      // Skip if the file already imports from this module.
+      if (isAlreadyImported(code, sourceModule)) continue
+      // Skip if identifier not referenced in the file.
+      const pattern = new RegExp(`\\b${identifier}\\b`)
+      if (!pattern.test(code)) continue
+
+      const existing = grouped.get(sourceModule) ?? []
+      existing.push(identifier)
+      grouped.set(sourceModule, existing)
+    }
+  }
+
+  return Array.from(grouped.entries()).map(
+    ([mod, ids]) => `import { ${ids.join(', ')} } from '${mod}';`,
+  )
+}
 
 /**
  * Auto-import transform: injects runtime and directive imports at the top of
@@ -87,30 +155,18 @@ export function autoImportTransform(
   // Skip virtual modules and non-ts files
   if (id.startsWith('\0') || (!id.endsWith('.ts') && !id.endsWith('.js'))) return null
 
-  const needsRuntime = isRuntimeImportNeeded(code)
-  const needsDirectives = isDirectiveImportNeeded(code)
-  const needsFramework = isFrameworkImportNeeded(code)
   // Skip virtual:cer-composables injection for files inside app/composables/ to
   // avoid circular imports (the virtual module re-exports from all composable files).
   const isComposablesDir = normalizedId.startsWith(srcDir + '/composables/')
   const composableImport = isComposablesDir ? null : buildComposableImport(code, opts.composableExports)
 
-  if (!needsRuntime && !needsDirectives && !needsFramework && !composableImport) return null
+  // Build per-identifier import statements from all maps.
+  const importLines = buildMinimalImportStatements(code, ALL_MAPS)
+
+  if (importLines.length === 0 && !composableImport) return null
 
   const ms = new MagicString(code)
-  const injectLines: string[] = []
-
-  if (needsRuntime) {
-    injectLines.push(RUNTIME_IMPORTS)
-  }
-
-  if (needsDirectives) {
-    injectLines.push(DIRECTIVE_IMPORTS)
-  }
-
-  if (needsFramework) {
-    injectLines.push(FRAMEWORK_IMPORTS)
-  }
+  const injectLines: string[] = [...importLines]
 
   if (composableImport) {
     injectLines.push(composableImport)
@@ -119,24 +175,6 @@ export function autoImportTransform(
   ms.prepend(injectLines.join('\n') + '\n')
 
   return ms.toString()
-}
-
-/**
- * Checks if the file already imports runtime identifiers.
- * Returns true if injection is needed (not already imported).
- */
-function isRuntimeImportNeeded(code: string): boolean {
-  // If already importing from @jasonshimmy/custom-elements-runtime (not a sub-path), skip
-  if (code.includes("from '@jasonshimmy/custom-elements-runtime'") ||
-      code.includes('from "@jasonshimmy/custom-elements-runtime"')) {
-    return false
-  }
-
-  // Check if any runtime identifiers are used in the file
-  return RUNTIME_IDENTIFIERS.some((id) => {
-    const pattern = new RegExp(`\\b${id}\\b`)
-    return pattern.test(code)
-  })
 }
 
 /**
@@ -163,38 +201,4 @@ function buildComposableImport(code: string, composableExports?: Map<string, str
   if (needed.length === 0) return null
 
   return `import { ${needed.join(', ')} } from 'virtual:cer-composables';`
-}
-
-/**
- * Checks if the file already imports framework composables (useHead, etc.).
- * Returns true if injection is needed (not already imported).
- */
-function isFrameworkImportNeeded(code: string): boolean {
-  if (code.includes("from '@jasonshimmy/vite-plugin-cer-app/composables'") ||
-      code.includes('from "@jasonshimmy/vite-plugin-cer-app/composables"')) {
-    return false
-  }
-
-  return FRAMEWORK_IDENTIFIERS.some((id) => {
-    const pattern = new RegExp(`\\b${id}\\b`)
-    return pattern.test(code)
-  })
-}
-
-/**
- * Checks if the file already imports directive identifiers.
- * Returns true if injection is needed (not already imported).
- */
-function isDirectiveImportNeeded(code: string): boolean {
-  // If already importing from directives sub-path, skip
-  if (code.includes("from '@jasonshimmy/custom-elements-runtime/directives'") ||
-      code.includes('from "@jasonshimmy/custom-elements-runtime/directives"')) {
-    return false
-  }
-
-  // Check if any directive identifiers are used in the file
-  return DIRECTIVE_IDENTIFIERS.some((id) => {
-    const pattern = new RegExp(`\\b${id}\\b`)
-    return pattern.test(code)
-  })
 }

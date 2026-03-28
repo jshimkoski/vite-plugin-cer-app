@@ -92,7 +92,7 @@
     "pathe": "^2.0.3"
   },
   "devDependencies": {
-    "@jasonshimmy/custom-elements-runtime": "^3.5.0",
+    "@jasonshimmy/custom-elements-runtime": "^3.7.1",
     "@types/node": "^25.5.0",
     "@vitest/coverage-v8": "^4.1.2",
     "cypress": "^15.13.0",

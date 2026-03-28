@@ -121,19 +121,25 @@ export function useSession<T extends Record<string, unknown> = Record<string, un
   const name = options.name ?? 'session'
   const maxAge = options.maxAge ?? 60 * 60 * 24 * 7 // 7 days
 
-  function _getSecret(): string {
+  /**
+   * Returns the list of signing secrets in priority order.
+   * The first secret is the active key (used for signing new sessions).
+   * Subsequent secrets are accepted for verification only (rotation window).
+   */
+  function _getSecrets(): string[] {
     try {
       const cfg = useRuntimeConfig()
-      const secret = (cfg as { private?: { sessionSecret?: string } }).private?.sessionSecret ?? ''
-      if (!secret) {
+      const raw = (cfg as { private?: { sessionSecret?: string | string[] } }).private?.sessionSecret ?? ''
+      const secrets = Array.isArray(raw) ? raw.filter(Boolean) : (raw ? [raw] : [])
+      if (secrets.length === 0) {
         console.warn(
           '[cer-app] useSession: runtimeConfig.private.sessionSecret is empty. ' +
           'Declare it with an empty-string default and set SESSION_SECRET in your environment.',
         )
       }
-      return secret
+      return secrets
     } catch {
-      return ''
+      return []
     }
   }
 
@@ -142,20 +148,26 @@ export function useSession<T extends Record<string, unknown> = Record<string, un
       const cookie = useCookie(name)
       const raw = cookie.value
       if (!raw) return null
-      const secret = _getSecret()
-      if (!secret) return null
-      try {
-        const key = await _importKey(secret)
-        return await _verify<T>(key, raw)
-      } catch {
-        return null
+      const secrets = _getSecrets()
+      if (secrets.length === 0) return null
+      // Try each secret in order — first match wins (supports rotation).
+      for (const secret of secrets) {
+        try {
+          const key = await _importKey(secret)
+          const result = await _verify<T>(key, raw)
+          if (result !== null) return result
+        } catch {
+          // Try next key
+        }
       }
+      return null
     },
 
     async set(data: T): Promise<void> {
-      const secret = _getSecret()
-      if (!secret) throw new Error('[cer-app] useSession: sessionSecret is not configured.')
-      const key = await _importKey(secret)
+      const secrets = _getSecrets()
+      if (secrets.length === 0) throw new Error('[cer-app] useSession: sessionSecret is not configured.')
+      // Always sign with the first (active) key.
+      const key = await _importKey(secrets[0])
       const token = await _sign(key, data)
       const cookie = useCookie(name, { maxAge, httpOnly: true, sameSite: 'Lax', path: '/' })
       cookie.set(token)

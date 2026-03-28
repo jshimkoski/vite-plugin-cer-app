@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
 import { join } from 'pathe'
 import { tmpdir } from 'node:os'
@@ -254,6 +254,46 @@ describe('runCloudflareAdapter — SPA mode', () => {
     const toml = readText(root, 'wrangler.toml')
     expect(toml).not.toContain('nodejs_compat')
     expect(toml).toContain('dist')
+  })
+})
+
+// ─── P1-4: _worker.js size guard ─────────────────────────────────────────────
+
+describe('runCloudflareAdapter — worker size guard (P1-4)', () => {
+  let root: string
+
+  beforeEach(() => {
+    root = createTempRoot()
+    writeFile(root, 'dist/server/server.js', '// server bundle')
+    writeFile(root, 'dist/client/index.html', '<html><body>shell</body></html>')
+  })
+
+  afterEach(() => rmSync(root, { recursive: true, force: true }))
+
+  it('completes without error when worker is under 900 KB', async () => {
+    // Default small worker — well under limits
+    await expect(runCloudflareAdapter(root)).resolves.not.toThrow()
+  })
+
+  it('warns to console when worker exceeds 900 KB', async () => {
+    // Write a large client HTML to inflate the worker
+    const largePadding = 'x'.repeat(950_000)
+    writeFile(root, 'dist/client/index.html', `<html><body>${largePadding}</body></html>`)
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await runCloudflareAdapter(root)
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('KB'))
+    warnSpy.mockRestore()
+  })
+
+  it('exits with error when worker exceeds 9 MB', async () => {
+    const hugePadding = 'x'.repeat(9_100_000)
+    writeFile(root, 'dist/client/index.html', `<html><body>${hugePadding}</body></html>`)
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => { throw new Error('process.exit called') }) as never)
+    await expect(runCloudflareAdapter(root)).rejects.toThrow('process.exit called')
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('MB'))
+    errorSpy.mockRestore()
+    exitSpy.mockRestore()
   })
 })
 

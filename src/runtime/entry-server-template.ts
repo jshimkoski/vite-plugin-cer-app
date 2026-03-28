@@ -107,6 +107,8 @@ export function runWithRequestContext(req, res, fn) {
 // Runs the server/middleware/ chain for a request.
 // Returns false if a middleware short-circuited the response; true to continue.
 // Exported so Netlify / Vercel / Cloudflare bridges can also call it for API routes.
+// P1-2: Middleware may throw { status: 401 } (or any numeric .status) to produce
+// a non-500 response — the status is extracted and forwarded to res.statusCode.
 export async function runServerMiddleware(req, res) {
   for (const { handler: mw } of (serverMiddleware ?? [])) {
     if (typeof mw !== 'function') continue
@@ -118,9 +120,12 @@ export async function runServerMiddleware(req, res) {
           else { calledNext = true; resolve() }
         })).catch(reject)
       })
-    } catch {
+    } catch (err) {
       if (!res.writableEnded) {
-        res.statusCode = 500
+        const statusCode = (typeof err === 'object' && err !== null && 'status' in err && typeof err.status === 'number')
+          ? (isNaN(err.status) ? 500 : err.status)
+          : 500
+        res.statusCode = statusCode
         res.end('Internal Server Error')
       }
       return false
@@ -232,6 +237,18 @@ const _prepareRequest = async (req) => {
     try {
       const mod = await route.load()
       const pageTag = mod.default
+      // P2-2: Route-level error tag (from co-located .error.ts or _error.ts).
+      // Preferred over the global errorTag when rendering loader errors for this route.
+      const routeErrorTag = mod.errorTag ?? null
+
+      // P1-1: Synthetic 404 catch-all — no page component registered.
+      if (!pageTag) {
+        const notFoundErrorTag = routeErrorTag ?? errorTag
+        const notFoundVnode = notFoundErrorTag
+          ? { tag: notFoundErrorTag, props: { attrs: { error: 'Not Found', status: '404' } }, children: [] }
+          : { tag: 'div', props: {}, children: [] }
+        return { vnode: notFoundVnode, router, head: undefined, status: 404 }
+      }
 
       // Run the loader before creating the page vnode so we can pass its
       // primitive return values as HTML attributes.  useProps() in the page
@@ -254,19 +271,20 @@ const _prepareRequest = async (req) => {
         }
       }
 
-      if (pageTag) {
-        pageVnode = { tag: pageTag, props: { attrs: { ...params, ...loaderAttrs } }, children: [] }
-      }
+      pageVnode = { tag: pageTag, props: { attrs: { ...params, ...loaderAttrs } }, children: [] }
     } catch (err) {
       // Loader threw — render the error page server-side if app/error.ts exists.
       const status = (err && typeof err === 'object' && 'status' in err && typeof err.status === 'number')
         ? err.status : 500
       const message = (err instanceof Error) ? err.message : String(err)
-      if (!errorTag) {
+      // P2-2: Prefer the route-level errorTag over the global one.
+      // routeErrorTag is not in scope here; use route?.meta?.errorTag from the matched route.
+      const effectiveErrorTag = route?.meta?.errorTag ?? errorTag
+      if (!effectiveErrorTag) {
         console.error('[cer-app] Loader error (no app/error.ts defined):', err)
       }
-      const errVnode = errorTag
-        ? { tag: errorTag, props: { attrs: { error: message, status: String(status) } }, children: [] }
+      const errVnode = effectiveErrorTag
+        ? { tag: effectiveErrorTag, props: { attrs: { error: message, status: String(status) } }, children: [] }
         : { tag: 'div', props: {}, children: [] }
       return { vnode: errVnode, router, head: undefined, status }
     }
@@ -284,7 +302,10 @@ const _prepareRequest = async (req) => {
     if (tag) vnode = { tag, props: {}, children: [vnode] }
   }
 
-  return { vnode, router, head, status: null }
+  // If the request matched a catch-all route (user-defined 404.ts or [...all].ts),
+  // return HTTP 404 so browsers and crawlers treat it as a not-found response.
+  const isCatchAll = route?.path === '/:all*'
+  return { vnode, router, head, status: isCatchAll ? 404 : null }
 }
 
 export const handler = async (req, res) => {

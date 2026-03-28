@@ -401,7 +401,7 @@ verify) and register themselves with the reactive system when a `componentId` is
 
 ---
 
-## P1-1 — No 404 fallback when catch-all route is absent
+## P1-1 — No 404 fallback when catch-all route is absent ✅ IMPLEMENTED
 
 ### Diagnosis
 
@@ -452,9 +452,18 @@ if `mod.default` is `null`, skip rendering and return `{ status: 404, vnode: err
 4. **`src/__tests__/plugin/entry-server-template.test.ts`** — add assertion: template
    handles `mod.default === null` with a 404 status return.
 
+### Implementation notes
+
+- `src/plugin/virtual/routes.ts`: After `sortRoutes`, if no `/:all*` catch-all exists, a synthetic route is appended: `load: () => Promise.resolve({ default: null, loader: null })`.
+- `src/runtime/entry-server-template.ts`: Two complementary fixes handle HTTP 404 for all catch-all cases:
+  1. `if (!pageTag)` — synthetic route (`mod.default === null`): renders the per-route or global `errorTag` with `status: 404`.
+  2. `const isCatchAll = route?.path === '/:all*'` → `status: isCatchAll ? 404 : null` — user-defined `404.ts` or `[...all].ts`: the real page component renders but the HTTP response code is 404.
+- Unit tests in `src/__tests__/plugin/entry-server-template.test.ts` and `src/__tests__/plugin/virtual/routes.test.ts`.
+- Cypress spec `e2e/cypress/e2e/synthetic-404.cy.ts` verifies all three behaviors: client-side navigation, HTTP 404 status, and no HTTP 500.
+
 ---
 
-## P1-2 — Server middleware cannot return status codes other than 500
+## P1-2 — Server middleware cannot return status codes other than 500 ✅ IMPLEMENTED
 
 ### Diagnosis
 
@@ -501,7 +510,7 @@ produce a non-500 response.
 
 ---
 
-## P1-3 — Session secret is not rotatable
+## P1-3 — Session secret is not rotatable ✅ IMPLEMENTED
 
 ### Diagnosis
 
@@ -553,7 +562,7 @@ sessionSecret: [
 
 ---
 
-## P1-4 — Cloudflare adapter has no size check for inlined HTML
+## P1-4 — Cloudflare adapter has no size check for inlined HTML ✅ IMPLEMENTED
 
 ### Diagnosis
 
@@ -604,7 +613,7 @@ Thresholds should be configurable via `adapter: { name: 'cloudflare', warnSize: 
 
 ---
 
-## P1-5 — Auto-import injects full import groups; unused exports cannot be tree-shaken
+## P1-5 — Auto-import injects full import groups; unused exports cannot be tree-shaken ✅ IMPLEMENTED
 
 ### Diagnosis
 
@@ -685,7 +694,7 @@ the same module paths. Only the subset changes.
 
 ---
 
-## P2-1 — Nested routes
+## P2-1 — Nested routes ✅ IMPLEMENTED
 
 ### Diagnosis
 
@@ -737,7 +746,7 @@ immediate goal is shared meta inheritance.
 
 ---
 
-## P2-2 — Per-route error components
+## P2-2 — Per-route error components ✅ IMPLEMENTED
 
 ### Diagnosis
 
@@ -783,9 +792,17 @@ client `cer-layout-view` component consult when displaying an error boundary.
 
 6. **`docs/routing.md`** — document co-located error components.
 
+### Implementation notes
+
+- `src/plugin/virtual/routes.ts`: `resolveRouteErrorComponent()` checks for a co-located `*.error.ts` first, then a directory-level `_error.ts`. The resolved tag name is stored in `route.meta.errorTag` and the file is bundled alongside the page via the `load()` function.
+- `src/runtime/entry-server-template.ts` (`_prepareRequest`): Uses `route?.meta?.errorTag ?? errorTag` as `effectiveErrorTag` when a loader throws, giving per-route components priority over the global error boundary.
+- `src/runtime/app-template.ts` (`cer-layout-view`): Computes `matched`/`routeMeta` before the `currentError` check so that `routeMeta?.errorTag ?? (hasError ? errorTag : null)` can be used as `effectiveErrorTag` for client-side errors — mirrors the server-side priority.
+- Kitchen-sink fixtures: `e2e/kitchen-sink/app/pages/per-route-error-test.ts` (throws in loader) and `e2e/kitchen-sink/app/pages/per-route-error-test.error.ts` (co-located error component).
+- Cypress spec `e2e/cypress/e2e/per-route-error.cy.ts` verifies the per-route error component renders (not the global one) in both SPA and SSR modes.
+
 ---
 
-## P2-3 — Client-side `useFetch()` does not deduplicate concurrent calls
+## P2-3 — Client-side `useFetch()` does not deduplicate concurrent calls ✅ IMPLEMENTED
 
 ### Diagnosis
 
@@ -838,7 +855,7 @@ concurrently share one request.
 
 ---
 
-## P2-4 — No lazy-loaded component support
+## P2-4 — No lazy-loaded component support ✅ IMPLEMENTED
 
 ### Diagnosis
 
@@ -904,7 +921,7 @@ path needs to wire into the existing on-demand registration mechanism.
 
 ---
 
-## P2-5 — `adoptedStyleSheets` not used; component styles are embedded `<style>` tags
+## P2-5 — `adoptedStyleSheets` not used; component styles are embedded `<style>` tags ✅ IMPLEMENTED
 
 ### Diagnosis
 

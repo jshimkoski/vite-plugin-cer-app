@@ -179,6 +179,55 @@ component('app-card', () => {
 
 ---
 
+## `defineAsyncComponent`
+
+`defineAsyncComponent` registers a custom element whose implementation is loaded asynchronously. Use it for heavy components that should not block the initial render.
+
+```ts
+defineAsyncComponent(
+  'ks-chart',
+  () => import('./chart-impl').then(m => m.render),  // returns a render fn
+  {
+    loading: () => html`<p>Loading chart…</p>`,          // shown while loading
+    error:   () => html`<p>Failed to load chart.</p>`,   // shown on rejection
+    timeout: 5000,                                        // ms before showing error (optional)
+  },
+)
+```
+
+The element transitions through four states:
+
+| State | Description |
+|---|---|
+| `loading` | Loader promise is pending. The `loading` template is rendered if provided. |
+| `resolved` | Loader resolved. The returned render function is called and its output is rendered. |
+| `error` | Loader rejected or timeout exceeded. The `error` template is rendered if provided. |
+| `idle` | No loader started yet (element connected before the loader is called). |
+
+**Loader return value:** The promise must resolve with a render function `() => TemplateResult | string`. The render function is called inside the component's normal reactive context — `useProps`, `ref`, etc. are available.
+
+**Timeout:** If `timeout` is set and the loader does not resolve within that many milliseconds, the state moves to `error` and the `error` template is rendered.
+
+**Options:**
+
+```ts
+interface AsyncComponentOptions {
+  loading?: () => TemplateResult | string  // rendered while pending
+  error?:   () => TemplateResult | string  // rendered on failure
+  timeout?: number                          // milliseconds before treating as error
+}
+```
+
+`defineAsyncComponent` is auto-imported — no import statement is needed in files under `app/`.
+
+If you need it outside auto-imported directories:
+
+```ts
+import { defineAsyncComponent } from '@jasonshimmy/custom-elements-runtime'
+```
+
+---
+
 ## HMR
 
 Changes to a component file's render logic trigger standard Vite HMR — no full reload required, because the static import edge is already in Vite's module graph.

@@ -136,12 +136,42 @@ app/
 
 ### `_layout.ts` syntax
 
-Export the inner layout name as a default string:
+`_layout.ts` supports two forms:
+
+**Legacy — export default string (inner layout only)**
 
 ```ts
 // app/pages/admin/_layout.ts
 export default 'sidebar'
 ```
+
+**Group meta — export const meta (middleware + layout defaults)**
+
+```ts
+// app/pages/admin/_layout.ts
+export const meta = {
+  // All pages in this directory inherit this middleware unless they declare their own
+  middleware: ['auth', 'admin'],
+  // All pages in this directory use this outer layout by default
+  layout: 'admin',
+}
+```
+
+You can also mix both forms in the same file:
+
+```ts
+// app/pages/admin/_layout.ts
+export default 'sidebar'           // inner layout (chain)
+export const meta = {
+  middleware: ['auth'],             // group middleware
+  layout: 'admin',                 // outer layout override
+}
+```
+
+**Precedence rules:**
+- Page-level `meta.middleware` completely overrides group middleware (no merging).
+- Page-level `meta.layout` overrides the group layout default.
+- The group-level `export default` sets the inner layout for the chain — this is never overridden by page meta.
 
 The value must match a filename (without extension) in `app/layouts/`.
 

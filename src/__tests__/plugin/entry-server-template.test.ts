@@ -161,9 +161,10 @@ describe('entry-server-template (ENTRY_SERVER_TEMPLATE content)', () => {
 
   it('catches loader errors in _prepareRequest', () => {
     expect(src).toContain('catch (err)')
-    // The catch block is inside _prepareRequest, before the layout chain
-    const catchIdx = src.indexOf('catch (err)')
-    const prepareIdx = src.indexOf('_prepareRequest')
+    // The catch block must exist inside _prepareRequest (after the function definition)
+    const prepareIdx = src.indexOf('const _prepareRequest')
+    const catchIdx = src.indexOf('catch (err)', prepareIdx)
+    expect(prepareIdx).toBeGreaterThan(-1)
     expect(catchIdx).toBeGreaterThan(prepareIdx)
   })
 
@@ -176,21 +177,26 @@ describe('entry-server-template (ENTRY_SERVER_TEMPLATE content)', () => {
     expect(src).toContain(': 500')
   })
 
-  it('renders errorTag component when loader throws and errorTag is set', () => {
-    expect(src).toContain('tag: errorTag')
+  it('renders error component when loader throws and an error tag is available', () => {
+    // P2-2: effectiveErrorTag (route-level or global) is used as the tag
+    expect(src).toContain('tag: effectiveErrorTag')
   })
 
-  it('logs to console.error when loader throws and no errorTag is defined', () => {
+  it('logs to console.error when loader throws and no error tag is defined', () => {
     expect(src).toContain('console.error')
-    expect(src).toContain('!errorTag')
+    expect(src).toContain('!effectiveErrorTag')
   })
 
   it('propagates status to res.statusCode', () => {
     expect(src).toContain('res.statusCode = status')
   })
 
-  it('returns status: null on the happy path', () => {
-    expect(src).toContain('status: null')
+  it('returns status: null on the happy path (non-catch-all route)', () => {
+    expect(src).toContain('isCatchAll ? 404 : null')
+  })
+
+  it('sets status 404 when the matched route is the root catch-all (/:all*)', () => {
+    expect(src).toContain("route?.path === '/:all*'")
   })
 
   // ─── Render error handling (P0-1) ────────────────────────────────────────────
@@ -255,5 +261,47 @@ describe('entry-server-template (ENTRY_SERVER_TEMPLATE content)', () => {
     expect(reqStoreIdx).toBeGreaterThan(-1)
     expect(dataStoreIdx).toBeGreaterThan(-1)
     expect(reqStoreIdx).toBeLessThan(dataStoreIdx)
+  })
+
+  // ─── P1-1: Synthetic 404 from null pageTag ───────────────────────────────────
+
+  it('handles null pageTag from the synthetic catch-all route (returns 404 status)', () => {
+    // The synthetic catch-all resolves to { default: null }; _prepareRequest must
+    // check for this and return 404 rather than crashing.
+    expect(src).toContain('!pageTag')
+    // Should return status: 404 for null pageTag
+    expect(src).toContain('status: 404')
+  })
+
+  it('uses the per-route errorTag for 404 display when available', () => {
+    // If the synthetic 404 route has an errorTag, it should be used as the 404 vnode tag
+    expect(src).toContain('routeErrorTag')
+    // Falls back to global errorTag when no per-route error component exists
+    const routeErrIdx = src.indexOf('routeErrorTag')
+    const globalErrIdx = src.indexOf('errorTag')
+    expect(routeErrIdx).toBeGreaterThan(-1)
+    expect(globalErrIdx).toBeGreaterThan(-1)
+  })
+
+  // ─── P1-2: runServerMiddleware status code extraction ──────────────────────
+
+  it('runServerMiddleware reads err.status to pick the response status code', () => {
+    // The catch block should extract err.status before defaulting to 500
+    expect(src).toContain('err.status')
+    // isNaN guard ensures non-numeric status values default to 500
+    expect(src).toContain('isNaN')
+  })
+
+  it('runServerMiddleware defaults to 500 when err has no .status property', () => {
+    expect(src).toContain(': 500')
+  })
+
+  // ─── P2-2: Per-route error component ────────────────────────────────────────
+
+  it('uses route.meta.errorTag over the global errorTag when available', () => {
+    // The error catch inside _prepareRequest should prefer the per-route error tag
+    expect(src).toContain('route?.meta?.errorTag')
+    // Fallback to global errorTag
+    expect(src).toContain('?? errorTag')
   })
 })

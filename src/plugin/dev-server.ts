@@ -19,7 +19,7 @@ export interface ResolvedCerConfig {
   router: { base?: string; scrollToFragment?: boolean | object }
   jitCss: { content: string[]; extendedColors: boolean }
   autoImports: { components: boolean; composables: boolean; directives: boolean; runtime: boolean }
-  runtimeConfig: { public: Record<string, unknown>; private: Record<string, string> }
+  runtimeConfig: { public: Record<string, unknown>; private: import('../types/config.js').RuntimePrivateConfig }
   auth: import('../types/config.js').AuthConfig | null
   i18n: { locales: string[]; defaultLocale: string; strategy: 'prefix' | 'prefix_except_default' | 'no_prefix' } | null
 }

@@ -90,6 +90,17 @@ component('page-all', () => {
 
 Both produce the same route (`/:all*`) and either form works. Use `404.ts` for clarity.
 
+**Synthetic 404 fallback (automatic)**
+
+If your app defines **no** catch-all route at all (neither `404.ts` nor `[...all].ts`), the framework injects a synthetic `/:all*` route that returns HTTP 404 without crashing. This protects production SSR apps from returning 500 for unknown paths during the period before you add a real 404 page.
+
+The synthetic route:
+- Returns `HTTP 404` in SSR mode
+- Renders the global error component (`app/error.ts`) if one is defined, passing `error="Not Found"` and `status="404"` as attributes
+- Renders an empty `<div>` if no error component is defined
+
+Add a real `404.ts` to customize the experience; the synthetic fallback is removed automatically once one exists.
+
 ---
 
 ## Route groups
@@ -337,6 +348,40 @@ export const meta = {
   render: 'static',
 }
 ```
+
+---
+
+### Per-route error components
+
+You can co-locate an error component alongside any page file. When the page's `loader` throws, the framework renders the error component instead of the global `app/error.ts` fallback.
+
+**Two file conventions are supported:**
+
+| File | Scope |
+|---|---|
+| `app/pages/foo.error.ts` | Error boundary for `app/pages/foo.ts` only |
+| `app/pages/blog/_error.ts` | Error boundary for every page under `app/pages/blog/` |
+
+Both files are **excluded from the route list** — they are never reachable as standalone routes.
+
+```ts
+// app/pages/blog/[slug].error.ts
+component('page-blog-slug-error', () => {
+  const props = useProps({ error: '', status: '' })
+
+  return html`
+    <div>
+      <h1>Post unavailable (${props.status})</h1>
+      <p>${props.error}</p>
+      <a href="/blog">← Back to blog</a>
+    </div>
+  `
+})
+```
+
+The error component receives `error` (the thrown error message) and `status` (the HTTP status code, e.g. `"422"` or `"500"`) as string attributes.
+
+**Resolution order:** page-level (`foo.error.ts`) > directory-level (`_error.ts`) > global (`app/error.ts`).
 
 ---
 

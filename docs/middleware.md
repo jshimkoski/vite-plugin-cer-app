@@ -191,9 +191,28 @@ type ServerMiddleware = (
 ```
 
 - Call `next()` to pass the request to the next handler.
-- Call `next(err)` with an error to short-circuit the chain and send a `500` response.
-- Throw (synchronously or via a rejected Promise) to produce the same result as `next(err)` — the chain stops and a `500` is returned.
+- Call `next(err)` with an error to short-circuit the chain. The response status defaults to `500`; attach a numeric `.status` to the error object to send a different status code.
+- Throw (synchronously or via a rejected Promise) to produce the same result as `next(err)`.
 - If you do not call `next()` at all (e.g. you called `res.end()`), the chain stops and subsequent handlers (API routes, SSR) will not run.
+
+**Custom status codes in server middleware**
+
+Throw (or reject) with an object that has a numeric `.status` property to control the HTTP response status:
+
+```ts
+// server/middleware/auth.ts
+export default defineServerMiddleware(async (req, _res, next) => {
+  const token = req.headers['authorization']
+  if (!token) {
+    const err = new Error('Unauthorized') as Error & { status: number }
+    err.status = 401
+    throw err
+  }
+  next()
+})
+```
+
+The framework extracts `err.status` and uses it as `res.statusCode`. If the value is non-numeric or missing, it falls back to `500`. This replaces the old behavior of always returning `500` for all middleware errors.
 
 ---
 

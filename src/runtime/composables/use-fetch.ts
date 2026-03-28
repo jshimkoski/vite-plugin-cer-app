@@ -139,6 +139,14 @@ export interface UseFetchReturn<T = unknown> {
 /** A UseFetchReturn that is also awaitable (resolves once the fetch completes). */
 export type UseFetchResult<T = unknown> = UseFetchReturn<T> & PromiseLike<UseFetchReturn<T>>
 
+// ─── Client-side in-flight deduplication ─────────────────────────────────────
+// P2-3: When two components (or two concurrent refresh() calls) fetch the same
+// key simultaneously, only one HTTP request is issued. The second caller awaits
+// the shared Promise and applies its own transform to the raw response.
+// The map is module-level so all component instances share it.
+// Keys are removed when the Promise settles (resolve or reject).
+const _inflight = new Map<string, Promise<unknown>>()
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 // Access fetch via globalThis so that vi.stubGlobal('fetch', mock) works in tests.
@@ -371,7 +379,7 @@ export function useFetch<T = unknown>(
       data: hydrated,
       pending: false,
       error: null,
-      refresh: () => doClientFetch(resolvedUrl, options, state),
+      refresh: () => doClientFetch(key, resolvedUrl, options, state),
     }
     return makeResult(state, null)
   }
@@ -383,27 +391,42 @@ export function useFetch<T = unknown>(
     error: null,
     refresh: async () => state,
   }
-  state.refresh = () => doClientFetch(resolvedUrl, options, state)
+  state.refresh = () => doClientFetch(key, resolvedUrl, options, state)
 
   let settling: Promise<void> | null = null
   if (!isLazy) {
-    settling = doClientFetch(resolvedUrl, options, state).then(() => undefined)
+    settling = doClientFetch(key, resolvedUrl, options, state).then(() => undefined)
   }
 
   return makeResult(state, settling)
 }
 
 async function doClientFetch<T>(
+  key: string,
   resolvedUrl: string,
   options: UseFetchOptions<T> | undefined,
   state: UseFetchReturn<T>,
 ): Promise<UseFetchReturn<T>> {
-  state.pending = true
-  state.error = null
+  // P2-3: Deduplicate concurrent requests for the same key.
+  // If another request for this key is already in-flight, share its raw Promise.
+  let rawPromise: Promise<unknown>
+
+  if (_inflight.has(key)) {
+    rawPromise = _inflight.get(key)!
+  } else {
+    state.pending = true
+    state.error = null
+    rawPromise = _fetch(resolvedUrl, buildInit(options))
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`)
+        return res.json()
+      })
+      .finally(() => { _inflight.delete(key) })
+    _inflight.set(key, rawPromise)
+  }
+
   try {
-    const res = await _fetch(resolvedUrl, buildInit(options))
-    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`)
-    const raw = await res.json()
+    const raw = await rawPromise
     state.data = applyTransform<T>(raw, options)
     state.pending = false
   } catch (err) {

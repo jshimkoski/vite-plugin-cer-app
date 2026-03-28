@@ -448,6 +448,29 @@ export default defineConfig({
 })
 ```
 
+**Secret rotation:** `sessionSecret` accepts a `string | string[]`. When an array is provided, the framework signs new sessions with the **first** secret and verifies incoming tokens against **all** secrets in order. This lets you rotate keys without immediately invalidating all existing sessions:
+
+```ts
+// cer.config.ts
+export default defineConfig({
+  runtimeConfig: {
+    private: {
+      sessionSecret: [
+        process.env.SESSION_SECRET_NEW!,  // active key — signs all new sessions
+        process.env.SESSION_SECRET_OLD!,  // accepted during rotation window
+      ],
+    },
+  },
+})
+```
+
+Rotation workflow:
+1. Generate a new secret and add it as the **first** element; keep the old secret as the second.
+2. Deploy. New sessions are signed with the new key; existing sessions signed with the old key are still accepted.
+3. After all old sessions have expired (or after your desired rotation window), remove the second element.
+
+A token is rejected only when it fails verification against every secret in the array.
+
 **Usage:**
 
 ```ts

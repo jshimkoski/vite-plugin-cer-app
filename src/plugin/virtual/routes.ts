@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { basename, join, relative } from 'node:path'
+import { basename, dirname, join, relative } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import { scanDirectory } from '../scanner.js'
 import { buildRouteEntry, sortRoutes } from '../path-utils.js'
@@ -113,6 +113,39 @@ function extractTitle(source: string): string | null {
 }
 
 /**
+ * Reads a `_layout.ts` file and returns the group-level meta it exports.
+ * Group meta applies to all pages in the same directory and subdirectories.
+ *
+ * Reads:
+ *   - `export const meta = { middleware: ['auth', 'admin'] }` → group middleware
+ *   - `export const meta = { layout: 'minimal' }` → group layout override
+ *   - `export default 'minimal'` → group layout (legacy form, still supported)
+ *
+ * Page-level meta takes precedence over group meta (group provides defaults only).
+ */
+async function readGroupMeta(layoutFile: string): Promise<{ middleware: string[]; layout: string | null; layoutChainExtra: string | null }> {
+  try {
+    const src = await readFile(layoutFile, 'utf-8')
+    // Legacy: export default 'layoutName'
+    const defaultMatch = src.match(/export\s+default\s+['"]([^'"]+)['"]/)
+    const layoutChainExtra = defaultMatch ? defaultMatch[1] : null
+    // meta.middleware
+    const mwMatch = src.match(/middleware\s*:\s*\[([^\]]*)\]/)
+    let middleware: string[] = []
+    if (mwMatch) {
+      const names = mwMatch[1].match(/['"]([^'"]+)['"]/g)
+      if (names) middleware = names.map((s) => s.replace(/['"]/g, ''))
+    }
+    // meta.layout (explicit override in meta object)
+    const layoutMatch = src.match(/layout\s*:\s*['"]([^'"]+)['"]/)
+    const layout = layoutMatch ? layoutMatch[1] : null
+    return { middleware, layout, layoutChainExtra }
+  } catch {
+    return { middleware: [], layout: null, layoutChainExtra: null }
+  }
+}
+
+/**
  * Resolves the layout chain for a page by walking its ancestor directories
  * inside pagesDir looking for `_layout.ts` files. Each `_layout.ts` must
  * export a default string naming a layout in `app/layouts/`.
@@ -140,18 +173,72 @@ async function resolveLayoutChain(
     currentDir = join(currentDir, part)
     const layoutFile = join(currentDir, '_layout.ts')
     if (existsSync(layoutFile)) {
-      try {
-        const src = await readFile(layoutFile, 'utf-8')
-        const match = src.match(/export\s+default\s+['"]([^'"]+)['"]/)
-        if (match) extras.push(match[1])
-      } catch (err) {
-        console.warn(`[cer-app] Could not read layout file "${layoutFile}":`, err)
-      }
+      const { layoutChainExtra } = await readGroupMeta(layoutFile)
+      if (layoutChainExtra) extras.push(layoutChainExtra)
     }
   }
 
   if (extras.length === 0) return null
   return [outerLayout ?? 'default', ...extras]
+}
+
+/**
+ * Resolves group-level meta (middleware + layout) from ancestor `_layout.ts` files.
+ * The deepest (most-specific) `_layout.ts` wins when multiple levels define the same field.
+ * Page-level meta always takes precedence over group meta.
+ */
+async function resolveGroupMeta(
+  filePath: string,
+  pagesDir: string,
+): Promise<{ middleware: string[]; layout: string | null }> {
+  const rel = relative(pagesDir, filePath)
+  const parts = rel.split('/').slice(0, -1)
+
+  let groupMiddleware: string[] = []
+  let groupLayout: string | null = null
+
+  let currentDir = pagesDir
+  for (const part of parts) {
+    currentDir = join(currentDir, part)
+    const layoutFile = join(currentDir, '_layout.ts')
+    if (existsSync(layoutFile)) {
+      const { middleware, layout } = await readGroupMeta(layoutFile)
+      // Deeper _layout.ts wins: overwrite (more-specific takes precedence)
+      if (middleware.length > 0) groupMiddleware = middleware
+      if (layout !== null) groupLayout = layout
+    }
+  }
+
+  return { middleware: groupMiddleware, layout: groupLayout }
+}
+
+/**
+ * Resolves the per-route error tag by checking for:
+ * 1. Co-located `<page>.error.ts` alongside the page file
+ * 2. Directory-level `_error.ts` in the same directory as the page
+ *
+ * Returns { errorTag, errorFilePath } when found, null otherwise.
+ */
+function resolveRouteErrorTag(
+  filePath: string,
+  pagesDir: string,
+  pageTagName: string,
+): { errorTag: string; errorFilePath: string } | null {
+  // 1. Co-located: foo.ts → foo.error.ts
+  const colocated = filePath.replace(/\.ts$/, '.error.ts')
+  if (existsSync(colocated)) {
+    return { errorTag: pageTagName + '-error', errorFilePath: colocated }
+  }
+  // 2. Directory-level: _error.ts in the same dir
+  const dirError = join(dirname(filePath), '_error.ts')
+  if (existsSync(dirError)) {
+    // Tag: based on directory relative to pagesDir
+    const relDir = relative(pagesDir, dirname(filePath))
+    const dirParts = relDir.split('/').filter(Boolean)
+    const tag = dirParts.length > 0 ? `page-${dirParts.join('-')}-error` : 'page-error'
+    return { errorTag: tag.toLowerCase().replace(/-+/g, '-').replace(/^-|-$/g, ''), errorFilePath: dirError }
+  }
+  return null
 }
 
 export interface I18nRouteConfig {
@@ -185,8 +272,8 @@ export async function generateRoutesCode(pagesDir: string, i18n?: I18nRouteConfi
   }
 
   const allFiles = await scanDirectory('**/*.ts', pagesDir)
-  // Exclude _layout.ts files — they are directory-level layout config, not pages.
-  const files = allFiles.filter((f) => basename(f) !== '_layout.ts')
+  // Exclude _layout.ts and _error.ts files — they are directory-level config, not pages.
+  const files = allFiles.filter((f) => basename(f) !== '_layout.ts' && basename(f) !== '_error.ts' && !basename(f).endsWith('.error.ts'))
 
   if (files.length === 0) {
     return `// AUTO-GENERATED by @jasonshimmy/vite-plugin-cer-app\nconst routes = []\nexport default routes\n`
@@ -224,14 +311,28 @@ export async function generateRoutesCode(pagesDir: string, i18n?: I18nRouteConfi
     render: 'static' | 'server' | 'spa' | null
     hydrate: 'load' | 'idle' | 'visible' | 'none' | null
     title: string | null
+    routeErrorTag: string | null
+    routeErrorFilePath: string | null
   }> = await Promise.all(
     sorted.map(async (entry) => {
       try {
         const src = await readFile(entry.filePath, 'utf-8')
-        const layout = extractLayout(src)
+        const pageLayout = extractLayout(src)
+        const pageMiddleware = extractMiddleware(src)
+
+        // P2-1: Resolve group meta from ancestor _layout.ts files.
+        // Page-level declarations take precedence over group-level defaults.
+        const groupMeta = await resolveGroupMeta(entry.filePath, pagesDir)
+        const layout = pageLayout ?? groupMeta.layout
+        const middleware = pageMiddleware.length > 0 ? pageMiddleware : groupMeta.middleware
+
         const layoutChain = await resolveLayoutChain(entry.filePath, pagesDir, layout)
+
+        // P2-2: Resolve per-route error tag from co-located or directory _error.ts.
+        const routeError = resolveRouteErrorTag(entry.filePath, pagesDir, entry.tagName)
+
         return {
-          middleware: extractMiddleware(src),
+          middleware,
           layout,
           layoutChain,
           revalidate: extractRevalidate(src),
@@ -239,9 +340,11 @@ export async function generateRoutesCode(pagesDir: string, i18n?: I18nRouteConfi
           render: extractRender(src),
           hydrate: extractHydrate(src),
           title: extractTitle(src),
+          routeErrorTag: routeError?.errorTag ?? null,
+          routeErrorFilePath: routeError?.errorFilePath ?? null,
         }
       } catch {
-        return { middleware: [], layout: null, layoutChain: null, revalidate: null, transition: null, render: null, hydrate: null, title: null }
+        return { middleware: [], layout: null, layoutChain: null, revalidate: null, transition: null, render: null, hydrate: null, title: null, routeErrorTag: null, routeErrorFilePath: null }
       }
     }),
   )
@@ -285,9 +388,12 @@ export async function generateRoutesCode(pagesDir: string, i18n?: I18nRouteConfi
     )
   }
 
+  // Track whether any user-defined catch-all route exists.
+  const hasCatchAll = sorted.some((e) => e.isCatchAll)
+
   // Build routes array with lazy load() functions for code splitting.
   const routeItems = sorted.map((entry, i) => {
-    const { middleware: mw, layout, layoutChain, revalidate, transition, render, hydrate, title } = metaPerEntry[i]
+    const { middleware: mw, layout, layoutChain, revalidate, transition, render, hydrate, title, routeErrorTag, routeErrorFilePath } = metaPerEntry[i]
     const filePath = JSON.stringify(entry.filePath)
     const tagName = JSON.stringify(entry.tagName)
     const routePath = JSON.stringify(entry.routePath)
@@ -296,7 +402,16 @@ export async function generateRoutesCode(pagesDir: string, i18n?: I18nRouteConfi
     //   1. Runs component() as a side effect, registering the custom element
     //   2. Returns the tag name string as `default` so the router knows what to render
     //   3. Forwards the optional `loader` export for SSR data hydration
-    const loadFn = `() => import(${filePath}).then(mod => ({ default: ${tagName}, loader: mod.loader ?? null }))`
+    //   4. (P2-2) If a co-located or directory _error.ts exists, imports it as a side-effect
+    //      and returns its tag name as `errorTag` for per-route error boundaries.
+    let loadFn: string
+    if (routeErrorFilePath) {
+      const errorPath = JSON.stringify(routeErrorFilePath)
+      const errorTagLiteral = JSON.stringify(routeErrorTag)
+      loadFn = `() => Promise.all([import(${filePath}), import(${errorPath})]).then(([mod]) => ({ default: ${tagName}, loader: mod.loader ?? null, errorTag: ${errorTagLiteral} }))`
+    } else {
+      loadFn = `() => import(${filePath}).then(mod => ({ default: ${tagName}, loader: mod.loader ?? null }))`
+    }
 
     // Build meta object — only emit fields that are set
     const metaFields: string[] = []
@@ -320,6 +435,10 @@ export async function generateRoutesCode(pagesDir: string, i18n?: I18nRouteConfi
     }
     if (title !== null) {
       metaFields.push(`title: ${JSON.stringify(title)}`)
+    }
+    // P2-2: Per-route error tag stored in meta for SSR error boundary resolution.
+    if (routeErrorTag !== null) {
+      metaFields.push(`errorTag: ${JSON.stringify(routeErrorTag)}`)
     }
     const metaStr = metaFields.length > 0 ? `    meta: { ${metaFields.join(', ')} },\n` : ''
 
@@ -362,8 +481,15 @@ export async function generateRoutesCode(pagesDir: string, i18n?: I18nRouteConfi
     return buildLocaleRouteItems(routePath, loadFn, metaStr, mwChainBody, entry.isCatchAll)
   })
 
+  // P1-1: If no user-defined catch-all exists, synthesize a 404 fallback route.
+  // The null default tag causes _prepareRequest to return status 404.
+  const allRouteItems = routeItems.flat()
+  if (!hasCatchAll) {
+    allRouteItems.push(`  {\n    path: '/:all*',\n    load: () => Promise.resolve({ default: null, loader: null }),\n  }`)
+  }
+
   lines.push('const routes = [')
-  lines.push(routeItems.flat().join(',\n'))
+  lines.push(allRouteItems.join(',\n'))
   lines.push(']')
   lines.push('')
   lines.push('export default routes')

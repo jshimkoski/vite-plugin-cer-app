@@ -3,7 +3,7 @@ export interface RuntimeConfigPublic {
 }
 
 export interface RuntimeConfigPrivate {
-  [key: string]: string
+  [key: string]: string | string[]
 }
 
 export interface RuntimeConfigResult {
@@ -70,15 +70,22 @@ function toUpperSnakeCase(key: string): string {
  * 2. `env[UPPER_SNAKE_CASE(key)]` — conventional env var form (e.g. `process.env.DB_URL`)
  * 3. `defaultValue`               — the declared default from `cer.config.ts`
  *
+ * Array values (e.g. `sessionSecret: [newSecret, oldSecret]`) are passed
+ * through unchanged — they are already resolved by the caller at config time.
+ *
  * Accepts an optional `env` parameter so the function is unit-testable
  * without mutating `process.env`.
  */
 export function resolvePrivateConfig(
-  defaults: Record<string, string>,
+  defaults: Record<string, string | string[]>,
   env: Record<string, string | undefined> = process.env as Record<string, string | undefined>,
-): Record<string, string> {
+): Record<string, string | string[]> {
   return Object.fromEntries(
     Object.entries(defaults).map(([key, defaultValue]) => {
+      // Array values are already fully resolved at config build time — pass through.
+      if (Array.isArray(defaultValue)) {
+        return [key, defaultValue.filter(Boolean)]
+      }
       const envKey = toUpperSnakeCase(key)
       const resolved = env[key] ?? env[envKey] ?? defaultValue
       // Warn when no env var was found and the declared default is an empty string.

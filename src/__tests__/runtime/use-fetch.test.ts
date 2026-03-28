@@ -306,3 +306,72 @@ describe('useFetch() — client fetch path', () => {
     expect(result.data).toEqual({ id: 11 })
   })
 })
+
+// ─── P2-3: Client-side in-flight deduplication ────────────────────────────────
+
+describe('useFetch() — client in-flight deduplication (P2-3)', () => {
+  beforeEach(() => {
+    delete g['__CER_FETCH_STORE__']
+    delete g['__CER_FETCH_DATA__']
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('issues only one HTTP request when two calls with the same key are concurrent', async () => {
+    let resolveFirst!: (v: unknown) => void
+    let fetchCallCount = 0
+    vi.stubGlobal('fetch', vi.fn(() => {
+      fetchCallCount++
+      return new Promise((resolve) => { resolveFirst = resolve })
+    }))
+
+    // Start two concurrent fetches
+    const p1 = useFetch<number[]>('/api/items')
+    const p2 = useFetch<number[]>('/api/items')
+
+    // Resolve the shared in-flight request
+    resolveFirst({ ok: true, json: async () => [1, 2, 3] })
+
+    await p1
+    await p2
+
+    // Only one actual HTTP call despite two useFetch calls
+    expect(fetchCallCount).toBe(1)
+    expect(p1.data).toEqual([1, 2, 3])
+    expect(p2.data).toEqual([1, 2, 3])
+  })
+
+  it('each caller applies its own transform to the shared raw response', async () => {
+    let resolveShared!: (v: unknown) => void
+    vi.stubGlobal('fetch', vi.fn(() => new Promise((resolve) => { resolveShared = resolve })))
+
+    const p1 = useFetch<number>('/api/nums', { transform: (d) => (d as number[]).length })
+    const p2 = useFetch<number[]>('/api/nums')
+
+    resolveShared({ ok: true, json: async () => [10, 20, 30] })
+    await p1
+    await p2
+
+    // p1 transformed (count), p2 raw
+    expect(p1.data).toBe(3)
+    expect(p2.data).toEqual([10, 20, 30])
+  })
+
+  it('a second fetch after the first has settled issues a fresh HTTP request', async () => {
+    let callCount = 0
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      callCount++
+      return { ok: true, json: async () => callCount }
+    }))
+
+    const first = await useFetch<number>('/api/seq')
+    expect(first.data).toBe(1)
+
+    // Wait a tick — first request is done, _inflight map entry is removed
+    const second = await useFetch<number>('/api/seq')
+    expect(second.data).toBe(2)
+    expect(callCount).toBe(2)
+  })
+})

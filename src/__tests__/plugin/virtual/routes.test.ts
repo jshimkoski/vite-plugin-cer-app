@@ -189,7 +189,14 @@ describe('generateRoutesCode', () => {
 
 describe('generateRoutesCode — meta.layout', () => {
   beforeEach(() => {
-    vi.mocked(existsSync).mockReturnValue(true)
+    // Return true for directory existence checks but false for .error.ts and
+    // _error.ts so resolveRouteErrorTag doesn't inject spurious errorTag fields
+    // into routes that aren't testing error boundaries.
+    vi.mocked(existsSync).mockImplementation((p: unknown) => {
+      const path = String(p)
+      if (path.endsWith('.error.ts') || path.endsWith('/_error.ts') || path.endsWith('\\_error.ts')) return false
+      return true
+    })
     vi.mocked(scanDirectory).mockResolvedValue([])
     vi.mocked(readFile).mockResolvedValue('' as never)
   })
@@ -686,5 +693,162 @@ describe('generateRoutesCode — i18n route prefixing', () => {
     expect(code).toContain('"/about"')
     expect(code).not.toContain('"/en/about"')
     expect(code).not.toContain('locale:')
+  })
+})
+
+// ─── P1-1: Synthetic 404 catch-all ───────────────────────────────────────────
+
+describe('generateRoutesCode — synthetic 404 catch-all (P1-1)', () => {
+  beforeEach(() => {
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(scanDirectory).mockResolvedValue([])
+    vi.mocked(readFile).mockResolvedValue('' as never)
+  })
+
+  it('adds a synthetic /:all* route when no user-defined catch-all exists', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/about.ts`])
+    const code = await generateRoutesCode(PAGES)
+    // Synthetic route uses single quotes in the generated code
+    expect(code).toContain("path: '/:all*'")
+    // Synthetic route returns default: null
+    expect(code).toContain('default: null')
+  })
+
+  it('does NOT add a synthetic catch-all when a user 404.ts already exists', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/404.ts`, `${PAGES}/about.ts`])
+    const code = await generateRoutesCode(PAGES)
+    // Should have exactly one /:all* (the real 404 page, with double quotes)
+    expect(code).toContain('"/:all*"')
+    expect(code).not.toContain('default: null')
+  })
+
+  it('does NOT add a synthetic catch-all when a user [...all].ts already exists', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/[...all].ts`])
+    const code = await generateRoutesCode(PAGES)
+    // Real catch-all uses double quotes
+    expect(code).toContain('"/:all*"')
+    expect(code).not.toContain('default: null')
+  })
+
+  it('does not add a synthetic catch-all for an empty pages directory (no routes)', async () => {
+    const code = await generateRoutesCode(PAGES)
+    // Empty routes array — no synthetic catch-all needed when there are no routes
+    expect(code).toContain('const routes = []')
+    expect(code).not.toContain("path: '/:all*'")
+  })
+})
+
+// ─── P2-1: _layout.ts group meta inheritance ─────────────────────────────────
+
+describe('generateRoutesCode — group meta from _layout.ts (P2-1)', () => {
+  beforeEach(() => {
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(scanDirectory).mockResolvedValue([])
+    vi.mocked(readFile).mockResolvedValue('' as never)
+  })
+
+  it('inherits middleware from ancestor _layout.ts when page has none', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/admin/dashboard.ts`])
+    vi.mocked(readFile).mockImplementation(async (path: unknown) => {
+      if (String(path).endsWith('_layout.ts')) {
+        return `export const meta = { middleware: ['auth'] }`
+      }
+      return ''
+    })
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('beforeEnter')
+    expect(code).toContain('"auth"')
+  })
+
+  it('page-level middleware overrides group middleware from _layout.ts', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/admin/profile.ts`])
+    vi.mocked(readFile).mockImplementation(async (path: unknown) => {
+      if (String(path).endsWith('_layout.ts')) {
+        return `export const meta = { middleware: ['auth'] }`
+      }
+      // page declares its own middleware
+      return `export const meta = { middleware: ['verified'] }`
+    })
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('"verified"')
+    // Page overrides group — group middleware should NOT appear
+    expect(code).not.toContain('"auth"')
+  })
+
+  it('inherits layout from ancestor _layout.ts meta.layout when page has no explicit layout', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/docs/intro.ts`])
+    vi.mocked(readFile).mockImplementation(async (path: unknown) => {
+      if (String(path).endsWith('_layout.ts')) {
+        // _layout.ts exports meta.layout (group default layout)
+        return `export const meta = { layout: 'docs' }`
+      }
+      return ''
+    })
+    const code = await generateRoutesCode(PAGES)
+    // The layout from group meta should appear in the route
+    expect(code).toContain('"docs"')
+  })
+})
+
+// ─── P2-2: Per-route error tags ───────────────────────────────────────────────
+
+describe('generateRoutesCode — per-route error tags (P2-2)', () => {
+  beforeEach(() => {
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(scanDirectory).mockResolvedValue([])
+    vi.mocked(readFile).mockResolvedValue('' as never)
+  })
+
+  it('excludes *.error.ts files from generating their own routes', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([
+      `${PAGES}/about.ts`,
+      `${PAGES}/about.error.ts`,
+    ])
+    const code = await generateRoutesCode(PAGES)
+    // The about route should exist
+    expect(code).toContain('"/about"')
+    // The error file must NOT produce a separate route path like /about-error or /about.error
+    expect(code).not.toContain('path: "/about-error"')
+    expect(code).not.toContain('path: "/about.error"')
+  })
+
+  it('excludes _error.ts files from generated routes', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([
+      `${PAGES}/admin/users.ts`,
+      `${PAGES}/admin/_error.ts`,
+    ])
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('/admin/users')
+    expect(code).not.toContain('_error')
+  })
+
+  it('load() includes co-located error file import when present', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([
+      `${PAGES}/dashboard.ts`,
+      `${PAGES}/dashboard.error.ts`,
+    ])
+    vi.mocked(existsSync).mockImplementation((p: unknown) => {
+      const path = String(p)
+      // The co-located error file exists
+      if (path.endsWith('dashboard.error.ts')) return true
+      return true
+    })
+    const code = await generateRoutesCode(PAGES)
+    // load() should import the error component alongside the page
+    expect(code).toContain('dashboard.error.ts')
+    expect(code).toContain('Promise.all')
+  })
+
+  it('emits meta.errorTag when co-located *.error.ts is present', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([
+      `${PAGES}/settings.ts`,
+      `${PAGES}/settings.error.ts`,
+    ])
+    vi.mocked(existsSync).mockImplementation((p: unknown) => {
+      if (String(p).endsWith('settings.error.ts')) return true
+      return true
+    })
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain('errorTag')
   })
 })

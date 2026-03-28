@@ -171,9 +171,14 @@ component('cer-layout-view', () => {
   })
   useOnDisconnected(() => { unsub?.(); unsub = undefined })
 
+  const matched = router.matchRoute(current.value.path)
+  const routeMeta = matched?.route?.meta
+
   if (currentError.value !== null) {
-    if (hasError && errorTag) {
-      return { tag: errorTag, props: { attrs: { error: String(currentError.value) } }, children: [] }
+    const routeErrorTag = routeMeta?.errorTag ?? null
+    const effectiveErrorTag = routeErrorTag ?? (hasError ? errorTag : null)
+    if (effectiveErrorTag) {
+      return { tag: effectiveErrorTag, props: { attrs: { error: String(currentError.value) } }, children: [] }
     }
     return { tag: 'div', props: { attrs: { style: 'padding:2rem;font-family:monospace' } }, children: String(currentError.value) }
   }
@@ -181,9 +186,6 @@ component('cer-layout-view', () => {
   if (isNavigating.value && hasLoading && loadingTag) {
     return { tag: loadingTag, props: {}, children: [] }
   }
-
-  const matched = router.matchRoute(current.value.path)
-  const routeMeta = matched?.route?.meta
 
   // Render the page component directly when a pre-loaded tag is available AND
   // the loaded path matches the current route.  The path guard detects

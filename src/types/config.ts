@@ -94,7 +94,29 @@ export interface RuntimePublicConfig {
 }
 
 export interface RuntimePrivateConfig {
-  [key: string]: string
+  /**
+   * HMAC-SHA-256 signing secret(s) for `useSession()`.
+   *
+   * Pass a single string for simple usage, or an **array** to support secret
+   * rotation without logging everyone out:
+   * - The **first** element is the active key — new sessions are signed with it.
+   * - Subsequent elements are accepted for **verification only** — old sessions
+   *   signed with them continue to work until they expire.
+   *
+   * ```ts
+   * // cer.config.ts
+   * runtimeConfig: {
+   *   private: {
+   *     sessionSecret: [
+   *       process.env.SESSION_SECRET_NEW!,  // signs new sessions
+   *       process.env.SESSION_SECRET_OLD!,  // still accepted during rotation
+   *     ],
+   *   },
+   * }
+   * ```
+   */
+  sessionSecret?: string | string[]
+  [key: string]: string | string[] | undefined
 }
 
 export interface RuntimeConfig {
