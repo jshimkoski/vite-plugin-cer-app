@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.19.1] - 2026-03-28
+
+- fix: add entry-server.ts generation for SSR support in dev server (2f102c8)
+
 ## [v0.19.0] - 2026-03-28
 
 - feat: implement observability hooks for SSR requests and responses, including error handling feat: inform developers when private config is used in a public context (44b592c)
