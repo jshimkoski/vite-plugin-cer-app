@@ -9,11 +9,11 @@
     "preview": "cer-app preview"
   },
   "dependencies": {
-    "@jasonshimmy/custom-elements-runtime": "^3.4.0"
+    "@jasonshimmy/custom-elements-runtime": "^3.7.1"
   },
   "devDependencies": {
-    "vite": "^8.0.1",
-    "@jasonshimmy/vite-plugin-cer-app": "^0.13.0",
-    "typescript": "^5.9.3"
+    "@jasonshimmy/vite-plugin-cer-app": "^0.17.2",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.3"
   }
 }
