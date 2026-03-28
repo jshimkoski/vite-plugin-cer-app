@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
+/** Options forwarded to the `Set-Cookie` header when writing a cookie via `useCookie()`. */
 export interface CookieOptions {
   /** Cookie path. Defaults to '/' when setting/removing. */
   path?: string
@@ -12,6 +13,7 @@ export interface CookieOptions {
   sameSite?: 'Strict' | 'Lax' | 'None'
 }
 
+/** Isomorphic cookie accessor returned by `useCookie()`. Reads the current value and provides `set`/`remove` methods. */
 export interface CookieRef {
   /** The current cookie value, or undefined if not set. */
   readonly value: string | undefined

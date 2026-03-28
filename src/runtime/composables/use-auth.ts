@@ -2,6 +2,11 @@ import { useSession } from './use-session.js'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+/**
+ * Normalised user profile stored in the auth session after a successful OAuth login.
+ * The `provider`, `id`, and at least one of `name`/`email` fields are populated by the built-in
+ * provider normalisers. Additional fields from `mapUser()` are merged in.
+ */
 export interface AuthUser {
   provider: string
   id: string
@@ -11,6 +16,7 @@ export interface AuthUser {
   [key: string]: unknown
 }
 
+/** Return value of `useAuth()`. Exposes the current user and helpers for login/logout. */
 export interface AuthComposable {
   /** The currently authenticated user, or `null` if not logged in. */
   readonly user: AuthUser | null

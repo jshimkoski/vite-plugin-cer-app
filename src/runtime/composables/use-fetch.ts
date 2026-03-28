@@ -72,6 +72,7 @@ export interface UseFetchReactiveReturn<T = unknown> {
   refresh(): Promise<void>
 }
 
+/** Options for `useFetch()`. Controls caching, SSR behaviour, data transformation, and HTTP request details. */
 export interface UseFetchOptions<T = unknown> {
   /**
    * Unique cache key.  Defaults to the full URL string (including query params).

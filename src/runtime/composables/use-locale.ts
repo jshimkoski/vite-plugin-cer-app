@@ -1,5 +1,6 @@
 import type { IncomingMessage } from 'node:http'
 
+/** Return value of `useLocale()`. Exposes the active locale and helpers for locale-aware navigation. */
 export interface LocaleComposable {
   /** The active locale code for the current request / page. */
   readonly locale: string

@@ -1,3 +1,7 @@
+/**
+ * Describes the `<head>` tags to inject for a page or component.
+ * Pass to `useHead()`. All fields are optional; only set fields are emitted.
+ */
 export interface HeadInput {
   title?: string
   meta?: Array<Record<string, string>>

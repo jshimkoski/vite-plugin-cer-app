@@ -3,6 +3,7 @@ import { useRuntimeConfig } from './use-runtime-config.js'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+/** Options for `useSession()`. Controls the cookie name and expiry. */
 export interface SessionOptions {
   /**
    * Cookie name for the session. Defaults to `'session'`.
@@ -14,6 +15,10 @@ export interface SessionOptions {
   maxAge?: number
 }
 
+/**
+ * HMAC-signed cookie session returned by `useSession()`.
+ * All methods are async because signing and verification use the Web Crypto API.
+ */
 export interface SessionComposable<T extends Record<string, unknown> = Record<string, unknown>> {
   /**
    * Reads and verifies the session cookie. Returns the session data or `null`

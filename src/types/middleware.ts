@@ -40,6 +40,22 @@ export type MiddlewareFn = (
   next: () => Promise<void>,
 ) => GuardResult | void
 
+/**
+ * Server middleware function. Receives the raw Node.js `req`/`res` pair and a `next`
+ * callback. Call `next()` to pass control to the next middleware in the chain,
+ * or call `next(err)` to signal an error (sets the response status from `err.status`,
+ * defaulting to 500).
+ *
+ * Defined with `defineServerMiddleware()` and placed in `app/middleware/`.
+ *
+ * @example
+ * ```ts
+ * export default defineServerMiddleware((req, res, next) => {
+ *   res.setHeader('X-Request-Id', crypto.randomUUID())
+ *   next()
+ * })
+ * ```
+ */
 export type ServerMiddleware = (
   req: IncomingMessage,
   res: ServerResponse,

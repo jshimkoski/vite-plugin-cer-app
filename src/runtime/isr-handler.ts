@@ -17,6 +17,7 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
+/** A single cached SSR response stored by `createIsrHandler`. Includes the full rendered HTML, response headers, status code, and revalidation metadata. */
 export interface IsrCacheEntry {
   html: string
   headers: Record<string, string>
@@ -25,6 +26,7 @@ export interface IsrCacheEntry {
   revalidate: number
 }
 
+/** The SSR request handler signature produced by the server entry bundle (exported as `handler`). Compatible with Express, Hono, and any Node.js HTTP server. */
 export type SsrHandlerFn = (req: IncomingMessage, res: ServerResponse) => unknown
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────

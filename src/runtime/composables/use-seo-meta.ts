@@ -1,5 +1,10 @@
 import { useHead } from './use-head.js'
 
+/**
+ * Convenience input for common SEO meta tags.
+ * Pass to `useSeoMeta()` — it maps each field to the correct `<meta>` or `<title>` tag automatically.
+ * All fields are optional.
+ */
 export interface SeoMetaInput {
   /** Sets the document title. */
   title?: string

@@ -2,6 +2,7 @@ import type { RouterConfig } from '@jasonshimmy/custom-elements-runtime/router'
 
 // ─── OAuth / Auth types ───────────────────────────────────────────────────────
 
+/** Token payload returned by an OAuth provider after a successful authorization code exchange. */
 export interface OAuthTokens {
   accessToken: string
   refreshToken?: string
@@ -9,6 +10,7 @@ export interface OAuthTokens {
   tokenType: string
 }
 
+/** Configuration for a single OAuth 2.0 provider (Google, GitHub, Discord, or a custom provider). */
 export interface OAuthProviderConfig {
   /** OAuth application client ID. */
   clientId: string
@@ -30,6 +32,7 @@ export interface OAuthProviderConfig {
   mapUser?: (profile: Record<string, unknown>, tokens: OAuthTokens) => Record<string, unknown>
 }
 
+/** Authentication configuration. Enables OAuth login flows and auto-generates `/api/auth/*` routes. */
 export interface AuthConfig {
   /**
    * OAuth provider configurations keyed by provider name.
@@ -53,6 +56,7 @@ export interface AuthConfig {
   sessionKey?: string
 }
 
+/** Internationalisation routing configuration. When set, locale-aware URL routes are generated and `useLocale()` is enabled. */
 export interface I18nConfig {
   /**
    * All supported locale codes. e.g. `['en', 'fr', 'de']`.
@@ -71,28 +75,46 @@ export interface I18nConfig {
   strategy?: 'prefix' | 'prefix_except_default' | 'no_prefix'
 }
 
+/** Global Static Site Generation (SSG) configuration. Controls which routes are pre-rendered and at what concurrency. */
 export interface SsgConfig {
+  /**
+   * Routes to pre-render.
+   * - `'auto'` (default) — pre-render every static route discovered in `app/pages/`.
+   * - `string[]` — explicit list of paths (e.g. `['/about', '/contact']`).
+   */
   routes?: 'auto' | string[]
+  /** Maximum number of pages rendered in parallel. Defaults to `1`. Increase for faster SSG builds at the cost of higher memory usage. */
   concurrency?: number
-  fallback?: boolean // fall back to SSR for unenumerated routes
+  /** When `true`, unenumerated routes fall back to SSR at runtime instead of returning 404. */
+  fallback?: boolean
 }
 
+/** JIT (Just-In-Time) CSS configuration for shadow-DOM style injection. */
 export interface JitCssConfig {
+  /** Additional glob patterns for content files scanned by the JIT CSS engine. */
   content?: string[]
+  /** Enable the extended color palette. Defaults to `false`. */
   extendedColors?: boolean
 }
 
+/** Fine-grained control over which auto-import categories are injected into page/layout/component files. All categories are enabled by default. */
 export interface AutoImportsConfig {
+  /** Auto-import components defined in `app/components/`. Defaults to `true`. */
   components?: boolean
+  /** Auto-import framework composables (`useHead`, `useState`, etc.). Defaults to `true`. */
   composables?: boolean
+  /** Auto-import template directives (`when`, `each`, `bind`). Defaults to `true`. */
   directives?: boolean
+  /** Auto-import runtime primitives (`component`, `html`, `ref`, etc.). Defaults to `true`. */
   runtime?: boolean
 }
 
+/** Arbitrary public runtime values serialized into the virtual module at build time. Available on both server and client via `useRuntimeConfig().public`. */
 export interface RuntimePublicConfig {
   [key: string]: unknown
 }
 
+/** Server-only secrets resolved from `process.env` at startup. Never serialized into the client bundle. Available via `useRuntimeConfig().private` in loaders and server middleware only. */
 export interface RuntimePrivateConfig {
   /**
    * HMAC-SHA-256 signing secret(s) for `useSession()`.
@@ -119,6 +141,7 @@ export interface RuntimePrivateConfig {
   [key: string]: string | string[] | undefined
 }
 
+/** Runtime configuration split into `public` (client + server) and `private` (server-only) sections. */
 export interface RuntimeConfig {
   /**
    * Public runtime config — available on both server and client via
@@ -146,6 +169,7 @@ export interface RuntimeConfig {
   private?: RuntimePrivateConfig
 }
 
+/** Root configuration object for `cer.config.ts`. Pass to `defineConfig()` for type-safe configuration. */
 export interface CerAppConfig {
   mode?: 'spa' | 'ssr' | 'ssg'
   srcDir?: string // defaults to 'app'
@@ -220,6 +244,25 @@ export interface CerAppConfig {
   auth?: AuthConfig
 }
 
+/**
+ * Define the framework configuration with full TypeScript intellisense.
+ * This is a pass-through helper — it returns `config` unchanged and exists
+ * solely to provide type checking and IDE autocompletion in `cer.config.ts`.
+ *
+ * @example
+ * ```ts
+ * // cer.config.ts
+ * import { defineConfig } from '@jasonshimmy/vite-plugin-cer-app'
+ *
+ * export default defineConfig({
+ *   mode: 'ssr',
+ *   runtimeConfig: {
+ *     public: { apiBase: 'https://api.example.com' },
+ *     private: { dbUrl: '' },
+ *   },
+ * })
+ * ```
+ */
 export function defineConfig(config: CerAppConfig): CerAppConfig {
   return config
 }

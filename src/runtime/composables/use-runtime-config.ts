@@ -1,11 +1,14 @@
+/** Resolved public runtime config values. Available on both server and client. */
 export interface RuntimeConfigPublic {
   [key: string]: unknown
 }
 
+/** Resolved private runtime config values. Available on the server only — never present on the client. */
 export interface RuntimeConfigPrivate {
   [key: string]: string | string[]
 }
 
+/** Return value of `useRuntimeConfig()`. */
 export interface RuntimeConfigResult {
   public: RuntimeConfigPublic
   private?: RuntimeConfigPrivate
