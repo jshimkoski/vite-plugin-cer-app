@@ -1,6 +1,11 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.19.0] - 2026-03-28
+
+- feat: implement observability hooks for SSR requests and responses, including error handling feat: inform developers when private config is used in a public context (44b592c)
+- chore: enhance type definitions with detailed comments across composables and types (e5c1963)
+
 ## [v0.18.2] - 2026-03-28
 
 - fix: correct vite-plugin-cer-app version in generated package.json files (ae1ccc1)
