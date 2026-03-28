@@ -190,6 +190,19 @@ function generateAppConfigModule(config: ResolvedCerConfig, ssr = false): string
     // the authenticated user without duplicating config knowledge.
     const authSessionKey = config.auth?.sessionKey ?? (config.auth ? 'auth' : null)
     code += `\nexport const _authSessionKey = ${JSON.stringify(authSessionKey)}\n`
+    // Thread observability hooks by re-importing the user's cer.config.ts.
+    // Functions can't be JSON-serialised, so we import directly and re-export.
+    const configFilePath = join(config.root, 'cer.config.ts')
+    if (existsSync(configFilePath)) {
+      code += `\nimport _cerUserConfig from ${JSON.stringify(configFilePath)}\n`
+      code += `export const _hooks = {\n`
+      code += `  onError: _cerUserConfig.onError ?? null,\n`
+      code += `  onRequest: _cerUserConfig.onRequest ?? null,\n`
+      code += `  onResponse: _cerUserConfig.onResponse ?? null,\n`
+      code += `}\n`
+    } else {
+      code += `\nexport const _hooks = { onError: null, onRequest: null, onResponse: null }\n`
+    }
   }
 
   return code

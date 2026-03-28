@@ -12,7 +12,7 @@
     "@jasonshimmy/custom-elements-runtime": "^3.7.1"
   },
   "devDependencies": {
-    "@jasonshimmy/vite-plugin-cer-app": "^0.18.1",
+    "@jasonshimmy/vite-plugin-cer-app": "^0.19.0",
     "typescript": "^5.9.3",
     "vite": "^8.0.3"
   }

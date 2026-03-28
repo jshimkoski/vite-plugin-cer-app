@@ -50,6 +50,24 @@ When `auth` is configured, the framework automatically registers:
 | `GET /api/auth/callback/:provider` | Handles the OAuth callback — exchanges the code for tokens, fetches the user profile, writes the auth session cookie, and redirects to `redirectAfterLogin` |
 | `GET /api/auth/logout` | Clears the auth session cookie and redirects to `redirectAfterLogout` |
 
+### OAuth error handling
+
+All network calls in the callback route (token exchange and user-info fetch) are wrapped in try/catch. If a provider is unreachable or returns an unexpected response, the handler responds with HTTP 502 and a plain-text diagnostic message rather than crashing the server:
+
+| Failure | Status | Response body |
+|---|---|---|
+| Token exchange network error | 502 | `[cer-app] OAuth token exchange request failed` |
+| Token exchange non-OK HTTP status | 502 | `[cer-app] OAuth token exchange returned non-OK status` |
+| Token exchange invalid JSON | 502 | `[cer-app] OAuth token exchange returned invalid JSON` |
+| User-info network error | 502 | `[cer-app] OAuth user-info request failed` |
+| User-info non-OK HTTP status | 502 | `[cer-app] OAuth user-info returned non-OK status` |
+| User-info invalid JSON | 502 | `[cer-app] OAuth user-info returned invalid JSON` |
+| Unknown provider | 404 | `[cer-app] Unknown OAuth provider: <name>` |
+| Missing state / code param | 400 | `[cer-app] OAuth callback missing code or state parameter` |
+| State mismatch (CSRF) | 400 | `[cer-app] OAuth state mismatch — possible CSRF attempt` |
+
+These responses are intentionally terse — they are server-to-server error messages, not end-user UI. To show a branded error page when OAuth fails, redirect in a top-level error boundary or handle the 502 at your reverse proxy / CDN layer.
+
 ---
 
 ## `useAuth(sessionKey?)`

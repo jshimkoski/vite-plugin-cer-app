@@ -1,4 +1,53 @@
 import type { RouterConfig } from '@jasonshimmy/custom-elements-runtime/router'
+import type { IncomingMessage } from 'node:http'
+
+// ─── Observability hook context types ─────────────────────────────────────────
+
+/**
+ * Context passed to the `onError` hook.
+ * `type` indicates which layer the error originated from so reporters can
+ * tag or route errors appropriately.
+ */
+export interface ErrorHookContext {
+  /** The layer that threw the error. */
+  type: 'loader' | 'render' | 'middleware'
+  /** The request URL pathname (e.g. `/about`). */
+  path: string
+  /** The raw Node.js incoming request. */
+  req: IncomingMessage
+}
+
+/**
+ * Context passed to the `onRequest` hook.
+ * Fires at the start of every SSR request, before the route is matched
+ * or the loader runs.
+ */
+export interface RequestHookContext {
+  /** The request URL pathname (e.g. `/about`). */
+  path: string
+  /** HTTP method in upper-case (e.g. `'GET'`). */
+  method: string
+  /** The raw Node.js incoming request. */
+  req: IncomingMessage
+}
+
+/**
+ * Context passed to the `onResponse` hook.
+ * Fires after the response has been sent (both success and error paths).
+ * Use this for latency tracking and request logging.
+ */
+export interface ResponseHookContext {
+  /** The request URL pathname (e.g. `/about`). */
+  path: string
+  /** HTTP method in upper-case (e.g. `'GET'`). */
+  method: string
+  /** Final HTTP status code written to the response. */
+  statusCode: number
+  /** Request duration in milliseconds from the first byte received to `res.end()`. */
+  duration: number
+  /** The raw Node.js incoming request. */
+  req: IncomingMessage
+}
 
 // ─── OAuth / Auth types ───────────────────────────────────────────────────────
 
@@ -242,6 +291,39 @@ export interface CerAppConfig {
    * ```
    */
   auth?: AuthConfig
+  /**
+   * Called when an error is caught by the framework's SSR error boundaries
+   * (loader throws, render crash, or server middleware throws). Use this to
+   * forward errors to Sentry, Datadog, or any other error-reporting service.
+   *
+   * Errors in this hook are silently swallowed so they cannot crash the request handler.
+   *
+   * @example
+   * ```ts
+   * import * as Sentry from '@sentry/node'
+   * export default defineConfig({
+   *   onError(err, ctx) {
+   *     Sentry.captureException(err, { tags: { type: ctx.type, path: ctx.path } })
+   *   },
+   * })
+   * ```
+   */
+  onError?: (err: unknown, ctx: ErrorHookContext) => void | Promise<void>
+  /**
+   * Called at the start of every SSR request, before route matching and the loader.
+   * Use this for request logging or to initialise per-request APM transactions.
+   *
+   * Errors in this hook are silently swallowed.
+   */
+  onRequest?: (ctx: RequestHookContext) => void | Promise<void>
+  /**
+   * Called after every SSR response is sent (both success and error paths).
+   * `ctx.duration` contains the elapsed milliseconds from first byte to `res.end()`.
+   * Use this for latency tracking and access logging.
+   *
+   * Errors in this hook are silently swallowed.
+   */
+  onResponse?: (ctx: ResponseHookContext) => void | Promise<void>
 }
 
 /**

@@ -415,12 +415,133 @@ export const loader = async () => {
 }
 ```
 
-> `useRuntimeConfig().private` is `undefined` on the client. Only access it in server-only contexts (loaders, server middleware, API handlers).
+> **Browser enforcement:** Accessing `useRuntimeConfig().private` in a browser context throws a clear runtime error:
+> ```
+> [cer-app] runtimeConfig.private is not available in the browser.
+> Move this access into a server-only loader, middleware, or API handler.
+> ```
+> This prevents accidental secret leaks — the Proxy is applied automatically with no extra configuration required.
 
 **TypeScript:** Import `RuntimePrivateConfig` to type your private config:
 
 ```ts
 import type { RuntimePrivateConfig } from '@jasonshimmy/vite-plugin-cer-app/types'
+```
+
+---
+
+## Observability hooks
+
+Three optional hooks in `cer.config.ts` give you visibility into every SSR request without modifying any application code.
+
+> **SSR mode only.** These hooks are invoked by the Node.js SSR request handler. They do **not** fire in SSG or SPA modes:
+> - **SSG** — pages are pre-rendered to static HTML at build time and served directly by the file server. No Node.js handler processes individual page requests at runtime, so no hooks fire.
+> - **SPA** — there is no server-side render pass; the browser loads `index.html` and renders entirely client-side.
+>
+> If you need request logging in SSG/SPA deployments, add it at the reverse-proxy or CDN layer instead.
+
+### `onRequest`
+
+Called at the start of every SSR request, before route matching and the data loader. Use this for request logging or to initialise per-request APM transactions.
+
+**Type:** `(ctx: RequestHookContext) => void | Promise<void>`
+
+| Field | Type | Description |
+|---|---|---|
+| `ctx.path` | `string` | URL pathname (e.g. `/about`) |
+| `ctx.method` | `string` | HTTP method in upper-case (e.g. `'GET'`) |
+| `ctx.req` | `IncomingMessage` | Raw Node.js incoming request |
+
+Errors thrown inside `onRequest` are silently swallowed — the hook cannot crash the request handler.
+
+### `onResponse`
+
+Called after every SSR response is sent, on both success and error paths. `ctx.duration` contains the elapsed milliseconds from the first byte received to `res.end()`. Use this for latency tracking and access logging.
+
+**Type:** `(ctx: ResponseHookContext) => void | Promise<void>`
+
+| Field | Type | Description |
+|---|---|---|
+| `ctx.path` | `string` | URL pathname |
+| `ctx.method` | `string` | HTTP method |
+| `ctx.statusCode` | `number` | Final HTTP status code written to the response |
+| `ctx.duration` | `number` | Request duration in milliseconds |
+| `ctx.req` | `IncomingMessage` | Raw Node.js incoming request |
+
+Errors thrown inside `onResponse` are silently swallowed.
+
+### `onError`
+
+Called when an error is caught by the framework's SSR error boundaries:
+
+- **`'loader'`** — the data loader threw
+- **`'render'`** — an infrastructure-level render error escaped the runtime
+- **`'middleware'`** — a server middleware threw
+
+Use this to forward errors to Sentry, Datadog, or any error-reporting service.
+
+**Type:** `(err: unknown, ctx: ErrorHookContext) => void | Promise<void>`
+
+| Field | Type | Description |
+|---|---|---|
+| `ctx.type` | `'loader' \| 'render' \| 'middleware'` | Which layer the error originated from |
+| `ctx.path` | `string` | URL pathname |
+| `ctx.req` | `IncomingMessage` | Raw Node.js incoming request |
+
+Errors thrown inside `onError` are silently swallowed — the hook cannot crash the request handler.
+
+### Example — Sentry integration
+
+```ts
+// cer.config.ts
+import * as Sentry from '@sentry/node'
+import { defineConfig } from '@jasonshimmy/vite-plugin-cer-app'
+
+Sentry.init({ dsn: process.env.SENTRY_DSN })
+
+export default defineConfig({
+  onError(err, ctx) {
+    Sentry.captureException(err, {
+      tags: { type: ctx.type, path: ctx.path },
+    })
+  },
+
+  onRequest(ctx) {
+    console.log(`→ ${ctx.method} ${ctx.path}`)
+  },
+
+  onResponse(ctx) {
+    console.log(`← ${ctx.statusCode} ${ctx.path} (${ctx.duration}ms)`)
+  },
+})
+```
+
+### Example — console request logger
+
+```ts
+// cer.config.ts
+import { defineConfig } from '@jasonshimmy/vite-plugin-cer-app'
+
+export default defineConfig({
+  onRequest({ method, path }) {
+    console.log(`[${new Date().toISOString()}] ${method} ${path}`)
+  },
+  onResponse({ method, path, statusCode, duration }) {
+    console.log(`[${new Date().toISOString()}] ${statusCode} ${method} ${path} — ${duration}ms`)
+  },
+})
+```
+
+### TypeScript types
+
+All hook context types are exported from `@jasonshimmy/vite-plugin-cer-app/types`:
+
+```ts
+import type {
+  ErrorHookContext,
+  RequestHookContext,
+  ResponseHookContext,
+} from '@jasonshimmy/vite-plugin-cer-app/types'
 ```
 
 ---
@@ -459,6 +580,10 @@ import type {
   AutoImportsConfig,
   RuntimeConfig,
   RuntimePublicConfig,
+  RuntimePrivateConfig,
   I18nConfig,
+  ErrorHookContext,
+  RequestHookContext,
+  ResponseHookContext,
 } from '@jasonshimmy/vite-plugin-cer-app/types'
 ```

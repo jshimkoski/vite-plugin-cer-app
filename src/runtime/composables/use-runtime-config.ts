@@ -39,10 +39,27 @@ export function useRuntimeConfig(): RuntimeConfigResult {
   // between the composable and the virtual module.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mod = (globalThis as any).__cerRuntimeConfig
-  if (mod) return mod as RuntimeConfigResult
+  const config: RuntimeConfigResult = mod ? (mod as RuntimeConfigResult) : { public: {} }
 
-  // Fallback: empty config (e.g. in test environments without the virtual module).
-  return { public: {} }
+  // In browser contexts, wrap the result in a Proxy that throws a clear,
+  // actionable error if any code attempts to read `runtimeConfig.private`.
+  // Private values are server-only secrets and are never serialized into the
+  // client bundle — accessing them client-side is always a bug.
+  if (typeof window !== 'undefined') {
+    return new Proxy(config, {
+      get(target, prop) {
+        if (prop === 'private') {
+          throw new Error(
+            '[cer-app] runtimeConfig.private is not available in the browser. ' +
+            'Move this access into a server-only loader, middleware, or API handler.',
+          )
+        }
+        return Reflect.get(target, prop)
+      },
+    })
+  }
+
+  return config
 }
 
 /**

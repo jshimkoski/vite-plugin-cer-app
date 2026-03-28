@@ -21,7 +21,7 @@ import layouts from 'virtual:cer-layouts'
 import plugins from 'virtual:cer-plugins'
 import apiRoutes from 'virtual:cer-server-api'
 import serverMiddleware from 'virtual:cer-server-middleware'
-import { runtimeConfig, _runtimePrivateDefaults, _authSessionKey } from 'virtual:cer-app-config'
+import { runtimeConfig, _runtimePrivateDefaults, _authSessionKey, _hooks } from 'virtual:cer-app-config'
 import { registerBuiltinComponents } from '@jasonshimmy/custom-elements-runtime'
 import { registerEntityMap, renderToStreamWithJITCSSDSD, DSD_POLYFILL_SCRIPT } from '@jasonshimmy/custom-elements-runtime/ssr'
 import entitiesJson from '@jasonshimmy/custom-elements-runtime/entities.json'
@@ -121,6 +121,9 @@ export async function runServerMiddleware(req, res) {
         })).catch(reject)
       })
     } catch (err) {
+      if (_hooks?.onError) {
+        try { await _hooks.onError(err, { type: 'middleware', path: new URL(req.url ?? '/', 'http://x').pathname, req }) } catch { /* hooks must not crash the handler */ }
+      }
       if (!res.writableEnded) {
         const statusCode = (typeof err === 'object' && err !== null && 'status' in err && typeof err.status === 'number')
           ? (isNaN(err.status) ? 500 : err.status)
@@ -277,6 +280,9 @@ const _prepareRequest = async (req) => {
       const status = (err && typeof err === 'object' && 'status' in err && typeof err.status === 'number')
         ? err.status : 500
       const message = (err instanceof Error) ? err.message : String(err)
+      if (_hooks?.onError) {
+        try { await _hooks.onError(err, { type: 'loader', path: new URL(req.url ?? '/', 'http://x').pathname, req }) } catch { /* hooks must not crash the handler */ }
+      }
       // P2-2: Prefer the route-level errorTag over the global one.
       // routeErrorTag is not in scope here; use route?.meta?.errorTag from the matched route.
       const effectiveErrorTag = route?.meta?.errorTag ?? errorTag
@@ -309,6 +315,11 @@ const _prepareRequest = async (req) => {
 }
 
 export const handler = async (req, res) => {
+  const _requestPath = new URL(req.url ?? '/', 'http://x').pathname
+  const _requestStart = Date.now()
+  if (_hooks?.onRequest) {
+    try { await _hooks.onRequest({ path: _requestPath, method: req.method ?? 'GET', req }) } catch { /* hooks must not crash the handler */ }
+  }
   await _cerStateStore.run(new Map(), async () => {
   await _cerReqStore.run({ req, res }, async () => {
   await _cerDataStore.run(null, async () => {
@@ -406,7 +417,13 @@ export const handler = async (req, res) => {
 
       // Inject DSD polyfill immediately before </body>, then close the document.
       res.end(DSD_POLYFILL_SCRIPT + fromBodyClose)
+      if (_hooks?.onResponse) {
+        try { void _hooks.onResponse({ path: _requestPath, method: req.method ?? 'GET', statusCode: res.statusCode, duration: Date.now() - _requestStart, req }) } catch { /* ignore */ }
+      }
     } catch (_renderErr) {
+      if (_hooks?.onError) {
+        try { await _hooks.onError(_renderErr, { type: 'render', path: _requestPath, req }) } catch { /* hooks must not crash the handler */ }
+      }
       // Ensure the head collector is never left open on error.
       if (_headCollectionOpen) { try { endHeadCollection() } catch { /* ignore */ } }
       // If headers have not been flushed yet we can still send a proper 500 page.
@@ -417,6 +434,9 @@ export const handler = async (req, res) => {
         res.end('<!DOCTYPE html><html><head></head><body><h1>500 Internal Server Error</h1><p>An unexpected error occurred while rendering this page.</p></body></html>')
       } else {
         res.end()
+      }
+      if (_hooks?.onResponse) {
+        try { void _hooks.onResponse({ path: _requestPath, method: req.method ?? 'GET', statusCode: res.statusCode, duration: Date.now() - _requestStart, req }) } catch { /* ignore */ }
       }
     }
   })  // _cerAuthStore.run

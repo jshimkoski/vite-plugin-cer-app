@@ -304,4 +304,54 @@ describe('entry-server-template (ENTRY_SERVER_TEMPLATE content)', () => {
     // Fallback to global errorTag
     expect(src).toContain('?? errorTag')
   })
+
+  // ─── Observability hooks ─────────────────────────────────────────────────────
+
+  it('imports _hooks from virtual:cer-app-config', () => {
+    expect(src).toContain('_hooks')
+    expect(src).toContain('virtual:cer-app-config')
+  })
+
+  it('fires onRequest at the start of the handler with path, method, and req', () => {
+    expect(src).toContain('_hooks?.onRequest')
+    expect(src).toContain('_requestPath')
+    expect(src).toContain('_requestStart')
+  })
+
+  it('fires onError in the middleware catch with type: middleware', () => {
+    expect(src).toContain("type: 'middleware'")
+    // onError fires inside runServerMiddleware catch
+    const mwIdx = src.indexOf('runServerMiddleware')
+    const middlewareErrIdx = src.indexOf("type: 'middleware'", mwIdx)
+    expect(middlewareErrIdx).toBeGreaterThan(mwIdx)
+  })
+
+  it('fires onError in the loader catch with type: loader', () => {
+    expect(src).toContain("type: 'loader'")
+  })
+
+  it('fires onError in the render catch with type: render', () => {
+    expect(src).toContain("type: 'render'")
+    const catchIdx = src.indexOf('} catch (_renderErr) {')
+    const renderErrIdx = src.indexOf("type: 'render'", catchIdx)
+    expect(renderErrIdx).toBeGreaterThan(catchIdx)
+  })
+
+  it('fires onResponse after the success res.end()', () => {
+    expect(src).toContain('_hooks?.onResponse')
+    // onResponse must appear after DSD_POLYFILL_SCRIPT + fromBodyClose
+    const endIdx = src.indexOf('DSD_POLYFILL_SCRIPT + fromBodyClose')
+    const responseIdx = src.indexOf('_hooks?.onResponse', endIdx)
+    expect(responseIdx).toBeGreaterThan(endIdx)
+  })
+
+  it('fires onResponse in the render error catch so it fires on both success and error paths', () => {
+    const catchIdx = src.indexOf('} catch (_renderErr) {')
+    const responseInCatchIdx = src.indexOf('_hooks?.onResponse', catchIdx)
+    expect(responseInCatchIdx).toBeGreaterThan(catchIdx)
+  })
+
+  it('swallows exceptions thrown by onError so hooks cannot crash the handler', () => {
+    expect(src).toContain('/* hooks must not crash the handler */')
+  })
 })

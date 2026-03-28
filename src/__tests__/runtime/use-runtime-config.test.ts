@@ -1,9 +1,15 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { useRuntimeConfig, initRuntimeConfig, resolvePrivateConfig } from '../../runtime/composables/use-runtime-config.js'
 
 beforeEach(() => {
   // Reset global state between tests
   delete (globalThis as Record<string, unknown>).__cerRuntimeConfig
+  // Ensure window is not set (server context for most tests)
+  delete (globalThis as Record<string, unknown>).window
+})
+
+afterEach(() => {
+  delete (globalThis as Record<string, unknown>).window
 })
 
 describe('initRuntimeConfig', () => {
@@ -72,6 +78,39 @@ describe('useRuntimeConfig', () => {
   it('returns empty private config when initialized with empty object', () => {
     initRuntimeConfig({ public: {}, private: {} })
     expect(useRuntimeConfig().private).toEqual({})
+  })
+})
+
+// ─── Browser Proxy (private config enforcement) ───────────────────────────────
+
+describe('useRuntimeConfig browser Proxy', () => {
+  it('throws a clear error when .private is accessed in a browser context', () => {
+    ;(globalThis as Record<string, unknown>).window = {}
+    initRuntimeConfig({ public: { apiBase: '/api' }, private: { secret: 'shh' } })
+    const config = useRuntimeConfig()
+    expect(() => config.private).toThrow('[cer-app] runtimeConfig.private is not available in the browser')
+  })
+
+  it('allows .public access in a browser context', () => {
+    ;(globalThis as Record<string, unknown>).window = {}
+    initRuntimeConfig({ public: { apiBase: '/api' }, private: { secret: 'shh' } })
+    const config = useRuntimeConfig()
+    expect(config.public).toEqual({ apiBase: '/api' })
+  })
+
+  it('does NOT throw when .private is accessed in a server (non-browser) context', () => {
+    // window is not set — server environment
+    initRuntimeConfig({ public: {}, private: { secret: 'shh' } })
+    const config = useRuntimeConfig()
+    expect(() => config.private).not.toThrow()
+    expect(config.private).toEqual({ secret: 'shh' })
+  })
+
+  it('error message instructs moving access to a loader or middleware', () => {
+    ;(globalThis as Record<string, unknown>).window = {}
+    initRuntimeConfig({ public: {} })
+    const config = useRuntimeConfig()
+    expect(() => config.private).toThrow('loader, middleware, or API handler')
   })
 })
 

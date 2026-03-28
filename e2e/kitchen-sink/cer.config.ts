@@ -1,3 +1,8 @@
+import { appendFileSync } from 'node:fs'
+import type { RequestHookContext, ResponseHookContext, ErrorHookContext } from '@jasonshimmy/vite-plugin-cer-app/types'
+
+const LOG_FILE = '/tmp/cer-hooks-test.log'
+
 // Kitchen sink configuration — mode is overridden by --mode CLI flag
 export default {
   ssg: { routes: 'auto', concurrency: 2 },
@@ -18,5 +23,14 @@ export default {
     locales: ['en', 'fr'],
     defaultLocale: 'en',
     strategy: 'prefix_except_default',
+  },
+  onRequest(ctx: RequestHookContext) {
+    try { appendFileSync(LOG_FILE, `REQUEST ${ctx.method} ${ctx.path}\n`) } catch { /* ignore */ }
+  },
+  onResponse(ctx: ResponseHookContext) {
+    try { appendFileSync(LOG_FILE, `RESPONSE ${ctx.statusCode} ${ctx.method} ${ctx.path} ${ctx.duration}ms\n`) } catch { /* ignore */ }
+  },
+  onError(_err: unknown, ctx: ErrorHookContext) {
+    try { appendFileSync(LOG_FILE, `ERROR ${ctx.type} ${ctx.path}\n`) } catch { /* ignore */ }
   },
 }
