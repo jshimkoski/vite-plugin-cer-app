@@ -8,10 +8,10 @@
     "preview": "cer-app preview --ssr"
   },
   "dependencies": {
-    "@jasonshimmy/custom-elements-runtime": "^3.7.1"
+    "@jasonshimmy/custom-elements-runtime": "^3.7.2"
   },
   "devDependencies": {
-    "@jasonshimmy/vite-plugin-cer-app": "^0.19.2",
+    "@jasonshimmy/vite-plugin-cer-app": "^0.19.3",
     "typescript": "^5.9.3",
     "vite": "^8.0.3"
   }
