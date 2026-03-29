@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.19.3] - 2026-03-29
+
+- fix: bump versions in generated package.json files and update the cer dependency for development (bf1014d)
+
 ## [v0.19.2] - 2026-03-28
 
 - fix: add plugin DSD test cases and ensure shared component registry in SSR (ee3fffb)
