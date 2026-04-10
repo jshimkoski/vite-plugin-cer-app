@@ -33,7 +33,7 @@ export interface ContentMeta {
 export interface ContentItem extends ContentMeta {
   /** Relative path from `content/` at the project root (e.g. `"blog/hello.md"`). */
   _file: string
-  /** Rendered HTML (Markdown) or `JSON.stringify` result (JSON files). */
+  /** Rendered HTML (Markdown) or the raw file contents (JSON files). */
   body: string
   /** Extracted headings. Empty array for JSON files. */
   toc: ContentHeading[]
