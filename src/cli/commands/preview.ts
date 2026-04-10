@@ -225,6 +225,8 @@ export function previewCommand(): Command {
           apiRoutes?: Array<{ path: string; handlers: Record<string, unknown> }>
         }
         try {
+          // Expose the app root so the server bundle can resolve content files at runtime.
+          process.env.__CER_APP_ROOT__ = root
           serverMod = await import(pathToFileURL(serverBundle).href)
         } catch (err) {
           console.error('[cer-app] Failed to load server bundle:', err)

@@ -346,6 +346,20 @@ describe('autoImportTransform — framework composable injection', () => {
     const count = result.split(`from ${FRAMEWORK_PKG}`).length - 1
     expect(count).toBe(1)
   })
+
+  it('injects queryContent import when queryContent is used', () => {
+    const code = "component('page-blog', () => { queryContent('/blog').find().then(posts => {}); return html`` })"
+    const result = autoImportTransform(code, '/project/app/pages/blog.ts', opts)!
+    expect(result).toContain('queryContent')
+    expect(result).toContain(`from ${FRAMEWORK_PKG}`)
+  })
+
+  it('injects useContentSearch import when useContentSearch is used', () => {
+    const code = "component('site-search', () => { const { query, results } = useContentSearch(); return html`` })"
+    const result = autoImportTransform(code, '/project/app/components/site-search.ts', opts)!
+    expect(result).toContain('useContentSearch')
+    expect(result).toContain(`from ${FRAMEWORK_PKG}`)
+  })
 })
 
 describe('autoImportTransform — server/middleware/ directory', () => {

@@ -76,7 +76,7 @@ const RUNTIME_GLOBALS = [
 
 const DIRECTIVE_GLOBALS = ['when', 'each', 'match', 'anchorBlock']
 
-const FRAMEWORK_GLOBALS = ['useHead', 'usePageData', 'useInject', 'useRuntimeConfig', 'defineMiddleware', 'defineServerMiddleware', 'useSeoMeta', 'useCookie', 'useSession', 'useAuth', 'useFetch', 'useRoute', 'navigateTo', 'useState', 'useLocale']
+const FRAMEWORK_GLOBALS = ['useHead', 'usePageData', 'useInject', 'useRuntimeConfig', 'defineMiddleware', 'defineServerMiddleware', 'useSeoMeta', 'useCookie', 'useSession', 'useAuth', 'useFetch', 'useRoute', 'navigateTo', 'useState', 'useLocale', 'queryContent', 'useContentSearch']
 
 /**
  * Scans a composables directory and returns a map of export name → file path.
@@ -147,6 +147,12 @@ export async function generateAutoImportDts(
   }
 
   lines.push('')
+  lines.push('  // Content layer types')
+  lines.push(`  type ContentMeta = import('@jasonshimmy/vite-plugin-cer-app')['ContentMeta']`)
+  lines.push(`  type ContentItem = import('@jasonshimmy/vite-plugin-cer-app')['ContentItem']`)
+  lines.push(`  type ContentHeading = import('@jasonshimmy/vite-plugin-cer-app')['ContentHeading']`)
+  lines.push(`  type ContentSearchResult = import('@jasonshimmy/vite-plugin-cer-app')['ContentSearchResult']`)
+  lines.push('')
   lines.push('  // SSR loader data injected as window.__CER_DATA__ by the server.')
   lines.push('  // Consumed once by usePageData() during client hydration.')
   lines.push('  // eslint-disable-next-line @typescript-eslint/no-explicit-any')
@@ -155,6 +161,9 @@ export async function generateAutoImportDts(
   lines.push('  // Pre-populates the client useState() Map on first use.')
   lines.push('  // eslint-disable-next-line @typescript-eslint/no-explicit-any')
   lines.push('  var __CER_STATE_INIT__: any')
+  lines.push('  // App config injected by virtual:cer-app-config at app bootstrap.')
+  lines.push('  // eslint-disable-next-line @typescript-eslint/no-explicit-any')
+  lines.push('  var __CER_APP_CONFIG__: any')
   lines.push('}')
   lines.push('')
 

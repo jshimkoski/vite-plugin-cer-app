@@ -5,6 +5,7 @@ import { createServer, type UserConfig } from 'vite'
 import type { ResolvedCerConfig } from './dev-server.js'
 import { buildSSR } from './build-ssr.js'
 import { buildRouteEntry } from './path-utils.js'
+import { CONTENT_STORE_KEY, loadContentStore, resolveContentDir } from './content/index.js'
 import fg from 'fast-glob'
 
 interface SsgManifest {
@@ -248,6 +249,17 @@ export async function buildSSG(
   console.log('[cer-app] Collecting SSG paths...')
   const paths = await collectSsgPaths(config, viteUserConfig)
   console.log(`[cer-app] Found ${paths.length} path(s) to generate:`, paths)
+
+  // Restore the in-memory content store to the production (no-draft) content.
+  // collectSsgPaths may spin up a Vite dev server (watchMode=true) whose
+  // buildStart hook overwrites globalThis.__CER_CONTENT_STORE__ with drafts
+  // included.  Re-running loadContentStore with isProduction=true corrects this
+  // so that every renderPath call sees only published content.
+  {
+    const contentDir = resolveContentDir(config.root)
+    const productionItems = await loadContentStore(contentDir, false, true)
+    ;(globalThis as Record<string, unknown>)[CONTENT_STORE_KEY] = productionItems
+  }
 
   // Step 3+4: Render and write paths with bounded concurrency.
   // The server bundle uses per-request router instances (initRouter returns the

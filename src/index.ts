@@ -15,3 +15,6 @@ export type { UseFetchOptions, UseFetchReturn, UseFetchResult, UseFetchReactiveR
 
 // Re-export resolved config type for use in build scripts
 export type { ResolvedCerConfig } from './plugin/dev-server.js'
+
+// Content layer types
+export type { ContentItem, ContentMeta, ContentHeading, ContentSearchResult, CerContentConfig } from './types/content.js'

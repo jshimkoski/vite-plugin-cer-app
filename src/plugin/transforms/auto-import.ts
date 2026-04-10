@@ -71,6 +71,8 @@ const FRAMEWORK_MAP: Record<string, string> = {
   navigateTo: '@jasonshimmy/vite-plugin-cer-app/composables',
   useState: '@jasonshimmy/vite-plugin-cer-app/composables',
   useLocale: '@jasonshimmy/vite-plugin-cer-app/composables',
+  queryContent: '@jasonshimmy/vite-plugin-cer-app/composables',
+  useContentSearch: '@jasonshimmy/vite-plugin-cer-app/composables',
 }
 
 // All identifier maps — processed in order. Earlier maps take precedence for

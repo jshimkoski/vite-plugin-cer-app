@@ -220,6 +220,8 @@ import {
   useCookie,
   useSession,
   useLocale,
+  queryContent,
+  useContentSearch,
   defineMiddleware,
   defineServerMiddleware,
   navigateTo,
@@ -281,6 +283,37 @@ cer-app adapt --platform custom   # runs the function adapter from cer.config.ts
 ```
 
 See [cli.md](./cli.md#cer-app-adapt) for full details.
+
+---
+
+## `content` options
+
+Enables the file-based content layer. Drop Markdown or JSON files into `content/` at the project root and query them with `queryContent()` or search with `useContentSearch()`.
+
+```ts
+export default defineConfig({
+  content: {
+    dir: 'content',  // default
+    drafts: false,   // default
+  },
+})
+```
+
+### `content.dir`
+
+**Type:** `string`
+**Default:** `'content'`
+
+Content directory relative to the project root. The default resolves to `{root}/content/`.
+
+### `content.drafts`
+
+**Type:** `boolean`
+**Default:** `false`
+
+When `false`, files with `draft: true` in their frontmatter are excluded from the content store and search index in production builds.
+
+See [content.md](./content.md) for full documentation.
 
 ---
 
