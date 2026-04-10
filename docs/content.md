@@ -150,7 +150,7 @@ content/index.md       →  _path: '/'
 
 ### JSON files
 
-JSON files are read as-is. The `body` is the result of `JSON.stringify(data)`. The `toc` is always an empty array.
+JSON files are read as-is. The `body` is the raw file content string — valid JSON, preserving the original formatting.
 
 ```
 content/data/features.json  →  _path: '/data/features', _type: 'json'
@@ -207,7 +207,7 @@ Full document returned by `.first()`. Extends `ContentMeta` with rendered body, 
 ```ts
 interface ContentItem extends ContentMeta {
   _file: string               // relative source path, e.g. 'blog/hello.md'
-  body: string                // rendered HTML
+  body: string                // rendered HTML (Markdown) or raw file content (JSON)
   toc: ContentHeading[]       // extracted headings
   excerpt?: string            // HTML before <!-- more --> (if marker present)
 }
@@ -389,9 +389,9 @@ On the client, `queryContent()` lazily fetches `/_content/manifest.json` (all `C
 
 ### SSR mode
 
-During concurrent server renders, `queryContent()` reads synchronously from the in-memory `globalThis.__CER_CONTENT_STORE__` array populated at server startup. No filesystem or network access is needed per request.
+In dev mode, `queryContent()` reads synchronously from the in-memory `globalThis.__CER_CONTENT_STORE__` array populated by the Vite plugin's `buildStart` hook. No filesystem or network access is needed per request.
 
-At production runtime, if `__CER_CONTENT_STORE__` is absent, the `ContentClient` falls back to reading `dist/_content/` files via `node:fs`.
+At production runtime, `__CER_CONTENT_STORE__` is absent — `buildStart` is a build-time hook that does not run at production server startup. The `ContentClient` always falls back to reading `dist/_content/` files via `node:fs`. The manifest and individual documents are cached as module-level singletons, so each file is read and parsed at most once per process lifetime.
 
 ### SSG mode
 
@@ -403,7 +403,7 @@ During pre-rendering (`cer-app build --mode ssg`), `queryContent()` reads from `
 
 At build time, a `dist/_content/search-index.json` file is written. It is the serialized MiniSearch index for all non-draft content items. The client fetches this file the first time `useContentSearch()` activates a search.
 
-The search index is **not** available in dev mode — the dev server serves `/_content/search-index.json` from the in-memory store using the same MiniSearch serialization.
+In dev mode, `/_content/search-index.json` is served from the in-memory store by the dev middleware — no file is written to disk.
 
 ---
 
