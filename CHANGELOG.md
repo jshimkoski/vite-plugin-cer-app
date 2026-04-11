@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.20.3] - 2026-04-11
+
+- fix: update content layer documentation and enhance plugin generation logic for SSR compatibility (a5bca33)
+
 ## [v0.20.2] - 2026-04-11
 
 - fix: correct loader error handling and improve data fetching in SSR/SSG modes (d225a99)
