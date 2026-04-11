@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'pathe'
@@ -62,6 +62,62 @@ Just content, no more marker.
 `)
 
   writeFileSync(join(contentDir, 'data', 'products.json'), JSON.stringify([{ id: 1, name: 'Widget' }]))
+
+  // ── Fallback fixtures ────────────────────────────────────────────────────
+  // No frontmatter at all — title and description derived from body
+  writeFileSync(join(contentDir, 'no-frontmatter.md'), `# Derived Title
+
+First paragraph for description.
+
+Second paragraph.
+`)
+
+  // Frontmatter title only — description derived from body
+  writeFileSync(join(contentDir, 'title-only.md'), `---
+title: Explicit Title
+---
+
+Description will come from this paragraph.
+`)
+
+  // Frontmatter description only — title derived from h1
+  writeFileSync(join(contentDir, 'desc-only.md'), `---
+description: Explicit description
+---
+
+# Derived H1 Title
+
+Some paragraph.
+`)
+
+  // Both set in frontmatter — body values must NOT overwrite them
+  writeFileSync(join(contentDir, 'both-frontmatter.md'), `---
+title: FM Title
+description: FM Description
+---
+
+# Different H1
+
+Different paragraph.
+`)
+
+  // h1 with inline formatting — plain text only
+  writeFileSync(join(contentDir, 'formatted-h1.md'), `# Hello **World**
+
+Some intro.
+`)
+
+  // Long paragraph — description truncated to 160 chars + ellipsis
+  writeFileSync(join(contentDir, 'long-para.md'), `# Long
+
+${'A'.repeat(200)}
+`)
+
+  // No h1, only h2 — title fallback must remain undefined
+  writeFileSync(join(contentDir, 'no-h1.md'), `## Section Only
+
+A paragraph here.
+`)
 })
 
 function makeFile(filePath: string, ext: 'md' | 'json'): ContentFile {
@@ -236,4 +292,90 @@ describe('parseContentFile — date normalisation', () => {
     expect(date >= '2026-01-01').toBe(true)
     expect(date < '2027-01-01').toBe(true)
   })
+})
+
+// ─── Fallback title / description ────────────────────────────────────────────
+
+describe('parseContentFile — fallback title from h1', () => {
+  it('derives title from h1 when frontmatter title is absent', () => {
+    const item = parseContentFile(makeFile(join(contentDir, 'no-frontmatter.md'), 'md'), contentDir)
+    expect(item.title).toBe('Derived Title')
+  })
+
+  it('frontmatter title is not overwritten when present', () => {
+    const item = parseContentFile(makeFile(join(contentDir, 'title-only.md'), 'md'), contentDir)
+    expect(item.title).toBe('Explicit Title')
+  })
+
+  it('derives title from h1 when only description is in frontmatter', () => {
+    const item = parseContentFile(makeFile(join(contentDir, 'desc-only.md'), 'md'), contentDir)
+    expect(item.title).toBe('Derived H1 Title')
+  })
+
+  it('frontmatter title wins over h1 when both set', () => {
+    const item = parseContentFile(makeFile(join(contentDir, 'both-frontmatter.md'), 'md'), contentDir)
+    expect(item.title).toBe('FM Title')
+  })
+
+  it('strips inline formatting — title is plain text', () => {
+    const item = parseContentFile(makeFile(join(contentDir, 'formatted-h1.md'), 'md'), contentDir)
+    expect(item.title).toBe('Hello World')
+  })
+
+  it('does not derive title from h2 — must be h1 only', () => {
+    const item = parseContentFile(makeFile(join(contentDir, 'no-h1.md'), 'md'), contentDir)
+    expect(item.title).toBeUndefined()
+  })
+})
+
+describe('parseContentFile — fallback description from first paragraph', () => {
+  it('derives description from first paragraph when frontmatter description is absent', () => {
+    const item = parseContentFile(makeFile(join(contentDir, 'no-frontmatter.md'), 'md'), contentDir)
+    expect(item.description).toBe('First paragraph for description.')
+  })
+
+  it('frontmatter description is not overwritten when present', () => {
+    const item = parseContentFile(makeFile(join(contentDir, 'desc-only.md'), 'md'), contentDir)
+    expect(item.description).toBe('Explicit description')
+  })
+
+  it('derives description from first paragraph when only title is in frontmatter', () => {
+    const item = parseContentFile(makeFile(join(contentDir, 'title-only.md'), 'md'), contentDir)
+    expect(item.description).toBe('Description will come from this paragraph.')
+  })
+
+  it('frontmatter description wins when both set', () => {
+    const item = parseContentFile(makeFile(join(contentDir, 'both-frontmatter.md'), 'md'), contentDir)
+    expect(item.description).toBe('FM Description')
+  })
+
+  it('truncates long paragraphs to 160 chars with ellipsis', () => {
+    const item = parseContentFile(makeFile(join(contentDir, 'long-para.md'), 'md'), contentDir)
+    expect(typeof item.description).toBe('string')
+    expect((item.description as string).length).toBeLessThanOrEqual(164) // 160 + '…' (3 bytes)
+    expect(item.description as string).toMatch(/…$/)
+  })
+
+  it('derived description is on ContentMeta (present in manifest)', async () => {
+    const { toContentMeta } = await import('../../../plugin/content/parser.js')
+    const item = parseContentFile(makeFile(join(contentDir, 'no-frontmatter.md'), 'md'), contentDir)
+    const meta = toContentMeta(item)
+    expect(meta.description).toBe('First paragraph for description.')
+  })
+})
+
+describe('parseContentFile — JSON fallback', () => {
+  it('does not apply title/description fallbacks to JSON files', () => {
+    // JSON files have no markdown body to extract from
+    const item = parseContentFile(
+      makeFile(join(contentDir, 'data', 'products.json'), 'json'),
+      contentDir,
+    )
+    expect(item.title).toBeUndefined()
+    expect(item.description).toBeUndefined()
+  })
+})
+
+afterAll(() => {
+  rmSync(tmpDir, { recursive: true, force: true })
 })

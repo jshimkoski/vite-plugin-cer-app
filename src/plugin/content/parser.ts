@@ -48,6 +48,62 @@ function extractHeadings(tokens: Token[]): ContentHeading[] {
   return headings
 }
 
+// ─── Fallback title / description extraction ─────────────────────────────────
+
+/**
+ * Converts a list of inline marked tokens to plain text by recursing into
+ * formatted tokens (strong, em, link, etc.) and collecting their leaf text.
+ * Used to derive readable fallback values from body content.
+ */
+function inlineToPlainText(tokens: Token[]): string {
+  let result = ''
+  for (const t of tokens) {
+    const children = (t as { tokens?: Token[] }).tokens
+    if (Array.isArray(children) && children.length > 0) {
+      result += inlineToPlainText(children)
+    } else if (t.type === 'br') {
+      result += ' '
+    } else if ('text' in t && typeof (t as { text: string }).text === 'string') {
+      result += (t as { text: string }).text
+    }
+  }
+  return result
+}
+
+const DESCRIPTION_MAX_LEN = 160
+
+/**
+ * Scans the top-level token list for a fallback `title` (first depth-1 heading)
+ * and `description` (first paragraph). Both are `undefined` when no matching
+ * token is found.
+ *
+ * These are applied only when the corresponding frontmatter field is absent, so
+ * frontmatter always wins.
+ */
+function extractFallbacks(tokens: Token[]): { title?: string; description?: string } {
+  let title: string | undefined
+  let description: string | undefined
+
+  for (const token of tokens) {
+    if (title === undefined && token.type === 'heading' && token.depth === 1) {
+      const text = inlineToPlainText((token as { tokens: Token[] }).tokens ?? []).trim()
+      if (text) title = text
+    }
+    if (description === undefined && token.type === 'paragraph') {
+      const text = inlineToPlainText((token as { tokens: Token[] }).tokens ?? []).trim()
+      if (text) {
+        description =
+          text.length > DESCRIPTION_MAX_LEN
+            ? text.slice(0, DESCRIPTION_MAX_LEN).trimEnd() + '…'
+            : text
+      }
+    }
+    if (title !== undefined && description !== undefined) break
+  }
+
+  return { title, description }
+}
+
 // ─── Custom renderer: add id to heading tags ─────────────────────────────────
 
 const renderer = new marked.Renderer()
@@ -129,6 +185,10 @@ function parseContentFileFromRaw(
     ? (marked.parse(excerptSource, { renderer }) as string)
     : undefined
 
+  // Derive fallback title / description from body tokens when frontmatter
+  // does not provide them. Frontmatter always wins — these only fill gaps.
+  const fallbacks = extractFallbacks(tokens)
+
   const item: ContentItem = {
     ...frontmatter,
     _path,
@@ -136,6 +196,13 @@ function parseContentFileFromRaw(
     _type: 'markdown',
     body,
     toc,
+  }
+
+  if (item.title === undefined && fallbacks.title !== undefined) {
+    item.title = fallbacks.title
+  }
+  if (item.description === undefined && fallbacks.description !== undefined) {
+    item.description = fallbacks.description
   }
 
   if (excerpt !== undefined) {

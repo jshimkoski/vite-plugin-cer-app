@@ -131,6 +131,23 @@ Recognized frontmatter keys:
 
 Any additional frontmatter keys are stored verbatim in the `ContentMeta` / `ContentItem` object.
 
+### Automatic title and description
+
+When `title` or `description` are absent from frontmatter, the parser derives them from the body:
+
+- **`title`** — plain text of the first depth-1 heading (`# …`). Only `h1` is considered; `h2`–`h6` are ignored.
+- **`description`** — plain text of the first paragraph, truncated to 160 characters (with `…` appended). Inline formatting is stripped.
+
+Frontmatter values always win — these fallbacks only fill the gaps. JSON files do not receive fallbacks (they have no Markdown body to parse from).
+
+```md
+# Hello World
+
+This becomes the description because no description key is in frontmatter.
+```
+
+Results in `title: 'Hello World'` and `description: 'This becomes the description because no description key is in frontmatter.'`.
+
 ### Date-prefixed filenames
 
 Filenames starting with `YYYY-MM-DD-` have the date prefix stripped when computing the content path:

@@ -2,10 +2,11 @@
  * Content layer e2e tests — exercises queryContent() and useContentSearch().
  *
  * Pages under test:
- *   /content-index  — queryContent().find()  (all content)
- *   /content-blog   — queryContent('/blog').find() (blog prefix, draft exclusion)
- *   /content-doc    — queryContent('/docs/getting-started').first() (body + TOC)
- *   /content-search — useContentSearch() (MiniSearch, client-side)
+ *   /content-index    — queryContent().find()  (all content)
+ *   /content-blog     — queryContent('/blog').find() (blog prefix, draft exclusion)
+ *   /content-doc      — queryContent('/docs/getting-started').first() (body + TOC)
+ *   /content-search   — useContentSearch() (MiniSearch, client-side)
+ *   /content-fallback — title/description derived from body when frontmatter omits them
  */
 
 const mode = Cypress.env('mode') as 'spa' | 'ssr' | 'ssg'
@@ -224,5 +225,67 @@ describe('Content search — useContentSearch()', () => {
     cy.get('[data-cy=content-search-result]', { timeout: 8000 }).should('have.length.at.least', 1)
     setSearchQuery('')
     cy.get('[data-cy=content-search-result]').should('not.exist')
+  })
+})
+
+// ─── /content-fallback ────────────────────────────────────────────────────────
+
+describe('Content fallback — title and description derived from body', () => {
+  // blog/no-frontmatter.md has no frontmatter at all.
+  // Expected derived values:
+  //   title       → "Derived From Body"      (first h1)
+  //   description → "This description is…"   (first paragraph, ≤160 chars)
+
+  if (mode !== 'spa') {
+    it('pre-renders the derived title in initial HTML (SSR/SSG)', () => {
+      cy.request('/content-fallback').then((response) => {
+        expect(response.body).to.include('Derived From Body')
+      })
+    })
+
+    it('pre-renders the derived description in initial HTML (SSR/SSG)', () => {
+      cy.request('/content-fallback').then((response) => {
+        expect(response.body).to.include('This description is derived from the first paragraph')
+      })
+    })
+  }
+
+  it('renders the derived title after hydration', () => {
+    cy.visit('/content-fallback')
+    cy.get('[data-cy=content-fallback-title]', { timeout: 8000 })
+      .should('contain', 'Derived From Body')
+  })
+
+  it('renders the derived description after hydration', () => {
+    cy.visit('/content-fallback')
+    cy.get('[data-cy=content-fallback-desc]', { timeout: 8000 })
+      .should('contain', 'This description is derived from the first paragraph')
+  })
+
+  it('document is found — fallback-missing element is absent', () => {
+    cy.visit('/content-fallback')
+    cy.get('[data-cy=content-fallback-heading]', { timeout: 8000 }).should('exist')
+    cy.get('[data-cy=content-fallback-missing]').should('not.exist')
+  })
+
+  it('derived item appears in queryContent find() results (content-index)', () => {
+    cy.visit('/content-index')
+    cy.get('[data-cy=content-item][data-path="/blog/no-frontmatter"]', { timeout: 8000 })
+      .should('exist')
+  })
+
+  it('derived title is shown in the content-index listing', () => {
+    cy.visit('/content-index')
+    cy.get('[data-cy=content-item][data-path="/blog/no-frontmatter"] [data-cy=content-item-title]', { timeout: 8000 })
+      .should('contain', 'Derived From Body')
+  })
+
+  it('derived item appears in search results when searching by derived title', () => {
+    cy.intercept('GET', '/_content/search-index.json').as('searchIndex')
+    cy.visit('/content-search')
+    cy.wait('@searchIndex')
+    setSearchQuery('Derived')
+    cy.get('[data-cy=content-search-result]', { timeout: 8000 })
+      .should('contain', 'Derived From Body')
   })
 })
