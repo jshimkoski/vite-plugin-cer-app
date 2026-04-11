@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.20.1] - 2026-04-11
+
+- fix(content): add fallback title and description extraction from Markdown body (9bab321)
+
 ## [v0.20.0] - 2026-04-11
 
 - feat(content): implement file-based content layer with Markdown/JSON support (#1) (c6ef0f7)
