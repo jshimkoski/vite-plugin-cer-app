@@ -117,7 +117,10 @@ describe('entry-server-template (ENTRY_SERVER_TEMPLATE content)', () => {
   })
 
   it('merges SSR html with client template when available', () => {
-    expect(src).toContain('_mergeWithClientTemplate(ssrHtml, _clientTemplate)')
+    // Dev mode: per-request global takes precedence over module-level _clientTemplate
+    expect(src).toContain('_resolvedClientTemplate')
+    expect(src).toContain('(globalThis).__CER_CLIENT_TEMPLATE__ ?? _clientTemplate')
+    expect(src).toContain('_mergeWithClientTemplate(ssrHtml, _resolvedClientTemplate)')
   })
 
   it('exports handler as both named and default export', () => {

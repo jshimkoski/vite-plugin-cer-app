@@ -365,6 +365,13 @@ export function cerApp(userConfig: CerAppConfig = {}): Plugin[] {
       if (!existsSync(userHtml)) {
         const cerHtmlPath = join(getGeneratedDir(config.root), 'index.html')
         server.middlewares.use(async (req, res, next) => {
+          // In SSR/SSG mode, HTML requests must fall through to configureCerDevServer
+          // so the SSR handler can run loaders and inject __CER_DATA__ into the response.
+          // Only SPA mode (no server rendering) should serve the raw SPA shell here.
+          if (config.mode === 'ssr' || config.mode === 'ssg') {
+            next()
+            return
+          }
           const url = (req as { url?: string }).url ?? '/'
           const isHtmlRequest =
             url === '/' ||

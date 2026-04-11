@@ -77,9 +77,14 @@ export function devCommand(): Command {
     .option('-p, --port <port>', 'Port to listen on', '3000')
     .option('--host <host>', 'Host to bind to', 'localhost')
     .option('--root <root>', 'Project root directory', process.cwd())
+    .option('--mode <mode>', 'Dev mode: spa, ssr, or ssg (overrides cer.config.ts)')
     .action(async (options) => {
       const root = resolve(options.root)
       const userConfig = await loadCerConfig(root)
+      // CLI --mode flag overrides config file (mirrors build command behaviour)
+      if (options.mode) {
+        userConfig.mode = options.mode as 'spa' | 'ssr' | 'ssg'
+      }
       const port = options.port ? parseInt(options.port, 10) : (userConfig.port ?? 3000)
 
       console.log('[cer-app] Starting dev server...')

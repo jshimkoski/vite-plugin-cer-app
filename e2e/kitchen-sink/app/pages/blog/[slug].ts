@@ -7,6 +7,9 @@ interface Post {
 component('page-blog-slug', () => {
   const props = useProps<{ slug: string }>({ slug: '' })
   const ssrData = usePageData<Post>()
+  // Captured once at element-creation time (during the hydration re-render).
+  // 'ssr' proves usePageData() was non-null — the queueMicrotask timing fix works.
+  const dataSource = ssrData ? 'ssr' : 'client'
 
   const title = ref(ssrData?.title ?? '')
   const body = ref(ssrData?.body ?? '')
@@ -29,6 +32,7 @@ component('page-blog-slug', () => {
 
   return html`
     <div>
+      <span data-cy="blog-detail-data-source" hidden>${dataSource}</span>
       <h1 data-cy="post-title">${title.value || props.slug}</h1>
       <p data-cy="post-slug"><em>slug: <code>${props.slug}</code></em></p>
       <div data-cy="post-body">${body.value}</div>

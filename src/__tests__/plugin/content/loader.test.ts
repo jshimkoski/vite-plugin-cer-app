@@ -79,38 +79,37 @@ describe('resolveContentDir', () => {
 
 describe('loadContentStore — nonexistent dir', () => {
   it('returns empty array when contentDir does not exist', async () => {
-    const items = await loadContentStore('/path/does/not/exist', false, false)
+    const items = await loadContentStore('/path/does/not/exist', false)
     expect(items).toEqual([])
   })
 })
 
-describe('loadContentStore — dev mode (isProduction=false)', () => {
-  it('loads all files including drafts', async () => {
-    const items = await loadContentStore(contentDir, false, false)
+describe('loadContentStore — drafts excluded by default (includeDrafts=false)', () => {
+  it('loads all non-draft files', async () => {
+    const items = await loadContentStore(contentDir, false)
     const paths = items.map((i) => i._path).sort()
-    // Root, about, blog/hello, blog/secret, data/products
+    // Root, about, blog/hello (not secret — it is a draft), data/products
     expect(paths).toContain('/')
     expect(paths).toContain('/about')
     expect(paths).toContain('/blog/hello')
-    expect(paths).toContain('/blog/secret')
+    expect(paths).not.toContain('/blog/secret')
     expect(paths).toContain('/data/products')
   })
 
-  it('includes draft items', async () => {
-    const items = await loadContentStore(contentDir, false, false)
+  it('excludes draft items', async () => {
+    const items = await loadContentStore(contentDir, false)
     const secret = items.find((i) => i._path === '/blog/secret')
-    expect(secret).toBeDefined()
-    expect(secret?.draft).toBe(true)
+    expect(secret).toBeUndefined()
   })
 
   it('strips date prefix from slug', async () => {
-    const items = await loadContentStore(contentDir, false, false)
+    const items = await loadContentStore(contentDir, false)
     expect(items.find((i) => i._path === '/blog/hello')).toBeDefined()
     expect(items.find((i) => i._path === '/blog/2026-04-03-hello')).toBeUndefined()
   })
 
   it('each item has required ContentItem fields', async () => {
-    const items = await loadContentStore(contentDir, false, false)
+    const items = await loadContentStore(contentDir, false)
     for (const item of items) {
       expect(typeof item._path).toBe('string')
       expect(typeof item._file).toBe('string')
@@ -121,7 +120,7 @@ describe('loadContentStore — dev mode (isProduction=false)', () => {
   })
 
   it('normalises date fields to strings (not Date objects)', async () => {
-    const items = await loadContentStore(contentDir, false, false)
+    const items = await loadContentStore(contentDir, false)
     const about = items.find((i) => i._path === '/about')
     expect(about).toBeDefined()
     expect(typeof about?.date).toBe('string')
@@ -129,31 +128,24 @@ describe('loadContentStore — dev mode (isProduction=false)', () => {
   })
 })
 
-describe('loadContentStore — production mode (isProduction=true, isDraft=false)', () => {
-  it('excludes draft items', async () => {
-    const items = await loadContentStore(contentDir, false, true)
+describe('loadContentStore — drafts included (includeDrafts=true)', () => {
+  it('includes draft items when includeDrafts=true', async () => {
+    const items = await loadContentStore(contentDir, true)
     const secret = items.find((i) => i._path === '/blog/secret')
-    expect(secret).toBeUndefined()
+    expect(secret).toBeDefined()
+    expect(secret?.draft).toBe(true)
   })
 
   it('includes non-draft items', async () => {
-    const items = await loadContentStore(contentDir, false, true)
+    const items = await loadContentStore(contentDir, true)
     expect(items.find((i) => i._path === '/blog/hello')).toBeDefined()
     expect(items.find((i) => i._path === '/about')).toBeDefined()
   })
 })
 
-describe('loadContentStore — production mode with drafts enabled (isDraft=true)', () => {
-  it('includes draft items when isDraft=true in production', async () => {
-    const items = await loadContentStore(contentDir, true, true)
-    const secret = items.find((i) => i._path === '/blog/secret')
-    expect(secret).toBeDefined()
-  })
-})
-
 describe('loadContentStore — JSON files', () => {
   it('includes JSON files with _type json', async () => {
-    const items = await loadContentStore(contentDir, false, false)
+    const items = await loadContentStore(contentDir, false)
     const products = items.find((i) => i._path === '/data/products')
     expect(products).toBeDefined()
     expect(products?._type).toBe('json')

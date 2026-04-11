@@ -40,7 +40,13 @@ export function writeTsconfigPaths(root: string, srcDir: string): void {
   }
 
   const content = JSON.stringify(tsconfig, null, 2) + '\n'
-  writeFileSync(join(cerDir, 'tsconfig.json'), content, 'utf-8')
+  const tsconfigPath = join(cerDir, 'tsconfig.json')
+  // Skip write when content is unchanged to avoid triggering Vite's tsconfig
+  // watcher, which would cause an unnecessary server restart on every dev start.
+  try {
+    if (existsSync(tsconfigPath) && readFileSync(tsconfigPath, 'utf-8') === content) return
+  } catch { /* proceed to write */ }
+  writeFileSync(tsconfigPath, content, 'utf-8')
 }
 
 const RUNTIME_GLOBALS = [

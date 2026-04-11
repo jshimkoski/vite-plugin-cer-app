@@ -1,5 +1,7 @@
 import type { ViteDevServer } from 'vite'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { existsSync, readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { join } from 'pathe'
 import { getGeneratedDir } from './generated-dir.js'
 
@@ -246,7 +248,7 @@ export function configureCerDevServer(
       const acceptsHtml =
         (req.headers['accept'] ?? '').includes('text/html') ||
         url === '/' ||
-        (!url.includes('.') && !url.startsWith('/api/'))
+        (!url.includes('.') && !url.startsWith('/api/') && !url.startsWith('/@'))
 
       if (acceptsHtml) {
         // Check per-route render mode — skip SSR for 'spa' routes.
@@ -257,6 +259,20 @@ export function configureCerDevServer(
           for (const route of pageRoutes) {
             if (_matchDevRoute(route.path, urlPathOnly)) {
               if (route.meta?.render === 'spa') {
+                // In SSR/SSG dev mode, a route with render:'spa' should be served as
+                // the SPA shell (no server rendering). Serve .cer/index.html so the
+                // client bundle boots and handles the route client-side.
+                const _userHtml = resolve(config.root, 'index.html')
+                const _cerHtml = join(getGeneratedDir(config.root), 'index.html')
+                const _spaSrcPath = existsSync(_userHtml) ? _userHtml : _cerHtml
+                if (existsSync(_spaSrcPath)) {
+                  const rawHtml = readFileSync(_spaSrcPath, 'utf-8')
+                  const transformed = await server.transformIndexHtml(url, rawHtml)
+                  res.setHeader('Content-Type', 'text/html; charset=utf-8')
+                  res.statusCode = 200
+                  res.end(transformed)
+                  return
+                }
                 next()
                 return
               }
@@ -276,7 +292,26 @@ export function configureCerDevServer(
             ssrEntry.handler ?? ssrEntry.default?.handler
 
           if (typeof handler === 'function') {
-            await handler(req, res)
+            // In dev mode _clientTemplate inside entry-server.ts is null because
+            // the dist/client/index.html path doesn't exist. Set the global that
+            // the handler reads per-request so the SSR response includes the
+            // Vite client scripts (/@vite/client, HMR, module imports for app.ts).
+            const _userIndexPath = resolve(config.root, 'index.html')
+            const _genIndexPath = join(getGeneratedDir(config.root), 'index.html')
+            const _rawHtml = existsSync(_userIndexPath)
+              ? readFileSync(_userIndexPath, 'utf-8')
+              : existsSync(_genIndexPath)
+                ? readFileSync(_genIndexPath, 'utf-8')
+                : null
+            if (_rawHtml) {
+              ;(globalThis as Record<string, unknown>).__CER_CLIENT_TEMPLATE__ =
+                await server.transformIndexHtml(url, _rawHtml)
+            }
+            try {
+              await handler(req, res)
+            } finally {
+              ;(globalThis as Record<string, unknown>).__CER_CLIENT_TEMPLATE__ = undefined
+            }
             return
           }
 

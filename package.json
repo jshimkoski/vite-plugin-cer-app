@@ -72,13 +72,16 @@
     "e2e:serve:spa": "node dist/cli/index.js preview --root e2e/kitchen-sink --port 4174",
     "e2e:serve:ssr": "node dist/cli/index.js preview --root e2e/kitchen-sink --port 4175 --ssr",
     "e2e:serve:ssg": "node dist/cli/index.js preview --root e2e/kitchen-sink --port 4176",
+    "e2e:serve:dev": "node dist/cli/index.js dev --root e2e/kitchen-sink --port 4177 --mode ssr",
     "e2e:run:spa": "cypress run --config baseUrl=http://localhost:4174 --env mode=spa",
     "e2e:run:ssr": "cypress run --config baseUrl=http://localhost:4175 --env mode=ssr",
     "e2e:run:ssg": "cypress run --config baseUrl=http://localhost:4176 --env mode=ssg",
+    "e2e:run:dev": "cypress run --config baseUrl=http://localhost:4177 --env mode=dev",
     "e2e:spa": "npm run e2e:build:spa && start-server-and-test e2e:serve:spa http://localhost:4174 e2e:run:spa",
     "e2e:ssr": "npm run e2e:build:ssr && start-server-and-test e2e:serve:ssr http://localhost:4175 e2e:run:ssr",
     "e2e:ssg": "npm run e2e:build:ssg && start-server-and-test e2e:serve:ssg http://localhost:4176 e2e:run:ssg",
-    "e2e": "npm run e2e:ssr && npm run e2e:ssg && npm run e2e:spa",
+    "e2e:dev": "npm run e2e:clean && start-server-and-test e2e:serve:dev http://localhost:4177 e2e:run:dev",
+    "e2e": "npm run e2e:ssr && npm run e2e:ssg && npm run e2e:spa && npm run e2e:dev",
     "cypress:open": "cypress open"
   },
   "peerDependencies": {

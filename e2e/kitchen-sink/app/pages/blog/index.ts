@@ -9,6 +9,10 @@ component('page-blog', () => {
 
   const ssrData = usePageData<{ posts: Post[] }>()
   const posts = ref<Post[]>(ssrData?.posts ?? [])
+  // Captured once at element-creation time (during the hydration re-render).
+  // 'ssr' proves usePageData() was non-null — the queueMicrotask timing fix works.
+  // 'client' means __CER_DATA__ was deleted before setup ran (regression).
+  const dataSource = ssrData ? 'ssr' : 'client'
 
   useOnConnected(async () => {
     if (ssrData) return  // already hydrated — skip client fetch
@@ -28,6 +32,7 @@ component('page-blog', () => {
     <div>
       <h1 data-cy="blog-heading">Blog</h1>
       <p>Posts are loaded via a page <strong>loader</strong> (SSR/SSG) or client-side fetch (SPA).</p>
+      <span data-cy="blog-data-source" hidden>${dataSource}</span>
       <ul data-cy="blog-list">
         ${posts.value.map(post => html`
           <li data-cy="blog-item">

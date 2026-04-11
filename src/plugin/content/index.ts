@@ -24,14 +24,14 @@ export function resolveContentDir(root: string, contentConfig?: CerContentConfig
 
 /**
  * Loads all content files from `contentDir`, parses them concurrently, and
- * returns the full `ContentItem[]`. Excludes drafts in production unless
- * `drafts: true`. Uses async I/O + `Promise.all` for concurrent disk reads,
- * which is significantly faster than sequential `readFileSync` at 10k+ pages.
+ * returns the full `ContentItem[]`. Excludes drafts unless `includeDrafts: true`
+ * is set in the content config. Uses async I/O + `Promise.all` for concurrent
+ * disk reads, which is significantly faster than sequential `readFileSync` at
+ * 10k+ pages.
  */
 export async function loadContentStore(
   contentDir: string,
   isDraft: boolean,
-  isProduction: boolean,
 ): Promise<ContentItem[]> {
   if (!existsSync(contentDir)) return []
 
@@ -41,8 +41,8 @@ export async function loadContentStore(
     files.map(async (file) => {
       try {
         const item = await parseContentFileAsync(file, contentDir)
-        // Skip drafts in production (unless drafts flag is set)
-        if (isProduction && !isDraft && item.draft === true) return null
+        // Skip drafts unless the user explicitly opted in via drafts: true
+        if (!isDraft && item.draft === true) return null
         return item
       } catch (err) {
         // Warn and skip unparseable / invalid files so one bad file does not
@@ -175,8 +175,7 @@ export function cerContent(
     },
 
     async buildStart() {
-      const isProduction = this.meta.watchMode === false
-      const items = await loadContentStore(_resolvedContentDir, includeDrafts, isProduction)
+      const items = await loadContentStore(_resolvedContentDir, includeDrafts)
       const g = globalThis as Record<string, unknown>
       g[CONTENT_STORE_KEY] = items
     },
@@ -225,9 +224,7 @@ export function cerContent(
 }
 
 async function refreshStore(contentDir: string, includeDrafts: boolean): Promise<void> {
-  // HMR runs in dev (watchMode=true) — use isProduction=false so draft items
-  // remain visible, matching the initial buildStart behaviour in dev mode.
-  const items = await loadContentStore(contentDir, includeDrafts, false)
+  const items = await loadContentStore(contentDir, includeDrafts)
   const g = globalThis as Record<string, unknown>
   g[CONTENT_STORE_KEY] = items
   // Invalidate the dev middleware caches so the next request rebuilds manifest

@@ -394,8 +394,14 @@ export const handler = async (req, res) => {
       // (loader data script, useHead() tags, JIT styles). No polyfill in body yet.
       const ssrHtml = \`<!DOCTYPE html><html><head>\${headContent}</head><body>\${firstChunk}</body></html>\`
 
-      const merged = _clientTemplate
-        ? _mergeWithClientTemplate(ssrHtml, _clientTemplate)
+      // In dev mode the module-level _clientTemplate is null (only the
+      // production dist/client/index.html path is searched at init time).
+      // The dev server sets (globalThis).__CER_CLIENT_TEMPLATE__ per-request
+      // after running server.transformIndexHtml so the Vite client scripts
+      // (/@vite/client, HMR) are included in every SSR response.
+      const _resolvedClientTemplate = (globalThis).__CER_CLIENT_TEMPLATE__ ?? _clientTemplate
+      const merged = _resolvedClientTemplate
+        ? _mergeWithClientTemplate(ssrHtml, _resolvedClientTemplate)
         : ssrHtml
 
       // Split at </body> so async swap scripts and the DSD polyfill can be streamed

@@ -5,33 +5,40 @@
  * Security headers and Cache-Control are server-level concerns, so these
  * tests only run in SSR and SSG modes (both use `cer-app preview`).
  * SPA mode also runs through the preview server, so the tests apply there too.
+ * Dev mode uses the Vite dev server which does not set these headers.
  */
 
-describe('Preview server — security headers', () => {
-  it('responds with X-Content-Type-Options: nosniff', () => {
-    cy.request('/').then((response) => {
-      expect(response.headers['x-content-type-options']).to.eq('nosniff')
-    })
-  })
+const mode = Cypress.env('mode') as 'spa' | 'ssr' | 'ssg' | 'dev'
 
-  it('responds with X-Frame-Options: DENY', () => {
-    cy.request('/').then((response) => {
-      expect(response.headers['x-frame-options']).to.eq('DENY')
+// Security headers and Cache-Control are only set by the production preview server.
+// Skip these tests in dev mode (Vite dev server does not set them).
+if (mode !== 'dev') {
+  describe('Preview server — security headers', () => {
+    it('responds with X-Content-Type-Options: nosniff', () => {
+      cy.request('/').then((response) => {
+        expect(response.headers['x-content-type-options']).to.eq('nosniff')
+      })
     })
-  })
 
-  it('responds with Referrer-Policy: strict-origin-when-cross-origin', () => {
-    cy.request('/').then((response) => {
-      expect(response.headers['referrer-policy']).to.eq('strict-origin-when-cross-origin')
+    it('responds with X-Frame-Options: DENY', () => {
+      cy.request('/').then((response) => {
+        expect(response.headers['x-frame-options']).to.eq('DENY')
+      })
     })
-  })
 
-  it('includes security headers on 404 responses', () => {
-    cy.request({ url: '/definitely-not-a-real-page-xyz', failOnStatusCode: false }).then((response) => {
-      expect(response.headers['x-content-type-options']).to.eq('nosniff')
+    it('responds with Referrer-Policy: strict-origin-when-cross-origin', () => {
+      cy.request('/').then((response) => {
+        expect(response.headers['referrer-policy']).to.eq('strict-origin-when-cross-origin')
+      })
+    })
+
+    it('includes security headers on 404 responses', () => {
+      cy.request({ url: '/definitely-not-a-real-page-xyz', failOnStatusCode: false }).then((response) => {
+        expect(response.headers['x-content-type-options']).to.eq('nosniff')
+      })
     })
   })
-})
+}
 
 describe('Preview server — path traversal protection', () => {
   // HTTP clients (including Cypress/got) normalize `..` segments before sending,
@@ -55,25 +62,27 @@ describe('Preview server — path traversal protection', () => {
   // src/__tests__/cli/preview-isr.test.ts. No additional e2e assertion is needed.
 })
 
-describe('Preview server — Cache-Control', () => {
-  it('serves HTML with Cache-Control: no-cache', () => {
-    cy.request('/').then((response) => {
-      expect(response.headers['cache-control']).to.include('no-cache')
+if (mode !== 'dev') {
+  describe('Preview server — Cache-Control', () => {
+    it('serves HTML with Cache-Control: no-cache', () => {
+      cy.request('/').then((response) => {
+        expect(response.headers['cache-control']).to.include('no-cache')
+      })
     })
-  })
 
-  it('serves content-hashed assets with immutable Cache-Control', () => {
-    // Get the page to discover an actual asset URL (Vite hashes asset filenames)
-    cy.request('/').then((htmlResponse) => {
-      const assetMatch = htmlResponse.body.match(/\/assets\/[^"'\s]+\.js/)
-      if (!assetMatch) return  // no JS asset found in this page, skip
+    it('serves content-hashed assets with immutable Cache-Control', () => {
+      // Get the page to discover an actual asset URL (Vite hashes asset filenames)
+      cy.request('/').then((htmlResponse) => {
+        const assetMatch = htmlResponse.body.match(/\/assets\/[^"'\s]+\.js/)
+        if (!assetMatch) return  // no JS asset found in this page, skip
 
-      const assetUrl = assetMatch[0]
-      cy.request(assetUrl).then((assetResponse) => {
-        const cc = assetResponse.headers['cache-control'] as string
-        expect(cc).to.include('max-age=31536000')
-        expect(cc).to.include('immutable')
+        const assetUrl = assetMatch[0]
+        cy.request(assetUrl).then((assetResponse) => {
+          const cc = assetResponse.headers['cache-control'] as string
+          expect(cc).to.include('max-age=31536000')
+          expect(cc).to.include('immutable')
+        })
       })
     })
   })
-})
+}
