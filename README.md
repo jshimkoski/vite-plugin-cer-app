@@ -220,6 +220,7 @@ component('page-about', () => {
 | [Layouts](docs/layouts.md) | Layout system and `<slot>` composition |
 | [Components](docs/components.md) | Auto-registered custom elements |
 | [Composables](docs/composables.md) | Auto-imported composables |
+| [Content Layer](docs/content.md) | File-based Markdown/JSON content with `queryContent()` and `useContentSearch()` |
 | [Plugins](docs/plugins.md) | App plugin system and DI |
 | [Middleware](docs/middleware.md) | Route guards and server middleware |
 | [Server API Routes](docs/server-api.md) | HTTP handlers in `server/api/` |
