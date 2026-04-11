@@ -1,6 +1,11 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.20.0] - 2026-04-11
+
+- feat(content): implement file-based content layer with Markdown/JSON support (#1) (c6ef0f7)
+- chore: update dependencies for @jasonshimmy/custom-elements-runtime and typescript-eslint (15095bc)
+
 ## [v0.19.3] - 2026-03-29
 
 - fix: bump versions in generated package.json files and update the cer dependency for development (bf1014d)
