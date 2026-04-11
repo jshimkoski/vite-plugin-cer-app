@@ -287,9 +287,15 @@ if (typeof window !== 'undefined') {
         // the initial paint — the loading component must not flash over pre-rendered content.
         await _replace(_initPath)
       }
-      // Clear SSR loader data after initial navigation so subsequent client-side
-      // navigations don't accidentally reuse stale server data.
-      delete (globalThis).__CER_DATA__
+      // Defer the data cleanup by one microtask so that cer-layout-view's reactive
+      // re-render — scheduled via queueMicrotask by the reactive system when the
+      // router fires its subscribers during _replace — can still read __CER_DATA__.
+      // Clearing synchronously here would remove the data before the queued render
+      // runs, causing usePageData() to return null on the initial page load.
+      // Subsequent navigations via router.push / router.replace each delete
+      // __CER_DATA__ themselves before calling _loadPageForPath, so this deferred
+      // cleanup only matters for the very first hydration render.
+      queueMicrotask(() => { delete (globalThis).__CER_DATA__ })
     }
 
     if (_hydrateStrategy === 'idle') {

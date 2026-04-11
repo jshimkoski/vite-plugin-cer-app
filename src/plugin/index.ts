@@ -123,7 +123,7 @@ async function generateVirtualModule(
     case RESOLVED_IDS.composables:
       return generateComposablesCode(config.composablesDir)
     case RESOLVED_IDS.plugins:
-      return generatePluginsCode(config.pluginsDir)
+      return generatePluginsCode(config.pluginsDir, ssr)
     case RESOLVED_IDS.middleware:
       return generateMiddlewareCode(config.middlewareDir)
     case RESOLVED_IDS.serverApi:
@@ -307,9 +307,12 @@ export function cerApp(userConfig: CerAppConfig = {}): Plugin[] {
       if (!allResolved.includes(id)) return null
 
       const ssr = options?.ssr ?? false
-      // For virtual:cer-app-config the SSR and client variants differ (private
-      // defaults are only included in the SSR bundle), so use separate cache keys.
-      const cacheKey = id === RESOLVED_IDS.appConfig ? `${id}:${ssr ? 'ssr' : 'client'}` : id
+      // For virtual:cer-app-config and virtual:cer-plugins the SSR and client
+      // variants differ: app-config includes private defaults in SSR; plugins
+      // excludes .client.ts files in SSR. Use separate cache keys for both.
+      const cacheKey = (id === RESOLVED_IDS.appConfig || id === RESOLVED_IDS.plugins)
+        ? `${id}:${ssr ? 'ssr' : 'client'}`
+        : id
 
       // Return from cache if available
       if (moduleCache.has(cacheKey)) {

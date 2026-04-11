@@ -10,13 +10,15 @@
  *    component renders with real data in the initial SSR/SSG HTML.
  *
  * 2. **Client hydration** — the server also serializes the data as
- *    `window.__CER_DATA__` in the page `<head>`. The client entry captures
- *    this into `globalThis.__CER_DATA__` before the app boots. On first
- *    component instantiation `usePageData()` returns that value so the client
+ *    `window.__CER_DATA__` in the page `<head>`. On first component
+ *    instantiation `usePageData()` returns that value so the client
  *    starts with the correct state without an extra network round-trip.
  *
- * The client-side value is cleared after the first read so subsequent
- * client-side navigations don't accidentally reuse stale SSR data.
+ * The client-side value is cleared via `queueMicrotask` in `_doHydrate`
+ * (app-template) after the initial router navigation completes — deferred by
+ * one microtask so the queued reactive re-render can still read the data
+ * before it is removed. Subsequent navigations via `router.push` / `router.replace`
+ * each clear `__CER_DATA__` synchronously before loading the next page's data.
  *
  * @returns The serialized loader result, or `null` if no SSR data is present.
  *

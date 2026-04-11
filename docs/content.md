@@ -17,18 +17,7 @@ CER Content is a file-based content layer built into `vite-plugin-cer-app`. It p
 
 ## Quick start
 
-### 1. Enable the content layer
-
-```ts
-// cer.config.ts
-import { defineConfig } from '@jasonshimmy/vite-plugin-cer-app'
-
-export default defineConfig({
-  content: {},
-})
-```
-
-### 2. Add content files
+### 1. Add content files
 
 ```
 content/
@@ -39,7 +28,7 @@ content/
     getting-started.md
 ```
 
-### 3. Query content in a page
+### 2. Query content in a page
 
 ```ts
 // app/pages/blog.ts

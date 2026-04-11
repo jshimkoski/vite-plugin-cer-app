@@ -79,12 +79,21 @@ describe('APP_ENTRY_TEMPLATE — meta.hydrate', () => {
     expect(APP_ENTRY_TEMPLATE).toContain('__cerRouter')
   })
 
-  it('_doHydrate clears __CER_DATA__ after navigation', () => {
-    // delete must appear inside _doHydrate, i.e. after _replace and before the closing }
+  it('_doHydrate defers __CER_DATA__ deletion via queueMicrotask after navigation', () => {
+    // The delete must happen inside a queueMicrotask callback so that
+    // cer-layout-view's reactive re-render (queued by the router subscription)
+    // runs BEFORE the data is cleared. A synchronous delete would remove the
+    // data before the scheduled render can read it, causing usePageData() to
+    // always return null on initial SSR/SSG page load.
     const doHydrateStart = APP_ENTRY_TEMPLATE.indexOf('const _doHydrate')
     const doHydrateEnd = APP_ENTRY_TEMPLATE.indexOf('\n    }', doHydrateStart)
     const doHydrateBlock = APP_ENTRY_TEMPLATE.slice(doHydrateStart, doHydrateEnd)
+    expect(doHydrateBlock).toContain('queueMicrotask')
     expect(doHydrateBlock).toContain('delete (globalThis).__CER_DATA__')
+    // The delete must be INSIDE a queueMicrotask callback, not inline
+    const microtaskIdx = doHydrateBlock.indexOf('queueMicrotask')
+    const deleteIdx = doHydrateBlock.indexOf('delete (globalThis).__CER_DATA__')
+    expect(deleteIdx).toBeGreaterThan(microtaskIdx)
   })
 })
 

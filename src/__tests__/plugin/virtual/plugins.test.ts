@@ -81,4 +81,49 @@ describe('generatePluginsCode', () => {
     expect(code).toContain('export const plugins')
     expect(code).toContain('export default plugins')
   })
+
+  // ─── .client.ts convention ────────────────────────────────────────────────
+
+  it('includes .client.ts plugins by default (client-side)', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([
+      `${PLUGINS}/auth.ts`,
+      `${PLUGINS}/cer-material.client.ts`,
+    ])
+    const code = await generatePluginsCode(PLUGINS)
+    expect(code).toContain('cer-material.client.ts')
+    expect(code).toContain('auth.ts')
+  })
+
+  it('excludes .client.ts plugins when serverSafeOnly is true', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([
+      `${PLUGINS}/auth.ts`,
+      `${PLUGINS}/cer-material.client.ts`,
+    ])
+    const code = await generatePluginsCode(PLUGINS, true)
+    expect(code).not.toContain('cer-material.client.ts')
+    expect(code).toContain('auth.ts')
+  })
+
+  it('returns empty plugins array when all plugins are .client.ts and serverSafeOnly is true', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([
+      `${PLUGINS}/cer-material.client.ts`,
+    ])
+    const code = await generatePluginsCode(PLUGINS, true)
+    expect(code).toContain('export const plugins = []')
+    expect(code).not.toContain('cer-material.client.ts')
+  })
+
+  it('preserves non-.client.ts plugins in server-safe mode', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([
+      `${PLUGINS}/01.analytics.ts`,
+      `${PLUGINS}/02.fonts.client.ts`,
+      `${PLUGINS}/03.auth.ts`,
+    ])
+    const code = await generatePluginsCode(PLUGINS, true)
+    expect(code).toContain('01.analytics.ts')
+    expect(code).toContain('03.auth.ts')
+    expect(code).not.toContain('02.fonts.client.ts')
+    // Two plugins remain: _p0 and _p1
+    expect(code).toContain('export const plugins = [_p0, _p1]')
+  })
 })
