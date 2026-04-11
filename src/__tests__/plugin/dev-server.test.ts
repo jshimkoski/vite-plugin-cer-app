@@ -450,6 +450,43 @@ describe('configureCerDevServer — SSR mode', () => {
     expect(ssrHandler).toHaveBeenCalled()
   })
 
+  it('invokes SSR handler for HTML requests in ssg mode', async () => {
+    const ssrHandler = vi.fn(async (req: any, res: any) => res.end('<html>SSG-DEV</html>'))
+    const { server, getMiddleware } = makeServer()
+    server.ssrLoadModule.mockImplementation(async (path: string) => {
+      if (path.includes('server-middleware')) return { serverMiddleware: [] }
+      if (path.includes('server-api')) return { apiRoutes: [] }
+      return { handler: ssrHandler }
+    })
+    configureCerDevServer(server as any, makeConfig({ mode: 'ssg' }))
+    const res = createRes()
+    await getMiddleware()(
+      createReq({ url: '/', headers: { accept: 'text/html' } }),
+      res,
+      vi.fn(),
+    )
+    expect(ssrHandler).toHaveBeenCalled()
+  })
+
+  it('does not invoke SSR handler in spa mode', async () => {
+    const ssrHandler = vi.fn()
+    const { server, getMiddleware } = makeServer()
+    server.ssrLoadModule.mockImplementation(async (path: string) => {
+      if (path.includes('server-middleware')) return { serverMiddleware: [] }
+      if (path.includes('server-api')) return { apiRoutes: [] }
+      return { handler: ssrHandler }
+    })
+    configureCerDevServer(server as any, makeConfig({ mode: 'spa' }))
+    const next = vi.fn()
+    await getMiddleware()(
+      createReq({ url: '/', headers: { accept: 'text/html' } }),
+      createRes(),
+      next,
+    )
+    expect(ssrHandler).not.toHaveBeenCalled()
+    expect(next).toHaveBeenCalled()
+  })
+
   it('does not invoke SSR handler for non-HTML requests (e.g. assets)', async () => {
     const ssrHandler = vi.fn()
     const { server, getMiddleware } = makeServer()
@@ -459,6 +496,25 @@ describe('configureCerDevServer — SSR mode', () => {
       return { handler: ssrHandler }
     })
     configureCerDevServer(server as any, makeConfig({ mode: 'ssr' }))
+    const next = vi.fn()
+    await getMiddleware()(
+      createReq({ url: '/assets/main.js', headers: { accept: 'application/javascript' } }),
+      createRes(),
+      next,
+    )
+    expect(ssrHandler).not.toHaveBeenCalled()
+    expect(next).toHaveBeenCalled()
+  })
+
+  it('does not invoke SSR handler for non-HTML requests in ssg mode', async () => {
+    const ssrHandler = vi.fn()
+    const { server, getMiddleware } = makeServer()
+    server.ssrLoadModule.mockImplementation(async (path: string) => {
+      if (path.includes('server-middleware')) return { serverMiddleware: [] }
+      if (path.includes('server-api')) return { apiRoutes: [] }
+      return { handler: ssrHandler }
+    })
+    configureCerDevServer(server as any, makeConfig({ mode: 'ssg' }))
     const next = vi.fn()
     await getMiddleware()(
       createReq({ url: '/assets/main.js', headers: { accept: 'application/javascript' } }),
@@ -531,13 +587,14 @@ describe('configureCerDevServer — SSR mode', () => {
   })
 })
 
-// ─── Per-route render mode (SSR mode) ────────────────────────────────────────
+// ─── Per-route render mode (SSR/SSG mode) ────────────────────────────────────
 
 describe("configureCerDevServer — per-route render mode in SSR", () => {
   /** Build a server where virtual:cer-routes returns the given routes array. */
   function makeServerWithRoutes(
     pageRoutes: Array<{ path: string; meta?: Record<string, unknown> }>,
     ssrHandler = vi.fn(async (_req: any, res: any) => res.end('<html>SSR</html>')),
+    mode: 'ssr' | 'ssg' = 'ssr',
   ) {
     const { server, getMiddleware } = makeServer()
     server.ssrLoadModule.mockImplementation(async (path: string) => {
@@ -546,7 +603,7 @@ describe("configureCerDevServer — per-route render mode in SSR", () => {
       if (path.includes('cer-routes')) return { default: pageRoutes }
       return { handler: ssrHandler }
     })
-    configureCerDevServer(server as any, makeConfig({ mode: 'ssr' }))
+    configureCerDevServer(server as any, makeConfig({ mode }))
     return { middleware: getMiddleware(), ssrHandler }
   }
 
@@ -554,6 +611,22 @@ describe("configureCerDevServer — per-route render mode in SSR", () => {
     const { middleware, ssrHandler } = makeServerWithRoutes([
       { path: '/spa-page', meta: { render: 'spa' } },
     ])
+    const next = vi.fn()
+    await middleware(
+      createReq({ url: '/spa-page', headers: { accept: 'text/html' } }),
+      createRes(),
+      next,
+    )
+    expect(next).toHaveBeenCalled()
+    expect(ssrHandler).not.toHaveBeenCalled()
+  })
+
+  it("calls next() instead of SSR for a route with render: 'spa' in ssg mode", async () => {
+    const { middleware, ssrHandler } = makeServerWithRoutes(
+      [{ path: '/spa-page', meta: { render: 'spa' } }],
+      vi.fn(async (_req: any, res: any) => res.end('<html>SSG</html>')),
+      'ssg',
+    )
     const next = vi.fn()
     await middleware(
       createReq({ url: '/spa-page', headers: { accept: 'text/html' } }),
@@ -619,6 +692,27 @@ describe("configureCerDevServer — per-route render mode in SSR", () => {
       ([p]: [string]) => p.includes('cer-routes'),
     )
     expect(routesCalls).toHaveLength(0)
+  })
+
+  it("loads routes module in ssg mode to check per-route render mode", async () => {
+    const ssrHandler = vi.fn(async (_req: any, res: any) => res.end('<html>SSG</html>'))
+    const { server, getMiddleware } = makeServer()
+    server.ssrLoadModule.mockImplementation(async (path: string) => {
+      if (path.includes('server-middleware')) return { serverMiddleware: [] }
+      if (path.includes('server-api') || path.includes('cer-server-api')) return { apiRoutes: [] }
+      if (path.includes('cer-routes')) return { default: [] }
+      return { handler: ssrHandler }
+    })
+    configureCerDevServer(server as any, makeConfig({ mode: 'ssg' }))
+    await getMiddleware()(
+      createReq({ url: '/about', headers: { accept: 'text/html' } }),
+      createRes(),
+      vi.fn(),
+    )
+    const routesCalls = (server.ssrLoadModule as any).mock.calls.filter(
+      ([p]: [string]) => p.includes('cer-routes'),
+    )
+    expect(routesCalls.length).toBeGreaterThan(0)
   })
 })
 

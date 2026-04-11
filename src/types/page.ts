@@ -88,7 +88,8 @@ export interface PageMeta {
 export interface PageLoaderContext<P extends Record<string, string> = Record<string, string>> {
   params: P
   query: Record<string, string>
-  req: IncomingMessage
+  /** Present during SSR/SSG server render. Absent (`undefined`) during client-side navigation. */
+  req?: IncomingMessage
 }
 
 /**

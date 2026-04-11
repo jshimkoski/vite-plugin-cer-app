@@ -238,8 +238,11 @@ export function configureCerDevServer(
       // virtual:cer-server-api not yet ready or empty — continue
     }
 
-    // 3. SSR mode: intercept HTML requests
-    if (config.mode === 'ssr') {
+    // 3. SSR/SSG mode: intercept HTML requests and server-render them.
+    // Both 'ssr' and 'ssg' modes run loaders on the server so usePageData()
+    // returns real data during dev — matching production behaviour.
+    // 'spa' mode never runs server loaders, so it falls through to the client bundle.
+    if (config.mode === 'ssr' || config.mode === 'ssg') {
       const acceptsHtml =
         (req.headers['accept'] ?? '').includes('text/html') ||
         url === '/' ||

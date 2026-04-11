@@ -65,4 +65,24 @@ if (mode === 'ssr') {
       cy.get('[data-cy=error-retry]').should('exist')
     })
   })
+
+  describe('SSR error boundary — loader throws a Response object', () => {
+    it('reads the numeric .status from the thrown Response (405)', () => {
+      cy.request({ url: '/loader-response-error-test', failOnStatusCode: false }).then((response) => {
+        expect(response.status).to.eq(405)
+      })
+    })
+
+    it('renders page-error element in the server response for a thrown Response', () => {
+      cy.request({ url: '/loader-response-error-test', failOnStatusCode: false }).then((response) => {
+        expect(response.body).to.include('page-error')
+      })
+    })
+
+    it('does not render the normal page heading when a Response is thrown', () => {
+      cy.request({ url: '/loader-response-error-test', failOnStatusCode: false }).then((response) => {
+        expect(response.body).not.to.include('loader-response-error-heading')
+      })
+    })
+  })
 }

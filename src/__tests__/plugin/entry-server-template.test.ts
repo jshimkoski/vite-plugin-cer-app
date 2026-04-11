@@ -173,6 +173,13 @@ describe('entry-server-template (ENTRY_SERVER_TEMPLATE content)', () => {
     expect(src).toContain('err.status')
   })
 
+  it('guards err.status with typeof === "number" so Response-like thrown values work', () => {
+    // `new Response("...", { status: 404 })` has a numeric `.status` property.
+    // The typeof guard ensures that non-numeric status values (e.g. a string "404")
+    // do not pass through — only genuine numbers are accepted.
+    expect(src).toContain("typeof err.status === 'number'")
+  })
+
   it('defaults to status 500 when thrown error has no .status', () => {
     expect(src).toContain(': 500')
   })

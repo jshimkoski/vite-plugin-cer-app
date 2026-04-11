@@ -11,12 +11,12 @@ Each page can export a `loader` function that runs on the server before the page
 import type { PageLoader } from '@jasonshimmy/vite-plugin-cer-app/types'
 
 component('page-blog-slug', () => {
-  const props = useProps({ slug: '', title: '', body: '' })
+  const data = usePageData<{ title: string; body: string }>()
 
   return html`
     <article>
-      <h1>${props.title}</h1>
-      <div>${props.body}</div>
+      <h1>${data?.title ?? ''}</h1>
+      <div>${data?.body ?? ''}</div>
     </article>
   `
 })
@@ -27,7 +27,7 @@ export const loader: PageLoader = async ({ params }) => {
 }
 ```
 
-The object returned by `loader` is serialized and passed as props to the page component.
+The object returned by `loader` is made available via `usePageData()` in the page component. Primitive values (strings, numbers, booleans) are also forwarded as HTML element attributes so `useProps()` can read them.
 
 ---
 
@@ -36,13 +36,13 @@ The object returned by `loader` is serialized and passed as props to the page co
 ```ts
 type PageLoader<
   Params extends Record<string, string> = Record<string, string>,
-  Data extends Record<string, unknown> = Record<string, unknown>,
-> = (ctx: PageLoaderContext<Params>) => Promise<Data>
+  Data = Record<string, unknown>,
+> = (ctx: PageLoaderContext<Params>) => Promise<Data> | Data
 
 interface PageLoaderContext<P extends Record<string, string>> {
   params: P                     // URL path parameters
   query: Record<string, string> // Parsed query string
-  req: IncomingMessage          // Raw Node.js request object (SSR only)
+  req?: IncomingMessage         // Raw Node.js request (present during SSR/SSG server render; absent during client-side navigation)
 }
 ```
 
@@ -66,7 +66,7 @@ interface PageLoaderContext<P extends Record<string, string>> {
 
 1. Browser receives the full HTML — content is immediately visible via Declarative Shadow DOM before any JS runs
 2. Client JS boots; `usePageData()` reads `window.__CER_DATA__` and returns the hydrated values
-3. After the initial `router.replace()` in `.cer/app.ts` completes, `.cer/app.ts` deletes `window.__CER_DATA__` so subsequent client-side navigations trigger a fresh fetch instead of reusing stale server data
+3. After the initial `router.replace()` in `.cer/app.ts` completes, `.cer/app.ts` clears the loader data from `globalThis` so subsequent client-side navigations trigger a fresh fetch instead of reusing stale server data
 4. Components that received SSR data skip their `useOnConnected` fetch — no duplicate request
 
 ---
@@ -106,18 +106,22 @@ export const loader = async ({ params }: { params: { id: string } }) => {
 
 ## Accessing loader data in components
 
-The loader's return value is passed as props. Use `useProps` to receive them:
+Use `usePageData()` to read loader data — it receives everything the loader returned (primitives and complex objects alike) and works in all modes: SSR, SSG, and client-side navigation.
 
 ```ts
 component('page-user', () => {
-  // Loader returns { user: { id, name, email } }
-  const props = useProps<{ user: { id: string; name: string; email: string } }>({
-    user: { id: '', name: '', email: '' },
+  const ssrData = usePageData<{ user: { id: string; name: string; email: string } }>()
+  const user = ref(ssrData?.user ?? { id: '', name: '', email: '' })
+
+  useOnConnected(async () => {
+    if (ssrData) return  // already hydrated
+    const { data } = await useFetch(`/api/users/${user.value.id}`)
+    if (data) user.value = data
   })
 
   return html`
-    <h1>Hello, ${props.user.name}</h1>
-    <p>${props.user.email}</p>
+    <h1>Hello, ${user.value.name}</h1>
+    <p>${user.value.email}</p>
   `
 })
 
@@ -126,6 +130,27 @@ export const loader: PageLoader<{ id: string }> = async ({ params }) => {
   return { user }
 }
 ```
+
+`useProps()` is an alternative for **primitive values only** (strings, numbers, booleans). It reads element HTML attributes rather than the loader payload directly, which means it also picks up attributes passed by parent components in the component tree — but it cannot receive arrays or objects.
+
+```ts
+component('page-profile', () => {
+  // Works for primitives only — use usePageData() if you need objects or arrays
+  const props = useProps<{ username: string; bio: string }>({ username: '', bio: '' })
+
+  return html`
+    <h1>${props.username}</h1>
+    <p>${props.bio}</p>
+  `
+})
+
+export const loader = async ({ params }: { params: { id: string } }) => {
+  const { data: user } = await useFetch(`/api/users/${params.id}`)
+  return { username: user?.name, bio: user?.bio }  // primitives only
+}
+```
+
+> **Rule of thumb:** reach for `usePageData()` first. Only prefer `useProps()` when you specifically need the element attribute binding model — for example, when the same component is also used as a child that receives attributes from a parent.
 
 ---
 
@@ -153,6 +178,14 @@ export const loader: PageLoader<{ slug: string }> = async ({ params }) => {
 
 ---
 
+## Dev server behavior
+
+In `mode: 'ssr'` and `mode: 'ssg'`, the dev server runs the server entry module and calls your `loader` on every HTML request — matching production behaviour. Both `usePageData()` and `useProps()` receive real loader data during development.
+
+In `mode: 'spa'`, no loaders run in the dev server. `usePageData()` always returns `null` and `useProps()` returns its defaults. Use `useOnConnected` to fetch data client-side in SPA mode.
+
+---
+
 ## Error handling in loaders
 
 When a `loader` throws, the SSR error boundary intercepts it:
@@ -171,12 +204,6 @@ export const loader: PageLoader<{ id: string }> = async ({ params }) => {
   }
   return { item }
 }
-```
-
-You can also throw a standard `Response` — the framework reads its `.status` property:
-
-```ts
-throw new Response('Not Found', { status: 404 })
 ```
 
 Unhandled errors without a `status` property default to HTTP 500.
