@@ -353,3 +353,42 @@ describe('writeAutoImportDts', () => {
     expect(writeFileSync).toHaveBeenCalledTimes(2)
   })
 })
+
+// ─── Content layer globals ────────────────────────────────────────────────────
+
+describe('generateAutoImportDts — content layer globals', () => {
+  it('declares queryContent as a global', async () => {
+    const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain('queryContent')
+  })
+
+  it('declares useContentSearch as a global', async () => {
+    const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain('useContentSearch')
+  })
+
+  it('declares ContentItem type in global scope', async () => {
+    const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain('type ContentItem')
+  })
+
+  it('declares ContentMeta type in global scope', async () => {
+    const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain('type ContentMeta')
+  })
+
+  it('declares ContentHeading type in global scope', async () => {
+    const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain('type ContentHeading')
+  })
+
+  it('declares ContentSearchResult type in global scope', async () => {
+    const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain('type ContentSearchResult')
+  })
+
+  it('declares __CER_APP_CONFIG__ global var', async () => {
+    const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain('__CER_APP_CONFIG__')
+  })
+})

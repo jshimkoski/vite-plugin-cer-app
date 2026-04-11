@@ -222,6 +222,8 @@ export interface RuntimeConfig {
 export interface CerAppConfig {
   mode?: 'spa' | 'ssr' | 'ssg'
   srcDir?: string // defaults to 'app'
+  /** File-based content layer configuration. Reads from `content/` at the project root by default. */
+  content?: import('./content.js').CerContentConfig
   /**
    * Internationalisation (i18n) routing configuration.
    * When set, the framework generates locale-aware URL routes and enables `useLocale()`.

@@ -19,6 +19,7 @@ import { generateServerMiddlewareCode } from './virtual/server-middleware.js'
 import { generateLoadingCode } from './virtual/loading.js'
 import { generateErrorCode } from './virtual/error.js'
 import { createWatcher } from './scanner.js'
+import { cerContent } from './content/index.js'
 
 // Virtual module IDs (raw)
 const VIRTUAL_IDS = {
@@ -181,7 +182,8 @@ function generateAppConfigModule(config: ResolvedCerConfig, ssr = false): string
     `export const runtimeConfig = { public: ${JSON.stringify(publicConfig, null, 2)} }\n` +
     `\n` +
     `export const i18nConfig = ${i18nValue}\n` +
-    `;(globalThis).__CER_I18N_CONFIG__ = i18nConfig\n`
+    `;(globalThis).__CER_I18N_CONFIG__ = i18nConfig\n` +
+    `;(globalThis).__CER_APP_CONFIG__ = appConfig\n`
 
   if (ssr) {
     const privateDefaults = config.runtimeConfig.private
@@ -521,5 +523,8 @@ export function cerApp(userConfig: CerAppConfig = {}): Plugin[] {
     cerAppPlugin,
     ...jitPlugins,
     ...(userConfig.autoImports?.components !== false ? [componentImportsProxy] : []),
+    cerContent(
+      userConfig.content,
+    ),
   ]
 }

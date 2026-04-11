@@ -145,9 +145,9 @@ component('page-posts', () => {
   const { data: posts, pending, error } = useFetch<Post[]>('/api/posts')
 
   return html`
-    ${pending.value ? html`<p>Loading…</p>` : ''}
-    ${error.value ? html`<p>Error: ${error.value.message}</p>` : ''}
-    <ul>${posts.value?.map(p => html`<li>${p.title}</li>`)}</ul>
+    ${when(pending.value, () => html`<p>Loading…</p>`)}
+    ${when(!!error.value, () => html`<p>Error: ${error.value!.message}</p>`)}
+    <ul>${each(posts.value ?? [], p => html`<li>${p.title}</li>`)}</ul>
   `
 })
 ```
@@ -165,10 +165,10 @@ component('page-nav', () => {
   const { user, loggedIn, login, logout } = useAuth()
 
   return html`
-    ${loggedIn
-      ? html`<span>${user?.name}</span><button @click="${logout}">Log out</button>`
-      : html`<button @click="${() => login('github')}">Log in</button>`
-    }
+    ${match()
+      .when(loggedIn, () => html`<span>${user?.name}</span><button @click="${logout}">Log out</button>`)
+      .otherwise(() => html`<button @click="${() => login('github')}">Log in</button>`)
+      .done()}
   `
 })
 ```
@@ -736,10 +736,10 @@ component('locale-switcher', () => {
 
   return html`
     <nav>
-      ${locales.map((l) => html`
+      ${each(locales, (l) => html`
         <a
-          href="${switchLocalePath(l)}"
-          aria-current="${l === locale ? 'true' : 'false'}"
+          :href="${switchLocalePath(l)}"
+          :aria-current="${l === locale ? 'true' : 'false'}"
         >${l.toUpperCase()}</a>
       `)}
     </nav>
@@ -797,4 +797,109 @@ If you need it outside auto-imported directories:
 
 ```ts
 import { navigateTo } from '@jasonshimmy/vite-plugin-cer-app/composables'
+```
+
+---
+
+### `queryContent(path?)`
+
+Queries content items from the file-based content layer. Returns a `QueryBuilder` that can be filtered, sorted, paginated, and terminated with `.find()`, `.first()`, or `.count()`.
+
+Requires `content: {}` in `cer.config.ts`. See [content.md](./content.md) for full configuration, type reference, and rendering-mode behavior.
+
+```ts
+// All items
+const all = await queryContent().find()
+
+// Blog posts only (path prefix)
+const posts = await queryContent('/blog').sortBy('date', 'desc').find()
+
+// Single full document (includes body + TOC)
+const doc = await queryContent('/docs/getting-started').first()
+
+// Count
+const total = await queryContent().count()
+```
+
+**QueryBuilder methods:**
+
+| Method | Returns | Description |
+|---|---|---|
+| `.where(predicate)` | `QueryBuilder` | Predicate function — `(doc: ContentMeta) => boolean`. |
+| `.sortBy(field, order?)` | `QueryBuilder` | Sort ascending (`'asc'`) or descending (`'desc'`). |
+| `.limit(n)` | `QueryBuilder` | Return at most `n` items. |
+| `.skip(n)` | `QueryBuilder` | Skip the first `n` items (pagination). |
+| `.find()` | `Promise<ContentMeta[]>` | Execute, return lean metadata array. |
+| `.first()` | `Promise<ContentItem \| null>` | Execute, return first full document with body and TOC. |
+| `.count()` | `Promise<number>` | Execute, return count only. |
+
+**Usage with a page loader:**
+
+```ts
+component('page-blog', () => {
+  const ssrData = usePageData<{ posts: ContentMeta[] }>()
+  const posts = ref<ContentMeta[]>(ssrData?.posts ?? [])
+
+  useOnConnected(async () => {
+    if (ssrData) return // hydrated from loader
+    posts.value = await queryContent('/blog').find()
+  })
+
+  return html`
+    <ul>
+      ${each(posts.value, p => html`<li><a :href="${p._path}">${p.title}</a></li>`)}
+    </ul>
+  `
+})
+
+export const loader = async () => {
+  const posts = await queryContent('/blog').find()
+  return { posts }
+}
+```
+
+If you need it outside auto-imported directories:
+
+```ts
+import { queryContent } from '@jasonshimmy/vite-plugin-cer-app/composables'
+```
+
+---
+
+### `useContentSearch()`
+
+Reactive full-text search over the content layer. Loads the MiniSearch index lazily on first use. Returns `query` and `results` refs that update reactively as the user types.
+
+Requires `content: {}` in `cer.config.ts`. See [content.md](./content.md) for full documentation.
+
+```ts
+component('page-search', () => {
+  const { query, results } = useContentSearch()
+
+  return html`
+    <input type="search" :model="${query}" placeholder="Search…" />
+    <ul>
+      ${each(results.value, r => html`
+        <li><a :href="${r._path}">${r.title}</a></li>
+      `)}
+    </ul>
+  `
+})
+```
+
+**Return value:**
+
+```ts
+interface UseContentSearchReturn {
+  query: Ref<string>                   // bind with :model
+  results: Ref<ContentSearchResult[]>  // reactive search results
+}
+```
+
+Search activates when `query.value.length >= 2`. MiniSearch is loaded once and cached for the lifetime of the page. Searched fields are `title` and `description`.
+
+If you need it outside auto-imported directories:
+
+```ts
+import { useContentSearch } from '@jasonshimmy/vite-plugin-cer-app/composables'
 ```

@@ -137,7 +137,8 @@ describe('buildSSG — path collection', () => {
   it('calls fg when pagesDir exists and no explicit routes', async () => {
     vi.mocked(existsSync).mockReturnValue(true)
     await buildSSG(makeConfig())
-    expect(fg).toHaveBeenCalledTimes(1)
+    // fg is called once for page discovery and once by loadContentStore (content scan)
+    expect(fg).toHaveBeenCalledTimes(2)
   })
 
   it('skips Vite dev server when all discovered pages are static', async () => {
