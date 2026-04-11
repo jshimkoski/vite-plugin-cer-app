@@ -1,6 +1,11 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.20.2] - 2026-04-11
+
+- fix: correct loader error handling and improve data fetching in SSR/SSG modes (d225a99)
+- docs: add Content Layer section to README for Markdown/JSON support (376a990)
+
 ## [v0.20.1] - 2026-04-11
 
 - fix(content): add fallback title and description extraction from Markdown body (9bab321)
