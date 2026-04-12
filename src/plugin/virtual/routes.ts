@@ -449,6 +449,17 @@ export async function generateRoutesCode(pagesDir: string, i18n?: I18nRouteConfi
       const mwLiteral = JSON.stringify(mw)
       mwChainBody = (
         `    beforeEnter: async (to, from) => {\n` +
+        `      const _hydrationEntry = (globalThis).__CER_HYDRATION_ENTRY__\n` +
+        `      if (\n` +
+        `        _hydrationEntry &&\n` +
+        `        from.path === to.path &&\n` +
+        `        JSON.stringify(from.params ?? {}) === JSON.stringify(to.params ?? {}) &&\n` +
+        `        _hydrationEntry.path === to.path &&\n` +
+        `        JSON.stringify(_hydrationEntry.query ?? {}) === JSON.stringify(to.query ?? {})\n` +
+        `      ) {\n` +
+        `        delete (globalThis).__CER_HYDRATION_ENTRY__\n` +
+        `        return true\n` +
+        `      }\n` +
         `      const { middleware } = await import('virtual:cer-middleware')\n` +
         `      const _names = ${mwLiteral}\n` +
         `      let _idx = 0\n` +

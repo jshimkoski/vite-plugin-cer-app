@@ -6,6 +6,16 @@
  */
 export const ENTRY_CLIENT_TEMPLATE = `// Client-side entry — hydrates SSR output
 
+// Mark the already-rendered entry URL so plugin-generated route middleware can
+// skip replaying guards once during hydration. This is cleared by the app
+// bootstrap after the initial hydrated route commits.
+if (typeof window !== 'undefined') {
+  (globalThis).__CER_HYDRATION_ENTRY__ = {
+    path: window.location.pathname,
+    query: Object.fromEntries(new URLSearchParams(window.location.search)),
+  }
+}
+
 // Capture SSR loader data before any scripts clear it.
 // usePageData() reads from this global; it is cleared after the first read
 // so subsequent client-side navigations don't reuse stale data.

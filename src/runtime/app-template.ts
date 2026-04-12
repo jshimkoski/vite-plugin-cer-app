@@ -50,12 +50,20 @@ let _currentPageAttrs = {}
 // back to <router-view> when the current route differs from what was pre-loaded.
 let _currentPagePath = null
 
+function _toLoaderAttrs(data) {
+  if (data === undefined || data === null || typeof data !== 'object') return {}
+  return Object.fromEntries(
+    Object.entries(data).filter(([, v]) => v !== null && v !== undefined && typeof v !== 'object' && typeof v !== 'function')
+  )
+}
+
 // Pre-loads the page module for \`path\`, calls its loader if present, and
 // stores the results so cer-layout-view can pass them as element attributes.
-async function _loadPageForPath(path) {
+async function _loadPageForPath(path, options = {}) {
   try {
     const url = new URL(path, 'http://x')
     const query = Object.fromEntries(url.searchParams)
+    const { runLoader = true, initialData } = options ?? {}
     const matched = router.matchRoute(url.pathname)
     const route = matched?.route
     if (!route?.load) {
@@ -69,17 +77,14 @@ async function _loadPageForPath(path) {
     _currentPagePath = url.pathname
     const params = matched.params ?? {}
     let loaderAttrs = { ...params }
-    if (typeof mod.loader === 'function') {
+    let loaderData = initialData
+    if (typeof mod.loader === 'function' && runLoader) {
       try {
         const data = await mod.loader({ params, query })
         if (data !== undefined && data !== null) {
+          loaderData = data
           // Make loader data available via usePageData() for this navigation.
           ;(globalThis).__CER_DATA__ = data
-          // Merge primitive values as element attributes so useProps() works.
-          const primitives = Object.fromEntries(
-            Object.entries(data).filter(([, v]) => v !== null && v !== undefined && typeof v !== 'object' && typeof v !== 'function')
-          )
-          loaderAttrs = { ...loaderAttrs, ...primitives }
         }
       } catch (err) {
         // Loader errors are surfaced through currentError so the error boundary
@@ -88,6 +93,11 @@ async function _loadPageForPath(path) {
         currentError.value = err instanceof Error ? err.message : String(err)
       }
     }
+    // For the very first hydration pass in SSR/SSG we already have the server's
+    // loader payload in globalThis.__CER_DATA__ / window.__CER_DATA__. Reuse it
+    // instead of re-running the loader on the client, then derive primitive attrs
+    // from that payload so useProps() stays consistent with usePageData().
+    loaderAttrs = { ...loaderAttrs, ..._toLoaderAttrs(loaderData) }
     _currentPageAttrs = loaderAttrs
   } catch {
     _currentPageTag = null
@@ -173,13 +183,22 @@ component('cer-layout-view', () => {
 
   const current = ref(router.getCurrent())
   let unsub
+  let _sawInitialRouteState = false
 
   useOnConnected(() => {
-    // Any router navigation (including the initial _replace in _doHydrate) will
-    // arrive here. If we are still in the hydration gap when a navigation fires
-    // (e.g. a redirect or user interaction before _doHydrate finishes), drop the
-    // slot immediately so the live render takes over.
+    // store.subscribe() synchronously pushes the current route once on
+    // subscription. That initial callback is not a real navigation and must not
+    // tear down the SSR slot before _doHydrate has pre-loaded the page.
+    // Subsequent callbacks are real navigations (including the initial _replace
+    // in _doHydrate), so if they arrive during the hydration gap we drop the
+    // slot immediately and let the live render take over.
     unsub = router.subscribe((s) => {
+      const _isInitialSubscribePush = !_sawInitialRouteState
+      _sawInitialRouteState = true
+      if (_isInitialSubscribePush) {
+        current.value = s
+        return
+      }
       if (_cerHydrating.value) _cerHydrating.value = false
       current.value = s
     })
@@ -270,9 +289,15 @@ if (typeof window !== 'undefined') {
   } else {
     const _doHydrate = async () => {
       const _initPath = window.location.pathname + window.location.search + window.location.hash
+      const _hasInitialLoaderData = Object.prototype.hasOwnProperty.call(globalThis, '__CER_DATA__')
       // Pre-load the page module and run the loader so cer-layout-view renders
       // the page tag directly with loader attrs (enables useProps() on hydration).
-      await _loadPageForPath(_initPath)
+      await _loadPageForPath(
+        _initPath,
+        _hasInitialLoaderData
+          ? { runLoader: false, initialData: (globalThis).__CER_DATA__ }
+          : undefined,
+      )
       // Only activate the initial route if the URL hasn't changed while we were
       // loading the module asynchronously (e.g. a test or plugin navigated away
       // before _doHydrate finished).  Calling _replace with a stale path would
@@ -287,15 +312,17 @@ if (typeof window !== 'undefined') {
         // the initial paint — the loading component must not flash over pre-rendered content.
         await _replace(_initPath)
       }
-      // Defer the data cleanup by one microtask so that cer-layout-view's reactive
-      // re-render — scheduled via queueMicrotask by the reactive system when the
-      // router fires its subscribers during _replace — can still read __CER_DATA__.
-      // Clearing synchronously here would remove the data before the queued render
-      // runs, causing usePageData() to return null on the initial page load.
-      // Subsequent navigations via router.push / router.replace each delete
-      // __CER_DATA__ themselves before calling _loadPageForPath, so this deferred
-      // cleanup only matters for the very first hydration render.
-      queueMicrotask(() => { delete (globalThis).__CER_DATA__ })
+      // The client entry marks the already-rendered entry URL so generated
+      // route middleware can skip the browser router's startup replay once.
+      // Clear any leftover flag after the first hydrated route commits so later
+      // navigations always run middleware normally.
+      queueMicrotask(() => { delete (globalThis).__CER_HYDRATION_ENTRY__ })
+      // Keep the initial route's SSR data available after hydration.
+      // Browser engines do not all upgrade and re-render custom elements with
+      // identical timing, so deleting __CER_DATA__ here can cause a later
+      // hydration render to fall back to the client-only path. The next real
+      // router.push/router.replace clears __CER_DATA__ before loading the new
+      // route, so stale page data still does not leak across navigations.
     }
 
     if (_hydrateStrategy === 'idle') {

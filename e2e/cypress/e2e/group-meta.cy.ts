@@ -25,8 +25,11 @@ describe('Group meta from _layout.ts (P2-1)', () => {
 
   context('layout inheritance', () => {
     it('pages in a group directory use the layout declared in _layout.ts', () => {
-      cy.visit('/group-meta-test/page')
-      // The group layout wraps the page
+      // Use the page that overrides the blocking group middleware so this
+      // assertion isolates layout inheritance from the redirect behavior.
+      cy.visit('/group-meta-test/custom-mw')
+      cy.get('[data-cy=custom-mw-marker]', { timeout: 5000 }).should('exist')
+      // The group layout still wraps the page.
       cy.get('[data-cy=group-layout]', { timeout: 5000 }).should('exist')
     })
   })

@@ -62,8 +62,13 @@ describe('entry-server-template (ENTRY_SERVER_TEMPLATE content)', () => {
     expect(src).toContain('_cerDataStore.run(')
   })
 
-  it('uses _cerDataStore.enterWith() to scope loader data', () => {
-    expect(src).toContain('_cerDataStore.enterWith(data)')
+  it('scopes loader data in _cerDataStore.run(loaderData) for rendering', () => {
+    // enterWith() does not propagate across await boundaries to a parent
+    // async continuation; run() is used instead so usePageData() in
+    // renderToStreamWithJITCSSDSD sees the correct store value.
+    expect(src).toContain('_cerDataStore.run(loaderData')
+    expect(src).toContain('loaderData = data')
+    expect(src).not.toContain('_cerDataStore.enterWith(data)')
   })
 
   it('initializes plugins and sets globalThis.__cerPluginProvides', () => {

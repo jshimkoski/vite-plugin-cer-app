@@ -738,6 +738,32 @@ describe('generateRoutesCode — synthetic 404 catch-all (P1-1)', () => {
   })
 })
 
+// ─── hydration middleware replay skip ───────────────────────────────────────
+
+describe('generateRoutesCode — hydration middleware replay skip', () => {
+  beforeEach(() => {
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(scanDirectory).mockResolvedValue([])
+    vi.mocked(readFile).mockResolvedValue('' as never)
+  })
+
+  it('emits a one-shot hydration replay skip before importing middleware', async () => {
+    vi.mocked(scanDirectory).mockResolvedValue([`${PAGES}/dashboard.ts`])
+    vi.mocked(readFile).mockResolvedValue(
+      `export const meta = { middleware: ['auth'] }` as never,
+    )
+    const code = await generateRoutesCode(PAGES)
+    expect(code).toContain(`const _hydrationEntry = (globalThis).__CER_HYDRATION_ENTRY__`)
+    expect(code).toContain(`from.path === to.path`)
+    expect(code).toContain(`_hydrationEntry.path === to.path`)
+    expect(code).toContain(`delete (globalThis).__CER_HYDRATION_ENTRY__`)
+    const hydrationIdx = code.indexOf(`const _hydrationEntry = (globalThis).__CER_HYDRATION_ENTRY__`)
+    const importIdx = code.indexOf(`const { middleware } = await import('virtual:cer-middleware')`)
+    expect(hydrationIdx).toBeGreaterThanOrEqual(0)
+    expect(importIdx).toBeGreaterThan(hydrationIdx)
+  })
+})
+
 // ─── P2-1: _layout.ts group meta inheritance ─────────────────────────────────
 
 describe('generateRoutesCode — group meta from _layout.ts (P2-1)', () => {

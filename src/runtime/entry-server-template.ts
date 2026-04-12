@@ -214,8 +214,10 @@ function _mergeWithClientTemplate(ssrHtml, clientTemplate) {
 
 // Per-request async setup: initialize a fresh router, resolve the matched
 // route and layout, pre-load the page module, and call the data loader.
-// Loader data is scoped to the current AsyncLocalStorage context via enterWith()
-// so concurrent renders never share state.
+// Loader data is returned so the handler can scope it to _cerDataStore.run()
+// during rendering. (AsyncLocalStorage.enterWith() inside an awaited child
+// function does not propagate back to the parent continuation, so run() is
+// the only reliable approach.)
 const _prepareRequest = async (req) => {
   await _pluginsReady
   const router = initRouter({ routes, initialUrl: req.url ?? '/' })
@@ -236,6 +238,9 @@ const _prepareRequest = async (req) => {
   // and breaks Declarative Shadow DOM on initial parse).
   let pageVnode = { tag: 'div', props: {}, children: [] }
   let head
+  // Loader data to pass to usePageData() during rendering. Declared here
+  // (outside try/catch) so it's visible in all return paths.
+  let loaderData = null
   if (route?.load) {
     try {
       const mod = await route.load()
@@ -262,9 +267,11 @@ const _prepareRequest = async (req) => {
         const query = current.query ?? {}
         const data = await mod.loader({ params, query, req })
         if (data !== undefined && data !== null) {
-          // enterWith() scopes the value to the current async context so
-          // concurrent renders (SSG concurrency > 1) never share data.
-          _cerDataStore.enterWith(data)
+          // Store loader data so the handler can pass it to _cerDataStore.run()
+          // below. Using enterWith() here doesn't work because it only modifies
+          // the async context *inside* this awaited function, not the outer
+          // handler's continuation where renderToStreamWithJITCSSDSD runs.
+          loaderData = data
           head = \`<script>window.__CER_DATA__ = \${JSON.stringify(data)}</script>\`
           // Expose primitive loader values as element attributes so useProps()
           // can read them.  Complex objects are only accessible via usePageData().
@@ -311,7 +318,7 @@ const _prepareRequest = async (req) => {
   // If the request matched a catch-all route (user-defined 404.ts or [...all].ts),
   // return HTTP 404 so browsers and crawlers treat it as a not-found response.
   const isCatchAll = route?.path === '/:all*'
-  return { vnode, router, head, status: isCatchAll ? 404 : null }
+  return { vnode, router, head, status: isCatchAll ? 404 : null, loaderData }
 }
 
 export const handler = async (req, res) => {
@@ -332,10 +339,17 @@ export const handler = async (req, res) => {
     try { _authUser = await useSession({ name: _authSessionKey }).get() } catch { /* no session secret */ }
   }
   await _cerAuthStore.run(_authUser, async () => {
-    const { vnode, router, head, status } = await _prepareRequest(req)
+    const { vnode, router, head, status, loaderData } = await _prepareRequest(req)
     if (status != null) res.statusCode = status
 
     let _headCollectionOpen = false
+    // Wrap the entire render pass in _cerDataStore.run(loaderData) so that
+    // usePageData() inside component renderFn calls sees the correct store
+    // value. AsyncLocalStorage.enterWith() inside _prepareRequest does NOT
+    // propagate back to this outer async continuation — it only affects the
+    // async chain inside _prepareRequest itself. Using run() here is the only
+    // reliable way to scope the data store to the synchronous render pass.
+    await _cerDataStore.run(loaderData ?? null, async () => {
     try {
       // Begin collecting useHead() calls made during the synchronous render pass.
       // IMPORTANT: the stream's start() function runs synchronously on construction,
@@ -445,6 +459,7 @@ export const handler = async (req, res) => {
         try { void _hooks.onResponse({ path: _requestPath, method: req.method ?? 'GET', statusCode: res.statusCode, duration: Date.now() - _requestStart, req }) } catch { /* ignore */ }
       }
     }
+    }) // _cerDataStore.run(loaderData)
   })  // _cerAuthStore.run
   })  // _cerFetchStore.run
   })  // _cerDataStore.run

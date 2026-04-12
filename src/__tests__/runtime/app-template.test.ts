@@ -55,8 +55,15 @@ describe('APP_ENTRY_TEMPLATE — meta.hydrate', () => {
   })
 
   it('_doHydrate pre-loads the page and calls _replace', () => {
-    expect(APP_ENTRY_TEMPLATE).toContain('await _loadPageForPath(_initPath)')
+    expect(APP_ENTRY_TEMPLATE).toContain('await _loadPageForPath(')
+    expect(APP_ENTRY_TEMPLATE).toContain('_initPath,')
     expect(APP_ENTRY_TEMPLATE).toContain('await _replace(_initPath)')
+  })
+
+  it('_doHydrate reuses existing SSR loader data instead of re-running the initial loader', () => {
+    expect(APP_ENTRY_TEMPLATE).toContain("Object.prototype.hasOwnProperty.call(globalThis, '__CER_DATA__')")
+    expect(APP_ENTRY_TEMPLATE).toContain('runLoader: false')
+    expect(APP_ENTRY_TEMPLATE).toContain('initialData: (globalThis).__CER_DATA__')
   })
 
   it('_doHydrate skips _replace if URL changed during async module load', () => {
@@ -75,25 +82,25 @@ describe('APP_ENTRY_TEMPLATE — meta.hydrate', () => {
     expect(APP_ENTRY_TEMPLATE).toContain('_currentPagePath === current.value.path')
   })
 
+  it('keeps the SSR slot during the router subscribe initial state push', () => {
+    expect(APP_ENTRY_TEMPLATE).toContain('let _sawInitialRouteState = false')
+    expect(APP_ENTRY_TEMPLATE).toContain('const _isInitialSubscribePush = !_sawInitialRouteState')
+    expect(APP_ENTRY_TEMPLATE).toContain('if (_isInitialSubscribePush) {')
+    expect(APP_ENTRY_TEMPLATE).toContain('return')
+  })
+
   it('exposes router globally as __cerRouter', () => {
     expect(APP_ENTRY_TEMPLATE).toContain('__cerRouter')
   })
 
-  it('_doHydrate defers __CER_DATA__ deletion via queueMicrotask after navigation', () => {
-    // The delete must happen inside a queueMicrotask callback so that
-    // cer-layout-view's reactive re-render (queued by the router subscription)
-    // runs BEFORE the data is cleared. A synchronous delete would remove the
-    // data before the scheduled render can read it, causing usePageData() to
-    // always return null on initial SSR/SSG page load.
+  it('_doHydrate keeps initial __CER_DATA__ available after hydration', () => {
+    // The initial page data must survive hydration because some browsers may
+    // perform a later upgrade/re-render of the hydrated page component. The
+    // next real client navigation clears __CER_DATA__ before loading new data.
     const doHydrateStart = APP_ENTRY_TEMPLATE.indexOf('const _doHydrate')
     const doHydrateEnd = APP_ENTRY_TEMPLATE.indexOf('\n    }', doHydrateStart)
     const doHydrateBlock = APP_ENTRY_TEMPLATE.slice(doHydrateStart, doHydrateEnd)
-    expect(doHydrateBlock).toContain('queueMicrotask')
-    expect(doHydrateBlock).toContain('delete (globalThis).__CER_DATA__')
-    // The delete must be INSIDE a queueMicrotask callback, not inline
-    const microtaskIdx = doHydrateBlock.indexOf('queueMicrotask')
-    const deleteIdx = doHydrateBlock.indexOf('delete (globalThis).__CER_DATA__')
-    expect(deleteIdx).toBeGreaterThan(microtaskIdx)
+    expect(doHydrateBlock).not.toContain('queueMicrotask(() => { delete (globalThis).__CER_DATA__ })')
   })
 })
 
@@ -106,6 +113,11 @@ describe('APP_ENTRY_TEMPLATE — loader sequence', () => {
 
   it('_loadPageForPath sets globalThis.__CER_DATA__ from loader result', () => {
     expect(APP_ENTRY_TEMPLATE).toContain('(globalThis).__CER_DATA__ = data')
+  })
+
+  it('_loadPageForPath derives primitive attrs from reused loader data too', () => {
+    expect(APP_ENTRY_TEMPLATE).toContain('function _toLoaderAttrs(data)')
+    expect(APP_ENTRY_TEMPLATE).toContain('loaderAttrs = { ...loaderAttrs, ..._toLoaderAttrs(loaderData) }')
   })
 
   it('_loadPageForPath merges loader primitive values into _currentPageAttrs', () => {

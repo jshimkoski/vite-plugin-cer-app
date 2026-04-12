@@ -7,6 +7,12 @@ describe('ENTRY_CLIENT_TEMPLATE', () => {
     expect(ENTRY_CLIENT_TEMPLATE.length).toBeGreaterThan(0)
   })
 
+  it('marks the SSR entry URL before app boots so generated middleware can skip hydration replay once', () => {
+    expect(ENTRY_CLIENT_TEMPLATE).toContain('(globalThis).__CER_HYDRATION_ENTRY__')
+    expect(ENTRY_CLIENT_TEMPLATE).toContain('path: window.location.pathname')
+    expect(ENTRY_CLIENT_TEMPLATE).toContain('new URLSearchParams(window.location.search)')
+  })
+
   it('captures __CER_DATA__ from window to globalThis before app boots', () => {
     // SSR loader data must be captured before any module clears window.__CER_DATA__
     expect(ENTRY_CLIENT_TEMPLATE).toContain('window.__CER_DATA__')
@@ -33,7 +39,7 @@ describe('ENTRY_CLIENT_TEMPLATE', () => {
     // Guards are required so the template works in SSR environments where
     // window is not defined.
     const windowChecks = (ENTRY_CLIENT_TEMPLATE.match(/typeof window !== 'undefined'/g) ?? []).length
-    expect(windowChecks).toBeGreaterThanOrEqual(3)
+    expect(windowChecks).toBeGreaterThanOrEqual(4)
   })
 
   it('captures globals before importing app.js', () => {
