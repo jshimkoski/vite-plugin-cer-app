@@ -5,6 +5,7 @@
  *   /content-index    — queryContent().find()  (all content)
  *   /content-blog     — queryContent('/blog').find() (blog prefix, draft exclusion)
  *   /content-doc      — queryContent('/docs/getting-started').first() (body + TOC)
+ *   /content-guides   — queryContent('/guides').find() (numeric dir/file prefixes)
  *   /content-search   — useContentSearch() (MiniSearch, client-side)
  *   /content-fallback — title/description derived from body when frontmatter omits them
  */
@@ -154,6 +155,42 @@ describe('Content doc — queryContent("/docs/getting-started").first()', () => 
   it('body contains "Installation" heading', () => {
     cy.visit('/content-doc')
     cy.get('[data-cy=content-doc-body]', { timeout: 8000 }).contains('h2', 'Installation')
+  })
+})
+
+// ─── /content-guides ─────────────────────────────────────────────────────────
+
+describe('Content guides — numeric directory and file prefixes', () => {
+  if (mode !== 'spa') {
+    it('pre-renders stripped guide paths and titles in initial HTML (SSR/SSG)', () => {
+      cy.request('/content-guides').then((response) => {
+        expect(response.body).to.include('Guides Home')
+        expect(response.body).to.include('Intro Guide')
+        expect(response.body).to.include('Advanced Guide')
+        expect(response.body).to.include('data-path="/guides"')
+        expect(response.body).to.include('data-path="/guides/intro"')
+        expect(response.body).to.include('data-path="/guides/advanced"')
+        expect(response.body).not.to.include('01.guides')
+        expect(response.body).not.to.include('/guides/02.intro')
+      })
+    })
+  }
+
+  it('renders guide items after hydration with stripped public paths', () => {
+    cy.visit('/content-guides')
+    cy.get('[data-cy=content-guides-item]', { timeout: 8000 }).should('have.length', 3)
+    cy.get('[data-cy=content-guides-item]').then(($items) => {
+      const paths = [...$items].map((el) => el.getAttribute('data-path'))
+      expect(paths).to.deep.equal(['/guides', '/guides/intro', '/guides/advanced'])
+    })
+  })
+
+  it('preserves numeric file ordering in queryContent results', () => {
+    cy.visit('/content-guides')
+    cy.get('[data-cy=content-guides-title]', { timeout: 8000 }).then(($titles) => {
+      const titles = [...$titles].map((el) => el.textContent?.trim())
+      expect(titles).to.deep.equal(['Guides Home', 'Intro Guide', 'Advanced Guide'])
+    })
   })
 })
 

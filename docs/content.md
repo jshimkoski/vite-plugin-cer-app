@@ -28,6 +28,15 @@ content/
     getting-started.md
 ```
 
+Numeric ordering prefixes are also supported on both directories and files. A leading `NN.` is used for ordering in the source tree but stripped from the public content path:
+
+```
+content/
+  01.docs/
+    01.getting-started.md   -> /docs/getting-started
+    02.routing.md           -> /docs/routing
+```
+
 ### 2. Query content in a page
 
 ```ts
@@ -144,6 +153,17 @@ Filenames starting with `YYYY-MM-DD-` have the date prefix stripped when computi
 ```
 content/blog/2026-04-01-hello.md  →  _path: '/blog/hello'
 ```
+
+### Numeric ordering prefixes
+
+Directories and filenames starting with `NN.` have that numeric prefix stripped from the computed content path. This lets you control source-tree ordering without exposing the prefix in URLs:
+
+```
+content/01.docs/02.getting-started.md  →  _path: '/docs/getting-started'
+content/02.blog/01.index.md            →  _path: '/blog'
+```
+
+Numeric prefixes are removed from every path segment before the usual `index` and date-prefix handling runs.
 
 ### Index files
 
@@ -340,6 +360,68 @@ export const loader = async () => {
   return { posts }
 }
 ```
+
+### Common pattern: catch-all content route
+
+Content-driven apps often use a catch-all page to resolve the current URL to a content document.
+
+```ts
+// app/pages/[...all].ts
+component('page-all', () => {
+  const props = useProps({ all: '' })
+  const ssrData = usePageData<{ doc: ContentItem | null }>()
+  const doc = ref<ContentItem | null>(ssrData?.doc ?? null)
+
+  const contentPath = normalizeContentPath(props.all)
+
+  useHead({
+    title: doc.value?.title ?? 'Not found',
+    meta: doc.value?.description
+      ? [{ name: 'description', content: doc.value.description }]
+      : [],
+  })
+
+  useOnConnected(async () => {
+    if (ssrData) return
+    doc.value = await queryContent(contentPath).first()
+  })
+
+  return html`
+    <article class="prose">
+      ${
+        !doc.value
+          ? html`
+              <h1>404</h1>
+              <p>No content found for <code>${contentPath}</code>.</p>
+            `
+          : doc.value._type === 'json'
+            ? html`
+                <h1>${doc.value.title ?? contentPath}</h1>
+                <pre>${doc.value.body}</pre>
+              `
+            : html`
+                <h1>${doc.value.title ?? contentPath}</h1>
+                ${doc.value.description ? html`<p>${doc.value.description}</p>` : ''}
+                ${unsafeHTML(doc.value.body)}
+              `
+      }
+    </article>
+  `
+})
+
+export const loader = async ({ params }) => {
+  const contentPath = normalizeContentPath(params.all)
+  const doc = await queryContent(contentPath).first()
+  return { doc }
+}
+
+function normalizeContentPath(all: string | undefined) {
+  const slug = String(all ?? '').replace(/^\/+|\/+$/g, '')
+  return slug ? `/${slug}` : '/'
+}
+```
+
+This pattern works well for documentation sites, blogs, and other apps where the route structure mirrors the `content/` directory. `queryContent('/docs/getting-started').first()` returns the full `ContentItem`, including `body`, `excerpt`, and `toc`.
 
 ---
 

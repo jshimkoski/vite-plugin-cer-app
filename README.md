@@ -210,6 +210,28 @@ component('page-about', () => {
 
 ---
 
+## Content Layer
+
+Drop Markdown and JSON files into `content/` and query them with `queryContent()`.
+
+Numeric ordering prefixes are supported on both directories and files. A leading `NN.` is stripped from the public content path, which lets you keep source-tree ordering without leaking the prefix into URLs:
+
+```text
+content/
+  01.docs/
+    01.getting-started.md   -> /docs/getting-started
+    02.routing.md           -> /docs/routing
+  02.blog/
+    01.index.md             -> /blog
+    02.2026-04-01-hello.md  -> /blog/hello
+```
+
+Date-prefixed filenames still work the same way after the numeric prefix is removed.
+
+See [docs/content.md](docs/content.md) for the full content-layer API and examples.
+
+---
+
 ## Documentation
 
 | Guide | Description |

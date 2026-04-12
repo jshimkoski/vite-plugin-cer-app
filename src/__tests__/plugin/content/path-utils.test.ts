@@ -10,16 +10,32 @@ describe('fileToContentPath', () => {
     expect(fileToContentPath(`${DIR}/index.md`, DIR)).toBe('/')
   })
 
+  it('strips numeric prefix from a root-level file segment', () => {
+    expect(fileToContentPath(`${DIR}/01.about.md`, DIR)).toBe('/about')
+  })
+
   it('maps about.md to /about', () => {
     expect(fileToContentPath(`${DIR}/about.md`, DIR)).toBe('/about')
+  })
+
+  it('strips numeric prefixes from directory segments', () => {
+    expect(fileToContentPath(`${DIR}/01.docs/02.getting-started.md`, DIR)).toBe('/docs/getting-started')
   })
 
   it('maps blog/index.md to /blog', () => {
     expect(fileToContentPath(`${DIR}/blog/index.md`, DIR)).toBe('/blog')
   })
 
+  it('strips numeric prefix before handling index files', () => {
+    expect(fileToContentPath(`${DIR}/01.blog/02.index.md`, DIR)).toBe('/blog')
+  })
+
   it('maps blog/2026-04-03-hello.md to /blog/hello (strips date prefix)', () => {
     expect(fileToContentPath(`${DIR}/blog/2026-04-03-hello.md`, DIR)).toBe('/blog/hello')
+  })
+
+  it('strips numeric prefix before date prefix on the final segment', () => {
+    expect(fileToContentPath(`${DIR}/blog/01.2026-04-03-hello.md`, DIR)).toBe('/blog/hello')
   })
 
   it('maps docs/getting-started.md to /docs/getting-started', () => {
