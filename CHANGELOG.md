@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.21.0] - 2026-04-12
+
+- feat: add support for numeric ordering prefixes in content paths and update related tests (ffb0bc8)
+
 ## [v0.20.5] - 2026-04-12
 
 - fix: enhance hydration handling and data caching in usePageData and routing middleware (305ae7f)
