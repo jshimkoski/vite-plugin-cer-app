@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.20.5] - 2026-04-12
+
+- fix: enhance hydration handling and data caching in usePageData and routing middleware (305ae7f)
+
 ## [v0.20.4] - 2026-04-11
 
 - fix: enhance SSR and SSG support with improved data handling and dev mode configurations (d1783af)
