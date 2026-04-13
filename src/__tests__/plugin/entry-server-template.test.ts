@@ -30,7 +30,16 @@ describe('entry-server-template (ENTRY_SERVER_TEMPLATE content)', () => {
 
   it('imports registerBuiltinComponents from custom-elements-runtime', () => {
     expect(src).toContain('registerBuiltinComponents')
+    expect(src).toContain('setDevMode')
     expect(src).toContain('@jasonshimmy/custom-elements-runtime')
+  })
+
+  it('enables runtime dev logging from the downstream server env', () => {
+    expect(src).toContain('const _cerRuntimeDev')
+    expect(src).toContain('import.meta.env?.DEV')
+    expect(src).toContain('_cerProcess?.env')
+    expect(src).toContain('(globalThis).__CE_RUNTIME_DEV__ = _cerRuntimeDev')
+    expect(src).toContain('setDevMode(_cerRuntimeDev)')
   })
 
   it('imports renderToStreamWithJITCSSDSD and DSD_POLYFILL_SCRIPT from ssr subpath', () => {

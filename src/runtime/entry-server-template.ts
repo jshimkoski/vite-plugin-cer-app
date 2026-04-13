@@ -22,7 +22,7 @@ import plugins from 'virtual:cer-plugins'
 import apiRoutes from 'virtual:cer-server-api'
 import serverMiddleware from 'virtual:cer-server-middleware'
 import { runtimeConfig, _runtimePrivateDefaults, _authSessionKey, _hooks } from 'virtual:cer-app-config'
-import { registerBuiltinComponents } from '@jasonshimmy/custom-elements-runtime'
+import { registerBuiltinComponents, setDevMode } from '@jasonshimmy/custom-elements-runtime'
 import { registerEntityMap, renderToStreamWithJITCSSDSD, DSD_POLYFILL_SCRIPT } from '@jasonshimmy/custom-elements-runtime/ssr'
 import entitiesJson from '@jasonshimmy/custom-elements-runtime/entities.json'
 import { initRouter } from '@jasonshimmy/custom-elements-runtime/router'
@@ -30,7 +30,22 @@ import { beginHeadCollection, endHeadCollection, serializeHeadTags, initRuntimeC
 import { errorTag } from 'virtual:cer-error'
 import { createIsrHandler } from '@jasonshimmy/vite-plugin-cer-app/isr'
 
+const _cerProcess = (globalThis).process
+const _cerNodeEnv = _cerProcess?.env?.NODE_ENV ?? _cerProcess?.env?.MODE
+const _cerRuntimeDev =
+  typeof _cerNodeEnv === 'string'
+    ? _cerNodeEnv !== 'production'
+    : typeof import.meta.env?.DEV === 'boolean'
+      ? import.meta.env.DEV
+      : typeof import.meta.env?.PROD === 'boolean'
+        ? !import.meta.env.PROD
+        : typeof import.meta.env?.MODE === 'string'
+          ? import.meta.env.MODE !== 'production'
+          : false
+;(globalThis).__CE_RUNTIME_DEV__ = _cerRuntimeDev
+
 registerBuiltinComponents()
+setDevMode(_cerRuntimeDev)
 
 // Resolve private config from environment variables at server startup.
 // Each key declared in runtimeConfig.private is looked up in process.env,

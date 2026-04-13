@@ -26,7 +26,16 @@ describe('app-template (APP_ENTRY_TEMPLATE content)', () => {
 
   it('imports registerBuiltinComponents from custom-elements-runtime', () => {
     expect(src).toContain('registerBuiltinComponents')
+    expect(src).toContain('setDevMode')
     expect(src).toContain('@jasonshimmy/custom-elements-runtime')
+  })
+
+  it('enables runtime dev logging from the downstream Vite env', () => {
+    expect(src).toContain('const _cerRuntimeDev')
+    expect(src).toContain('import.meta.env?.DEV')
+    expect(src).toContain('_cerProcess?.env')
+    expect(src).toContain('(globalThis).__CE_RUNTIME_DEV__ = _cerRuntimeDev')
+    expect(src).toContain('setDevMode(_cerRuntimeDev)')
   })
 
   it('imports initRouter from the router subpath', () => {

@@ -26,6 +26,8 @@ async function loadCerConfig(root: string): Promise<CerAppConfig> {
   }
 
   try {
+    const originalNodeEnv = process.env.NODE_ENV
+    const originalMode = process.env.MODE
     // Bootstrap .cer/tsconfig.json so rolldown can resolve it during cer.config.ts transform
     const cerDir = resolve(root, '.cer')
     const cerTsconfig = resolve(cerDir, 'tsconfig.json')
@@ -35,23 +37,30 @@ async function loadCerConfig(root: string): Promise<CerAppConfig> {
     }
 
     // Use Vite's build to transpile TS config at runtime
-    const { build } = await import('vite')
-    await build({
-      build: {
-        lib: {
-          entry: filePath,
-          formats: ['es'],
-          fileName: 'cer.config',
+    try {
+      const { build } = await import('vite')
+      await build({
+        build: {
+          lib: {
+            entry: filePath,
+            formats: ['es'],
+            fileName: 'cer.config',
+          },
+          outDir: resolve(root, 'node_modules/.cer-app-cache'),
+          write: true,
+          rollupOptions: {
+            // Externalize all bare package imports (handles file: symlinks too)
+            external: (id: string) => !id.startsWith('.') && !id.startsWith('/'),
+          },
         },
-        outDir: resolve(root, 'node_modules/.cer-app-cache'),
-        write: true,
-        rollupOptions: {
-          // Externalize all bare package imports (handles file: symlinks too)
-          external: (id: string) => !id.startsWith('.') && !id.startsWith('/'),
-        },
-      },
-      logLevel: 'silent',
-    })
+        logLevel: 'silent',
+      })
+    } finally {
+      if (typeof originalNodeEnv === 'undefined') delete process.env.NODE_ENV
+      else process.env.NODE_ENV = originalNodeEnv
+      if (typeof originalMode === 'undefined') delete process.env.MODE
+      else process.env.MODE = originalMode
+    }
 
     const outFile = resolve(root, 'node_modules/.cer-app-cache/cer.config.mjs')
     if (existsSync(outFile)) {
@@ -81,6 +90,8 @@ export function devCommand(): Command {
     .action(async (options) => {
       const root = resolve(options.root)
       const userConfig = await loadCerConfig(root)
+      process.env.NODE_ENV = 'development'
+      process.env.MODE = 'development'
       // CLI --mode flag overrides config file (mirrors build command behaviour)
       if (options.mode) {
         userConfig.mode = options.mode as 'spa' | 'ssr' | 'ssg'

@@ -20,6 +20,7 @@ import {
   component,
   ref,
   provide,
+  setDevMode,
   useOnConnected,
   useOnDisconnected,
   registerBuiltinComponents,
@@ -28,7 +29,22 @@ import { initRouter } from '@jasonshimmy/custom-elements-runtime/router'
 import { enableJITCSS } from '@jasonshimmy/custom-elements-runtime/jit-css'
 import { initRuntimeConfig } from '@jasonshimmy/vite-plugin-cer-app/composables'
 
+const _cerProcess = (globalThis).process
+const _cerNodeEnv = _cerProcess?.env?.NODE_ENV ?? _cerProcess?.env?.MODE
+const _cerRuntimeDev =
+  typeof _cerNodeEnv === 'string'
+    ? _cerNodeEnv !== 'production'
+    : typeof import.meta.env?.DEV === 'boolean'
+      ? import.meta.env.DEV
+      : typeof import.meta.env?.PROD === 'boolean'
+        ? !import.meta.env.PROD
+        : typeof import.meta.env?.MODE === 'string'
+          ? import.meta.env.MODE !== 'production'
+          : false
+;(globalThis).__CE_RUNTIME_DEV__ = _cerRuntimeDev
+
 registerBuiltinComponents()
+setDevMode(_cerRuntimeDev)
 enableJITCSS()
 initRuntimeConfig(runtimeConfig)
 
