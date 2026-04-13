@@ -226,6 +226,8 @@ export const meta = {
 
 Dynamic routes without `ssg.paths` are skipped during SSG. If `ssg.fallback: true`, they fall back to SSR at runtime. Otherwise they return 404.
 
+Catch-all pages (`[...all].ts`) follow the same rule, with one extra convenience for the built-in content layer: if the catch-all page resolves URLs with `queryContent()` and `ssg.routes` is `'auto'`, the SSG build can auto-enumerate concrete paths from the in-memory content store. For non-content catch-all pages, continue to provide `meta.ssg.paths` explicitly.
+
 ### SSG manifest
 
 ```json

@@ -216,7 +216,8 @@ describe('generateRoutesCode — meta.layout', () => {
       `component('page-about', () => html\`<h1>About</h1>\`)` as never,
     )
     const code = await generateRoutesCode(PAGES)
-    expect(code).not.toContain('meta:')
+    expect(code).toContain('path: "/about"')
+    expect(code).not.toContain('path: "/about",\n    load: () => import("/project/app/pages/about.ts").then(mod => ({ default: "page-about", loader: mod.loader ?? null })),\n    meta:')
   })
 
   it('emits meta.layout alongside beforeEnter when both layout and middleware are present', async () => {
@@ -245,6 +246,7 @@ describe('generateRoutesCode — 404.ts convention', () => {
     const code = await generateRoutesCode(PAGES)
     expect(code).toContain('path: \"/:all*\"')
     expect(code).toContain('"page-404"')
+    expect(code).toContain('_cerNotFound: true')
   })
 
   it('sorts 404.ts catch-all after all other routes', async () => {
@@ -712,6 +714,7 @@ describe('generateRoutesCode — synthetic 404 catch-all (P1-1)', () => {
     expect(code).toContain("path: '/:all*'")
     // Synthetic route returns default: null
     expect(code).toContain('default: null')
+    expect(code).toContain('meta: { _cerNotFound: true }')
   })
 
   it('does NOT add a synthetic catch-all when a user 404.ts already exists', async () => {
@@ -728,6 +731,7 @@ describe('generateRoutesCode — synthetic 404 catch-all (P1-1)', () => {
     // Real catch-all uses double quotes
     expect(code).toContain('"/:all*"')
     expect(code).not.toContain('default: null')
+    expect(code).not.toContain('_cerNotFound: true')
   })
 
   it('does not add a synthetic catch-all for an empty pages directory (no routes)', async () => {

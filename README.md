@@ -228,6 +228,8 @@ content/
 
 Date-prefixed filenames still work the same way after the numeric prefix is removed.
 
+For content-driven routing, use `app/pages/[...all].ts` to resolve valid nested URLs at runtime. Unlike `app/pages/404.ts`, a catch-all page is not treated as a 404 automatically. Existing content routes stay HTTP 200, and in SSG with `ssg.routes: 'auto'` a catch-all page that uses `queryContent()` can auto-generate concrete output paths from the content store.
+
 See [docs/content.md](docs/content.md) for the full content-layer API and examples.
 
 ---

@@ -61,9 +61,14 @@ The `:slug` param is populated by the router and passed as a prop to the compone
 
 ## Catch-all routes and 404 pages
 
-There are two equivalent ways to define a catch-all / 404 page:
+`404.ts` and `[...all].ts` both map to the same route pattern (`/:all*`), but they are not the same thing semantically:
 
-**Option A — `404.ts` (recommended shorthand)**
+- `404.ts` is the conventional not-found route. It should render your 404 UI, and the framework treats it as a real HTTP 404 route.
+- `[...all].ts` is a general catch-all route. It can be used for not-found pages, but it is also the right choice for content-driven routing where valid URLs are resolved at runtime.
+
+Use `404.ts` when the route is truly your global not-found page. Use `[...all].ts` when the route needs application logic to decide whether the current URL is valid.
+
+**Option A — `404.ts` (recommended for true not-found pages)**
 
 ```ts
 // app/pages/404.ts
@@ -77,7 +82,7 @@ component('page-404', () => {
 })
 ```
 
-The framework special-cases `404.ts` and automatically registers it as the catch-all route (`/:all*`). This is the conventional name and is the approach used by the kitchen-sink example.
+The framework special-cases `404.ts` and automatically registers it as the catch-all route (`/:all*`). In SSR/SSG, it is treated as a real not-found route and returns HTTP 404.
 
 **Option B — `[...name].ts` explicit catch-all**
 
@@ -88,7 +93,9 @@ component('page-all', () => {
 })
 ```
 
-Both produce the same route (`/:all*`) and either form works. Use `404.ts` for clarity.
+This still produces the same route pattern (`/:all*`), but unlike `404.ts` it is not assumed to be a 404 by default. If the page successfully resolves data for the current URL, the response stays HTTP 200. If the page decides the URL is missing, throw or return a 404 from your loader explicitly.
+
+This is the pattern to use for content-driven sites, documentation trees, storefront catalogs, and other apps where one catch-all page resolves many valid nested URLs.
 
 **Synthetic 404 fallback (automatic)**
 
@@ -100,6 +107,8 @@ The synthetic route:
 - Renders an empty `<div>` if no error component is defined
 
 Add a real `404.ts` to customize the experience; the synthetic fallback is removed automatically once one exists.
+
+Note that `app/error.ts` is a global error boundary, not a route page. You can also define per-route error boundaries with `foo.error.ts` or directory-level `_error.ts`. See [data-loading.md](./data-loading.md#error-boundary--apperrorts) for the global error page and the route-level error-boundary section later in this guide for per-route overrides.
 
 ---
 
@@ -249,6 +258,22 @@ export const meta = {
   },
 }
 ```
+
+Catch-all pages can use `meta.ssg.paths` too:
+
+```ts
+// app/pages/[...all].ts
+export const meta = {
+  ssg: {
+    paths: async () => [
+      { params: { all: 'docs/getting-started' } },
+      { params: { all: 'docs/routing' } },
+    ],
+  },
+}
+```
+
+For content-backed catch-all pages that resolve URLs with `queryContent()`, SSG can also auto-discover concrete paths from the content store when `ssg.routes` is set to `'auto'`.
 
 ### `meta.ssg.revalidate`
 

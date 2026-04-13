@@ -3,6 +3,8 @@ import { EventEmitter } from 'node:events'
 import { configureCerDevServer } from '../../plugin/dev-server.js'
 import type { ResolvedCerConfig } from '../../plugin/dev-server.js'
 
+const HTML_SHELL_ROOT = '/Users/jshimkoski/dev/cer/custom-elements'
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
@@ -60,6 +62,7 @@ type MockServer = {
   middlewares: { use: ReturnType<typeof vi.fn> }
   ssrLoadModule: ReturnType<typeof vi.fn>
   ssrFixStacktrace: ReturnType<typeof vi.fn>
+  transformIndexHtml: ReturnType<typeof vi.fn>
 }
 
 function makeServer(): { server: MockServer; getMiddleware: () => Function } {
@@ -71,6 +74,7 @@ function makeServer(): { server: MockServer; getMiddleware: () => Function } {
       return { apiRoutes: [] }
     }),
     ssrFixStacktrace: vi.fn(),
+    transformIndexHtml: vi.fn(async (_url: string, html: string) => html),
   }
   return { server, getMiddleware: () => registered[0] }
 }
@@ -89,11 +93,11 @@ describe('configureCerDevServer — registration', () => {
 // ─── Non-API pass-through ─────────────────────────────────────────────────────
 
 describe('configureCerDevServer — non-API pass-through', () => {
-  it('calls next() for a plain page request with no matching routes', async () => {
+  it('calls next() for a non-HTML request with no matching routes', async () => {
     const { server, getMiddleware } = makeServer()
     configureCerDevServer(server as any, makeConfig())
     const next = vi.fn()
-    await getMiddleware()(createReq({ url: '/about' }), createRes(), next)
+    await getMiddleware()(createReq({ url: '/assets/main.js', headers: { accept: 'application/javascript' } }), createRes(), next)
     expect(next).toHaveBeenCalled()
   })
 
@@ -103,6 +107,52 @@ describe('configureCerDevServer — non-API pass-through', () => {
     configureCerDevServer(server as any, makeConfig())
     const next = vi.fn()
     await getMiddleware()(createReq({ url: '/test' }), createRes(), next)
+    expect(next).toHaveBeenCalled()
+  })
+})
+
+// ─── SPA shell handling ──────────────────────────────────────────────────────
+
+describe('configureCerDevServer — SPA shell handling', () => {
+  it('serves the transformed SPA shell for direct HTML navigations in spa mode', async () => {
+    const { server, getMiddleware } = makeServer()
+    server.transformIndexHtml.mockResolvedValue('<html>spa shell</html>')
+    const res = createRes()
+
+    configureCerDevServer(
+      server as any,
+      makeConfig({ root: HTML_SHELL_ROOT, mode: 'spa' }),
+    )
+
+    const next = vi.fn()
+    await getMiddleware()(
+      createReq({ url: '/music/effects/pro-co/rat', headers: { accept: 'text/html' } }),
+      res,
+      next,
+    )
+
+    expect(server.transformIndexHtml).toHaveBeenCalled()
+    expect(res.statusCode).toBe(200)
+    expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/html; charset=utf-8')
+    expect(res.end).toHaveBeenCalledWith('<html>spa shell</html>')
+    expect(next).not.toHaveBeenCalled()
+  })
+
+  it('does not serve the SPA shell for API requests in spa mode', async () => {
+    const { server, getMiddleware } = makeServer()
+    configureCerDevServer(
+      server as any,
+      makeConfig({ root: HTML_SHELL_ROOT, mode: 'spa' }),
+    )
+
+    const next = vi.fn()
+    await getMiddleware()(
+      createReq({ url: '/api/missing', headers: { accept: 'text/html' } }),
+      createRes(),
+      next,
+    )
+
+    expect(server.transformIndexHtml).not.toHaveBeenCalled()
     expect(next).toHaveBeenCalled()
   })
 })
@@ -476,15 +526,21 @@ describe('configureCerDevServer — SSR mode', () => {
       if (path.includes('server-api')) return { apiRoutes: [] }
       return { handler: ssrHandler }
     })
-    configureCerDevServer(server as any, makeConfig({ mode: 'spa' }))
+    server.transformIndexHtml.mockResolvedValue('<html>spa shell</html>')
+    configureCerDevServer(
+      server as any,
+      makeConfig({ root: HTML_SHELL_ROOT, mode: 'spa' }),
+    )
     const next = vi.fn()
+    const res = createRes()
     await getMiddleware()(
       createReq({ url: '/', headers: { accept: 'text/html' } }),
-      createRes(),
+      res,
       next,
     )
     expect(ssrHandler).not.toHaveBeenCalled()
-    expect(next).toHaveBeenCalled()
+    expect(res.end).toHaveBeenCalledWith('<html>spa shell</html>')
+    expect(next).not.toHaveBeenCalled()
   })
 
   it('does not invoke SSR handler for non-HTML requests (e.g. assets)', async () => {

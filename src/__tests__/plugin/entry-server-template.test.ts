@@ -206,12 +206,12 @@ describe('entry-server-template (ENTRY_SERVER_TEMPLATE content)', () => {
     expect(src).toContain('res.statusCode = status')
   })
 
-  it('returns status: null on the happy path (non-catch-all route)', () => {
-    expect(src).toContain('isCatchAll ? 404 : null')
+  it('returns status: null on the happy path when the route is not marked as not-found', () => {
+    expect(src).toContain('isNotFoundRoute ? 404 : null')
   })
 
-  it('sets status 404 when the matched route is the root catch-all (/:all*)', () => {
-    expect(src).toContain("route?.path === '/:all*'")
+  it('sets status 404 only when the matched route is marked as framework not-found', () => {
+    expect(src).toContain('route?.meta?._cerNotFound === true')
   })
 
   // ─── Render error handling (P0-1) ────────────────────────────────────────────

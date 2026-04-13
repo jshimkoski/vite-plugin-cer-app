@@ -227,14 +227,21 @@ describe('buildSSG — path collection', () => {
     expect(manifest.paths.length + manifest.errors.length).toBe(3)
   })
 
-  it('skips catch-all pages when auto-discovering paths', async () => {
+  it('skips catch-all pages without explicit paths or content queries when auto-discovering paths', async () => {
     vi.mocked(existsSync).mockReturnValue(true)
     vi.mocked(fg).mockResolvedValue(['/project/app/pages/[...all].ts'])
+    vi.mocked(readFile).mockResolvedValue('')
     vi.mocked(buildRouteEntry).mockReturnValueOnce({
       routePath: '/:all*',
       isDynamic: true,
       isCatchAll: true,
     } as ReturnType<typeof buildRouteEntry>)
+
+    const closeFn = vi.fn().mockResolvedValue(undefined)
+    vi.mocked(createServer).mockResolvedValue({
+      ssrLoadModule: vi.fn().mockResolvedValue({}),
+      close: closeFn,
+    } as unknown as Awaited<ReturnType<typeof createServer>>)
 
     await buildSSG(makeConfig())
 
@@ -244,6 +251,110 @@ describe('buildSSG — path collection', () => {
     )
     const manifest = JSON.parse(String(manifestCall![1]))
     expect(manifest.paths.length + manifest.errors.length).toBe(1)
+  })
+
+  it('auto-expands content-backed catch-all pages from the content store', async () => {
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(fg).mockResolvedValue(['/project/app/pages/[...all].ts'])
+    vi.mocked(readFile).mockResolvedValue('export const loader = async () => queryContent().find()')
+    vi.mocked(buildRouteEntry).mockReturnValueOnce({
+      routePath: '/:all*',
+      isDynamic: true,
+      isCatchAll: true,
+    } as ReturnType<typeof buildRouteEntry>)
+
+    ;(globalThis as Record<string, unknown>).__CER_CONTENT_STORE__ = [
+      { _path: '/music/effects/pro-co/rat' },
+      { _path: '/music/effects/boss/ds-1' },
+    ]
+
+    const closeFn = vi.fn().mockResolvedValue(undefined)
+    vi.mocked(createServer).mockResolvedValue({
+      ssrLoadModule: vi.fn().mockResolvedValue({}),
+      close: closeFn,
+    } as unknown as Awaited<ReturnType<typeof createServer>>)
+
+    await buildSSG(makeConfig({ ssg: { concurrency: 1 } } as Partial<ResolvedCerConfig>))
+
+    const manifestCall = vi.mocked(writeFile).mock.calls.find(([p]) =>
+      String(p).includes('ssg-manifest.json'),
+    )
+    const manifest = JSON.parse(String(manifestCall![1]))
+    expect(manifest.paths.length + manifest.errors.length).toBe(3)
+
+    delete (globalThis as Record<string, unknown>).__CER_CONTENT_STORE__
+  })
+
+  it('filters auto-expanded content paths by nested catch-all prefix', async () => {
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(fg).mockResolvedValue(['/project/app/pages/docs/[...all].ts'])
+    vi.mocked(readFile).mockResolvedValue('queryContent()')
+    vi.mocked(buildRouteEntry).mockReturnValueOnce({
+      routePath: '/docs/:all*',
+      isDynamic: true,
+      isCatchAll: true,
+    } as ReturnType<typeof buildRouteEntry>)
+
+    ;(globalThis as Record<string, unknown>).__CER_CONTENT_STORE__ = [
+      { _path: '/docs/getting-started' },
+      { _path: '/docs/api/config' },
+      { _path: '/blog/hello' },
+    ]
+
+    const closeFn = vi.fn().mockResolvedValue(undefined)
+    vi.mocked(createServer).mockResolvedValue({
+      ssrLoadModule: vi.fn().mockResolvedValue({}),
+      close: closeFn,
+    } as unknown as Awaited<ReturnType<typeof createServer>>)
+
+    await buildSSG(makeConfig({ ssg: { concurrency: 1 } } as Partial<ResolvedCerConfig>))
+
+    const manifestCall = vi.mocked(writeFile).mock.calls.find(([p]) =>
+      String(p).includes('ssg-manifest.json'),
+    )
+    const manifest = JSON.parse(String(manifestCall![1]))
+    expect(manifest.paths.length + manifest.errors.length).toBe(3)
+
+    delete (globalThis as Record<string, unknown>).__CER_CONTENT_STORE__
+  })
+
+  it('expands catch-all ssg.paths into concrete URL paths', async () => {
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(fg).mockResolvedValue(['/project/app/pages/[...all].ts'])
+    vi.mocked(readFile).mockResolvedValue('')
+    vi.mocked(buildRouteEntry).mockReturnValueOnce({
+      routePath: '/:all*',
+      isDynamic: true,
+      isCatchAll: true,
+    } as ReturnType<typeof buildRouteEntry>)
+
+    const closeFn = vi.fn().mockResolvedValue(undefined)
+    vi.mocked(createServer).mockResolvedValue({
+      ssrLoadModule: vi.fn().mockResolvedValue({
+        meta: {
+          ssg: {
+            paths: async () => [
+              { params: { all: 'music/effects/pro-co/rat' } },
+              { params: { all: 'music/effects/boss/ds-1' } },
+            ],
+          },
+        },
+      }),
+      close: closeFn,
+    } as unknown as Awaited<ReturnType<typeof createServer>>)
+
+    await buildSSG(makeConfig({ ssg: { concurrency: 1 } } as Partial<ResolvedCerConfig>))
+
+    const manifestCall = vi.mocked(writeFile).mock.calls.find(([p]) =>
+      String(p).includes('ssg-manifest.json'),
+    )
+    const manifest = JSON.parse(String(manifestCall![1]))
+    expect(manifest.paths.length + manifest.errors.length).toBe(3)
+    expect(manifest.errors.map((entry: { path: string }) => entry.path)).toEqual([
+      '/',
+      '/music/effects/pro-co/rat',
+      '/music/effects/boss/ds-1',
+    ])
   })
 
   it('deduplicates collected paths', async () => {

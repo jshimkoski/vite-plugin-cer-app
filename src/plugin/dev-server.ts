@@ -131,6 +131,36 @@ function _matchDevRoute(pattern: string, urlPath: string): boolean {
   return new RegExp(regexStr).test(norm(urlPath))
 }
 
+function _isHtmlRequest(url: string, acceptHeader: string | string[] | undefined): boolean {
+  const accept = Array.isArray(acceptHeader) ? acceptHeader.join(',') : (acceptHeader ?? '')
+  if (url.startsWith('/api/') || url.startsWith('/@')) return false
+  return (
+    accept.includes('text/html') ||
+    url === '/' ||
+    url === '/index.html' ||
+    !url.includes('.')
+  )
+}
+
+async function _serveSpaShell(
+  server: ViteDevServer,
+  config: ResolvedCerConfig,
+  url: string,
+  res: ServerResponse,
+): Promise<boolean> {
+  const userHtml = resolve(config.root, 'index.html')
+  const cerHtml = join(getGeneratedDir(config.root), 'index.html')
+  const shellPath = existsSync(userHtml) ? userHtml : cerHtml
+  if (!existsSync(shellPath)) return false
+
+  const rawHtml = readFileSync(shellPath, 'utf-8')
+  const transformed = await server.transformIndexHtml(url, rawHtml)
+  res.setHeader('Content-Type', 'text/html; charset=utf-8')
+  res.statusCode = 200
+  res.end(transformed)
+  return true
+}
+
 /**
  * Configures the Vite dev server with:
  * 1. API route handlers from server/api/
@@ -144,6 +174,7 @@ export function configureCerDevServer(
   server.middlewares.use(async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
     const url = req.url ?? '/'
     const method = req.method?.toUpperCase() ?? 'GET'
+    const acceptsHtml = _isHtmlRequest(url, req.headers['accept'])
 
     // 1. Server middleware from server/middleware/ runs first (CORS, auth, logging, etc.)
     try {
@@ -240,16 +271,19 @@ export function configureCerDevServer(
       // virtual:cer-server-api not yet ready or empty — continue
     }
 
-    // 3. SSR/SSG mode: intercept HTML requests and server-render them.
+    // 3. SPA mode: answer client-routed HTML navigations with the shell directly
+    // so Vite's history fallback never emits an intermediate 404 for valid app routes.
+    if (config.mode === 'spa' && (method === 'GET' || method === 'HEAD') && acceptsHtml) {
+      if (await _serveSpaShell(server, config, url, res)) {
+        return
+      }
+    }
+
+    // 4. SSR/SSG mode: intercept HTML requests and server-render them.
     // Both 'ssr' and 'ssg' modes run loaders on the server so usePageData()
     // returns real data during dev — matching production behaviour.
     // 'spa' mode never runs server loaders, so it falls through to the client bundle.
     if (config.mode === 'ssr' || config.mode === 'ssg') {
-      const acceptsHtml =
-        (req.headers['accept'] ?? '').includes('text/html') ||
-        url === '/' ||
-        (!url.includes('.') && !url.startsWith('/api/') && !url.startsWith('/@'))
-
       if (acceptsHtml) {
         // Check per-route render mode — skip SSR for 'spa' routes.
         const urlPathOnly = url.split('?')[0]
@@ -262,15 +296,7 @@ export function configureCerDevServer(
                 // In SSR/SSG dev mode, a route with render:'spa' should be served as
                 // the SPA shell (no server rendering). Serve .cer/index.html so the
                 // client bundle boots and handles the route client-side.
-                const _userHtml = resolve(config.root, 'index.html')
-                const _cerHtml = join(getGeneratedDir(config.root), 'index.html')
-                const _spaSrcPath = existsSync(_userHtml) ? _userHtml : _cerHtml
-                if (existsSync(_spaSrcPath)) {
-                  const rawHtml = readFileSync(_spaSrcPath, 'utf-8')
-                  const transformed = await server.transformIndexHtml(url, rawHtml)
-                  res.setHeader('Content-Type', 'text/html; charset=utf-8')
-                  res.statusCode = 200
-                  res.end(transformed)
+                if (await _serveSpaShell(server, config, url, res)) {
                   return
                 }
                 next()

@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'pathe'
 import { createServer, type UserConfig } from 'vite'
 import type { ResolvedCerConfig } from './dev-server.js'
+import type { ContentItem } from '../types/content.js'
 import { buildSSR } from './build-ssr.js'
 import { buildRouteEntry } from './path-utils.js'
 import fg from 'fast-glob'
@@ -12,6 +13,8 @@ interface SsgManifest {
   paths: string[]
   errors: Array<{ path: string; error: string }>
 }
+
+const CONTENT_STORE_KEY = '__CER_CONTENT_STORE__'
 
 
 /**
@@ -66,27 +69,33 @@ async function collectSsgPaths(
   })
 
   const staticFiles: string[] = []
-  const dynamicFiles: Array<{ file: string; entry: ReturnType<typeof buildRouteEntry> }> = []
+  const dynamicFiles: Array<{
+    file: string
+    entry: ReturnType<typeof buildRouteEntry>
+    usesQueryContent: boolean
+  }> = []
 
   for (const file of files) {
     // Skip routes that declare render: 'server' or render: 'spa' — they are
     // either always-SSR or client-only and must not be pre-rendered.
+    let src = ''
     try {
-      const src = await readFile(file, 'utf-8')
+      src = await readFile(file, 'utf-8')
       const renderMatch = src.match(/render\s*:\s*['"]([^'"]+)['"]/)
       const renderMode = renderMatch ? renderMatch[1] : null
       if (renderMode === 'server' || renderMode === 'spa') continue
     } catch { /* ignore read errors */ }
 
     const entry = buildRouteEntry(file, config.pagesDir)
+    const usesQueryContent = /\bqueryContent\s*\(/.test(src)
 
     if (!entry.isDynamic && !entry.isCatchAll) {
       staticFiles.push(file)
       if (entry.routePath !== '/') {
         paths.push(entry.routePath)
       }
-    } else if (entry.isDynamic && !entry.isCatchAll) {
-      dynamicFiles.push({ file, entry })
+    } else if (entry.isDynamic) {
+      dynamicFiles.push({ file, entry, usesQueryContent })
     }
   }
 
@@ -101,7 +110,7 @@ async function collectSsgPaths(
     })
 
     try {
-      for (const { file, entry } of dynamicFiles) {
+      for (const { file, entry, usesQueryContent } of dynamicFiles) {
         try {
           const pageMod = await viteServer.ssrLoadModule(file)
           const pageMeta = pageMod.meta ?? pageMod.pageMeta
@@ -112,10 +121,18 @@ async function collectSsgPaths(
             for (const ctx of pathsResult) {
               let resolvedPath = entry.routePath
               for (const [key, value] of Object.entries(ctx.params as Record<string, unknown>)) {
+                resolvedPath = resolvedPath.replace(`:${key}*`, String(value))
                 resolvedPath = resolvedPath.replace(`:${key}`, String(value))
               }
               paths.push(resolvedPath)
             }
+            continue
+          }
+
+          if (entry.isCatchAll && usesQueryContent) {
+            const contentStore = (globalThis as Record<string, unknown>)[CONTENT_STORE_KEY] as ContentItem[] | undefined
+            const catchAllPaths = _collectCatchAllContentPaths(entry.routePath, contentStore ?? [])
+            paths.push(...catchAllPaths)
           }
         } catch {
           console.warn(`[cer-app] Could not enumerate paths for ${file}`)
@@ -148,6 +165,21 @@ async function collectSsgPaths(
   }
 
   return [...new Set(paths)] // deduplicate
+}
+
+function _collectCatchAllContentPaths(routePath: string, store: ContentItem[]): string[] {
+  if (store.length === 0) return []
+
+  const prefix = routePath
+    .replace(/:[^/]+\*$/, '')
+    .replace(/\/+$/, '') || '/'
+
+  return store
+    .map((item) => item._path)
+    .filter((contentPath) => {
+      if (prefix === '/') return true
+      return contentPath === prefix || contentPath.startsWith(prefix + '/')
+    })
 }
 
 // Cache the server module across renderPath calls (loaded once per SSG run)

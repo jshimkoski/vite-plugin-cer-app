@@ -315,10 +315,11 @@ const _prepareRequest = async (req) => {
     if (tag) vnode = { tag, props: {}, children: [vnode] }
   }
 
-  // If the request matched a catch-all route (user-defined 404.ts or [...all].ts),
-  // return HTTP 404 so browsers and crawlers treat it as a not-found response.
-  const isCatchAll = route?.path === '/:all*'
-  return { vnode, router, head, status: isCatchAll ? 404 : null, loaderData }
+  // Only framework-owned not-found routes should force a 404 status. A user
+  // catch-all page ([...all].ts) may successfully resolve real content paths
+  // and should stay 200 unless its loader explicitly throws a 404.
+  const isNotFoundRoute = route?.meta?._cerNotFound === true
+  return { vnode, router, head, status: isNotFoundRoute ? 404 : null, loaderData }
 }
 
 export const handler = async (req, res) => {

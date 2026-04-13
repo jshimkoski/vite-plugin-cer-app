@@ -423,6 +423,12 @@ function normalizeContentPath(all: string | undefined) {
 
 This pattern works well for documentation sites, blogs, and other apps where the route structure mirrors the `content/` directory. `queryContent('/docs/getting-started').first()` returns the full `ContentItem`, including `body`, `excerpt`, and `toc`.
 
+Important behavior notes:
+
+- A content-backed `[...all].ts` route is not treated as a framework 404 by default. If `queryContent()` finds a matching document, SSR/SSG responses stay HTTP 200.
+- If no document is found and you want a real HTTP 404, throw a not-found error from the loader instead of only rendering a `404` heading in the template.
+- In SSG with `ssg.routes: 'auto'`, catch-all pages that use `queryContent()` can auto-generate concrete output paths from the content store. You only need `meta.ssg.paths` when the URLs come from some other source.
+
 ---
 
 ## `useContentSearch()`

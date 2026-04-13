@@ -397,6 +397,7 @@ export async function generateRoutesCode(pagesDir: string, i18n?: I18nRouteConfi
     const filePath = JSON.stringify(entry.filePath)
     const tagName = JSON.stringify(entry.tagName)
     const routePath = JSON.stringify(entry.routePath)
+    const isNotFoundPage = basename(entry.filePath) === '404.ts'
 
     // The load() function dynamically imports the page module which:
     //   1. Runs component() as a side effect, registering the custom element
@@ -435,6 +436,9 @@ export async function generateRoutesCode(pagesDir: string, i18n?: I18nRouteConfi
     }
     if (title !== null) {
       metaFields.push(`title: ${JSON.stringify(title)}`)
+    }
+    if (isNotFoundPage) {
+      metaFields.push(`_cerNotFound: true`)
     }
     // P2-2: Per-route error tag stored in meta for SSR error boundary resolution.
     if (routeErrorTag !== null) {
@@ -496,7 +500,7 @@ export async function generateRoutesCode(pagesDir: string, i18n?: I18nRouteConfi
   // The null default tag causes _prepareRequest to return status 404.
   const allRouteItems = routeItems.flat()
   if (!hasCatchAll) {
-    allRouteItems.push(`  {\n    path: '/:all*',\n    load: () => Promise.resolve({ default: null, loader: null }),\n  }`)
+    allRouteItems.push(`  {\n    path: '/:all*',\n    load: () => Promise.resolve({ default: null, loader: null }),\n    meta: { _cerNotFound: true },\n  }`)
   }
 
   lines.push('const routes = [')

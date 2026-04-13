@@ -95,7 +95,7 @@ ssg: {
 
 Which paths to generate at build time.
 
-- `'auto'` — Scans `app/pages/` and generates all static routes. For dynamic routes, calls `meta.ssg.paths()` to enumerate paths.
+- `'auto'` — Scans `app/pages/` and generates all static routes. For dynamic routes, calls `meta.ssg.paths()` to enumerate paths. Content-backed catch-all pages that use `queryContent()` can also auto-enumerate concrete paths from the content store.
 - `string[]` — Explicit list of paths, e.g. `['/about', '/blog/hello-world']`.
 
 ### `ssg.concurrency`
