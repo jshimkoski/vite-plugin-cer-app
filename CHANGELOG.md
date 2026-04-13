@@ -1,6 +1,11 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.21.1] - 2026-04-13
+
+- fix: broken test (19540bd)
+- fix: ensure catch all only throws errors if one is actually encountered, enhance content-driven routing and catch-all page handling in documentation (a1ea900)
+
 ## [v0.21.0] - 2026-04-12
 
 - feat: add support for numeric ordering prefixes in content paths and update related tests (ffb0bc8)
