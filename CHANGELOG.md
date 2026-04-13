@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.21.3] - 2026-04-13
+
+- fix: enhance content layer with automatic component registration from markdown (62bcc04)
+
 ## [v0.21.2] - 2026-04-13
 
 - fix: enhance dev mode logging in runtime and update dependencies (57a5a7c)
