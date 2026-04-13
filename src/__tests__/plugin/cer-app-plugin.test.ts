@@ -34,6 +34,7 @@ vi.mock('../../plugin/virtual/server-api.js', () => ({ generateServerApiCode: vi
 vi.mock('../../plugin/virtual/server-middleware.js', () => ({ generateServerMiddlewareCode: vi.fn().mockResolvedValue('// server-middleware') }))
 vi.mock('../../plugin/virtual/loading.js', () => ({ generateLoadingCode: vi.fn().mockResolvedValue('// loading') }))
 vi.mock('../../plugin/virtual/error.js', () => ({ generateErrorCode: vi.fn().mockResolvedValue('// error') }))
+vi.mock('../../plugin/virtual/content-components.js', () => ({ generateContentComponentsCode: vi.fn().mockResolvedValue('// content-components') }))
 vi.mock('../../plugin/transforms/auto-import.js', () => ({ autoImportTransform: vi.fn().mockReturnValue(null) }))
 
 import { cerApp } from '../../plugin/index.js'

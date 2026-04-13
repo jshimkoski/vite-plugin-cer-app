@@ -9,6 +9,7 @@ export interface ResolvedCerConfig {
   mode: 'spa' | 'ssr' | 'ssg'
   srcDir: string
   root: string
+  contentDir: string
   pagesDir: string
   layoutsDir: string
   componentsDir: string

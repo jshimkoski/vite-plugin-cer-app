@@ -18,6 +18,7 @@ import { generateServerApiCode } from './virtual/server-api.js'
 import { generateServerMiddlewareCode } from './virtual/server-middleware.js'
 import { generateLoadingCode } from './virtual/loading.js'
 import { generateErrorCode } from './virtual/error.js'
+import { generateContentComponentsCode } from './virtual/content-components.js'
 import { createWatcher } from './scanner.js'
 import { cerContent } from './content/index.js'
 
@@ -33,6 +34,7 @@ const VIRTUAL_IDS = {
   appConfig: 'virtual:cer-app-config',
   loading: 'virtual:cer-loading',
   error: 'virtual:cer-error',
+  contentComponents: 'virtual:cer-content-components',
   i18n: 'virtual:cer-i18n',
 } as const
 
@@ -60,6 +62,7 @@ export function resolveConfig(userConfig: CerAppConfig, root: string = process.c
     mode,
     srcDir,
     root,
+    contentDir: resolve(root, userConfig.content?.dir ?? 'content'),
     pagesDir: join(srcDir, 'pages'),
     layoutsDir: join(srcDir, 'layouts'),
     componentsDir: join(srcDir, 'components'),
@@ -136,6 +139,8 @@ async function generateVirtualModule(
       return generateLoadingCode(config.srcDir)
     case RESOLVED_IDS.error:
       return generateErrorCode(config.srcDir)
+    case RESOLVED_IDS.contentComponents:
+      return generateContentComponentsCode(config.componentsDir, config.contentDir)
     case RESOLVED_IDS.i18n:
       return generateI18nModule(config.i18n)
     default:
@@ -223,6 +228,9 @@ function getDirtyVirtualIds(filePath: string, config: ResolvedCerConfig): string
   if (filePath.startsWith(config.layoutsDir)) {
     dirty.push(RESOLVED_IDS.layouts)
   }
+  if (filePath.startsWith(config.componentsDir)) {
+    dirty.push(RESOLVED_IDS.contentComponents)
+  }
   if (filePath.startsWith(config.composablesDir)) {
     dirty.push(RESOLVED_IDS.composables)
   }
@@ -237,6 +245,9 @@ function getDirtyVirtualIds(filePath: string, config: ResolvedCerConfig): string
   }
   if (filePath.startsWith(config.serverMiddlewareDir)) {
     dirty.push(RESOLVED_IDS.serverMiddleware)
+  }
+  if (filePath.startsWith(config.contentDir)) {
+    dirty.push(RESOLVED_IDS.contentComponents)
   }
 
   return dirty
@@ -393,6 +404,7 @@ export function cerApp(userConfig: CerAppConfig = {}): Plugin[] {
         config.pagesDir,
         config.layoutsDir,
         config.componentsDir,
+        config.contentDir,
         config.composablesDir,
         config.pluginsDir,
         config.middlewareDir,

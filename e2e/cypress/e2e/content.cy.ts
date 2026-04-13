@@ -10,7 +10,7 @@
  *   /content-fallback — title/description derived from body when frontmatter omits them
  */
 
-const mode = Cypress.env('mode') as 'spa' | 'ssr' | 'ssg'
+const mode = Cypress.env('mode') as 'spa' | 'ssr' | 'ssg' | 'dev'
 
 // ─── /content-index ───────────────────────────────────────────────────────────
 
@@ -115,6 +115,18 @@ describe('Content doc — queryContent("/docs/getting-started").first()', () => 
         expect(response.body).to.include('Installation')
       })
     })
+
+    it('includes markdown component registration hints in initial HTML', () => {
+      cy.request('/content-doc').then((response) => {
+        expect(response.body).to.include('<ks-badge>Docs Badge</ks-badge>')
+        if (mode === 'dev') {
+          expect(response.body).to.include('/@cer/app.ts')
+        } else {
+          expect(response.body).to.match(/ks-badge-[^"']+\.js/)
+        }
+        expect(response.body).to.include('Docs Badge')
+      })
+    })
   }
 
   it('renders doc title after hydration', () => {
@@ -155,6 +167,14 @@ describe('Content doc — queryContent("/docs/getting-started").first()', () => 
   it('body contains "Installation" heading', () => {
     cy.visit('/content-doc')
     cy.get('[data-cy=content-doc-body]', { timeout: 8000 }).contains('h2', 'Installation')
+  })
+
+  it('renders app components referenced inside markdown after hydration', () => {
+    cy.visit('/content-doc')
+    cy.get('[data-cy=content-doc-body]', { timeout: 8000 }).within(() => {
+      cy.get('ks-badge').should('contain', 'Docs Badge')
+      cy.get('[data-cy=ks-badge]').should('exist')
+    })
   })
 })
 

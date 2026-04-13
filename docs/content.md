@@ -7,7 +7,7 @@ CER Content is a file-based content layer built into `vite-plugin-cer-app`. It p
 ## Overview
 
 - **Zero config** — drop files into `content/` at the project root and they are available immediately.
-- **Markdown + JSON** — Markdown files are parsed with frontmatter, rendered to HTML, and have their headings extracted into a table of contents. JSON files are stored as raw string bodies.
+- **Markdown + JSON** — Markdown files are parsed with frontmatter, rendered to HTML, have their headings extracted into a table of contents, and auto-register matching custom elements from `app/components/` when those tags appear in the markdown body. JSON files are stored as raw string bodies.
 - **Draft support** — items with `draft: true` in frontmatter are excluded from production builds by default.
 - **Excerpt extraction** — place `<!-- more -->` in a Markdown file to set the excerpt boundary.
 - **Full-text search** — a MiniSearch index is emitted at build time and loaded lazily on the client via `useContentSearch()`.
@@ -103,6 +103,19 @@ When `false`, any file with `draft: true` in its frontmatter is excluded from th
 
 Markdown files use [gray-matter](https://github.com/jonschlinkert/gray-matter) for YAML frontmatter. All frontmatter keys are stored in the content item. The body is rendered to HTML using [marked](https://marked.js.org). Heading elements receive an `id` attribute derived from their slug.
 
+If the rendered markdown body contains custom-element tags that match components registered in `app/components/`, CER automatically imports those component modules for both client and server entry points. That means markdown like `<site-callout>Note</site-callout>` works in SPA, SSR, and SSG without adding manual imports to your page component.
+
+Props passed from markdown follow normal HTML attribute rules:
+
+- String props work directly: `<site-callout tone="info" heading="Heads up">…</site-callout>`
+- Number and boolean props work when the component declares them via `useProps()` defaults, because the runtime coerces attribute values to the declared primitive type
+- Boolean presence attributes are appropriate for flag-style props such as `<site-callout dismissible>`
+- All markdown-supplied props are attribute-based, so they must be serializable as plain HTML attribute values
+- Arrays, objects, and function props are not passed as rich JavaScript values from markdown
+- CER template bindings and directives do not run inside markdown HTML, so syntax like `:bind`, `@click`, `:class`, or `${...}` is treated as plain text/attributes, not live bindings
+
+In practice, components used from markdown should expose a string/number/boolean attribute API and read those values with `useProps()`.
+
 ```md
 ---
 title: Hello World
@@ -116,6 +129,31 @@ draft: false
 <!-- more -->
 
 Everything below the excerpt boundary is in `body` but not in `excerpt`.
+```
+
+```md
+# Docs
+
+<site-callout>Remember to configure your content directory.</site-callout>
+```
+
+```ts
+component('site-callout', () => {
+  const props = useProps({ tone: 'info', heading: '', dismissible: false, priority: 0 })
+
+  return html`
+    <aside data-tone="${props.tone}">
+      ${props.heading ? html`<strong>${props.heading}</strong>` : ''}
+      <slot></slot>
+    </aside>
+  `
+})
+```
+
+```md
+<site-callout tone="warning" heading="Before You Start" dismissible priority="2">
+  Install dependencies first.
+</site-callout>
 ```
 
 Recognized frontmatter keys:

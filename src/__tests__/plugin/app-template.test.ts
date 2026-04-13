@@ -52,6 +52,10 @@ describe('app-template (APP_ENTRY_TEMPLATE content)', () => {
     expect(src).toContain('virtual:cer-jit-css')
   })
 
+  it('imports virtual:cer-content-components for markdown-backed custom elements', () => {
+    expect(src).toContain('virtual:cer-content-components')
+  })
+
   it('exports router', () => {
     expect(src).toContain('export { router }')
   })

@@ -28,6 +28,10 @@ describe('entry-server-template (ENTRY_SERVER_TEMPLATE content)', () => {
     expect(src).toContain('virtual:cer-server-api')
   })
 
+  it('imports virtual:cer-content-components for markdown-backed custom elements', () => {
+    expect(src).toContain('virtual:cer-content-components')
+  })
+
   it('imports registerBuiltinComponents from custom-elements-runtime', () => {
     expect(src).toContain('registerBuiltinComponents')
     expect(src).toContain('setDevMode')

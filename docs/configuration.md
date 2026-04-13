@@ -288,7 +288,7 @@ See [cli.md](./cli.md#cer-app-adapt) for full details.
 
 ## `content` options
 
-Enables the file-based content layer. Drop Markdown or JSON files into `content/` at the project root and query them with `queryContent()` or search with `useContentSearch()`.
+Enables the file-based content layer. Drop Markdown or JSON files into `content/` at the project root and query them with `queryContent()` or search with `useContentSearch()`. Custom elements referenced directly inside markdown are also auto-registered from `app/components/`.
 
 ```ts
 export default defineConfig({

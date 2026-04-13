@@ -7,6 +7,8 @@ description: How to install and configure the content layer — tests TOC depth 
 
 This guide walks you through installation and basic usage.
 
+<ks-badge>Docs Badge</ks-badge>
+
 ## Installation
 
 Run the following command:
