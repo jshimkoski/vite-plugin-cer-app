@@ -1,9 +1,13 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 import { EventEmitter } from 'node:events'
+vi.mock('node:fs', () => ({
+  existsSync: vi.fn().mockReturnValue(false),
+  readFileSync: vi.fn().mockReturnValue('<html>shell</html>'),
+}))
+
+import { existsSync, readFileSync } from 'node:fs'
 import { configureCerDevServer } from '../../plugin/dev-server.js'
 import type { ResolvedCerConfig } from '../../plugin/dev-server.js'
-
-const HTML_SHELL_ROOT = '/Users/jshimkoski/dev/cer/custom-elements'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -79,6 +83,11 @@ function makeServer(): { server: MockServer; getMiddleware: () => Function } {
   return { server, getMiddleware: () => registered[0] }
 }
 
+beforeEach(() => {
+  vi.mocked(existsSync).mockReturnValue(false)
+  vi.mocked(readFileSync).mockReturnValue('<html>shell</html>' as never)
+})
+
 // ─── Registration ─────────────────────────────────────────────────────────────
 
 describe('configureCerDevServer — registration', () => {
@@ -117,11 +126,13 @@ describe('configureCerDevServer — SPA shell handling', () => {
   it('serves the transformed SPA shell for direct HTML navigations in spa mode', async () => {
     const { server, getMiddleware } = makeServer()
     server.transformIndexHtml.mockResolvedValue('<html>spa shell</html>')
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(readFileSync).mockReturnValue('<html>source shell</html>' as never)
     const res = createRes()
 
     configureCerDevServer(
       server as any,
-      makeConfig({ root: HTML_SHELL_ROOT, mode: 'spa' }),
+      makeConfig({ mode: 'spa' }),
     )
 
     const next = vi.fn()
@@ -142,7 +153,7 @@ describe('configureCerDevServer — SPA shell handling', () => {
     const { server, getMiddleware } = makeServer()
     configureCerDevServer(
       server as any,
-      makeConfig({ root: HTML_SHELL_ROOT, mode: 'spa' }),
+      makeConfig({ mode: 'spa' }),
     )
 
     const next = vi.fn()
@@ -527,9 +538,11 @@ describe('configureCerDevServer — SSR mode', () => {
       return { handler: ssrHandler }
     })
     server.transformIndexHtml.mockResolvedValue('<html>spa shell</html>')
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(readFileSync).mockReturnValue('<html>source shell</html>' as never)
     configureCerDevServer(
       server as any,
-      makeConfig({ root: HTML_SHELL_ROOT, mode: 'spa' }),
+      makeConfig({ mode: 'spa' }),
     )
     const next = vi.fn()
     const res = createRes()
