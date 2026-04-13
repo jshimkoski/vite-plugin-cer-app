@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.21.2] - 2026-04-13
+
+- fix: enhance dev mode logging in runtime and update dependencies (57a5a7c)
+
 ## [v0.21.1] - 2026-04-13
 
 - fix: broken test (19540bd)
