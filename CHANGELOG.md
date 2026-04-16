@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.22.0] - 2026-04-16
+
+- feat: add customColors support for jitCss configuration and implement related tests (b8061ef)
+
 ## [v0.21.4] - 2026-04-16
 
 - fix: update path resolution for auto-imported components to be relative from .cer/ (633a241)
