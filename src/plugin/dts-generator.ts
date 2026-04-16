@@ -146,18 +146,18 @@ export async function generateAutoImportDts(
   if (exports.size > 0) {
     lines.push('')
     for (const [name, filePath] of exports) {
-      // Use a path relative to the project root so the .d.ts is portable
-      const rel = './' + relative(root, filePath).replace(/\.ts$/, '')
+      // Use a path relative to .cer/ (one level up from root) so the .d.ts resolves correctly
+      const rel = '../' + relative(root, filePath).replace(/\.ts$/, '')
       lines.push(`  const ${name}: typeof import('${rel}')['${name}']`)
     }
   }
 
   lines.push('')
   lines.push('  // Content layer types')
-  lines.push(`  type ContentMeta = import('@jasonshimmy/vite-plugin-cer-app')['ContentMeta']`)
-  lines.push(`  type ContentItem = import('@jasonshimmy/vite-plugin-cer-app')['ContentItem']`)
-  lines.push(`  type ContentHeading = import('@jasonshimmy/vite-plugin-cer-app')['ContentHeading']`)
-  lines.push(`  type ContentSearchResult = import('@jasonshimmy/vite-plugin-cer-app')['ContentSearchResult']`)
+  lines.push(`  type ContentMeta = import('@jasonshimmy/vite-plugin-cer-app').ContentMeta`)
+  lines.push(`  type ContentItem = import('@jasonshimmy/vite-plugin-cer-app').ContentItem`)
+  lines.push(`  type ContentHeading = import('@jasonshimmy/vite-plugin-cer-app').ContentHeading`)
+  lines.push(`  type ContentSearchResult = import('@jasonshimmy/vite-plugin-cer-app').ContentSearchResult`)
   lines.push('')
   lines.push('  // SSR loader data injected as window.__CER_DATA__ by the server.')
   lines.push('  // Consumed once by usePageData() during client hydration.')
@@ -210,7 +210,7 @@ export async function generateVirtualModuleDts(
   ]
 
   for (const [name, filePath] of exports) {
-    const rel = './' + relative(root, filePath).replace(/\.ts$/, '')
+    const rel = '../' + relative(root, filePath).replace(/\.ts$/, '')
     lines.push(`  export { ${name} } from '${rel}'`)
   }
 

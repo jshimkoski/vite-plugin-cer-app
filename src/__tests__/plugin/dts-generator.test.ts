@@ -258,8 +258,8 @@ describe('generateAutoImportDts', () => {
   it('uses relative path for user composables', async () => {
     const exports = new Map([['useFoo', `${ROOT}/app/composables/foo.ts`]])
     const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR, exports)
-    // Path should be relative from root
-    expect(dts).toContain('./app/composables/foo')
+    // Path must be relative from .cer/ (one level up from root) so TypeScript can resolve it
+    expect(dts).toContain('../app/composables/foo')
   })
 })
 
