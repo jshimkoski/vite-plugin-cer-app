@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.21.4] - 2026-04-16
+
+- fix: update path resolution for auto-imported components to be relative from .cer/ (633a241)
+
 ## [v0.21.3] - 2026-04-13
 
 - fix: enhance content layer with automatic component registration from markdown (62bcc04)
