@@ -1,13 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'pathe'
+import { generateAppEntryTemplate } from '../../runtime/app-template.js'
 
 const src = readFileSync(
   resolve(import.meta.dirname, '../../runtime/app-template.ts'),
   'utf-8',
 )
 
-describe('app-template (APP_ENTRY_TEMPLATE content)', () => {
+describe('app-template (source content)', () => {
   it('does not import virtual:cer-components (components injected per-file by cerComponentImports)', () => {
     expect(src).not.toContain('virtual:cer-components')
   })
@@ -58,5 +59,54 @@ describe('app-template (APP_ENTRY_TEMPLATE content)', () => {
 
   it('exports router', () => {
     expect(src).toContain('export { router }')
+  })
+})
+
+describe('generateAppEntryTemplate', () => {
+  it('calls enableJITCSS() with no arguments when customColors is omitted', () => {
+    const out = generateAppEntryTemplate()
+    expect(out).toContain('enableJITCSS()')
+    expect(out).not.toContain('customColors')
+  })
+
+  it('calls enableJITCSS() with no arguments when customColors is an empty object', () => {
+    const out = generateAppEntryTemplate({})
+    expect(out).toContain('enableJITCSS()')
+    expect(out).not.toContain('customColors')
+  })
+
+  it('serializes a single color family into the enableJITCSS call', () => {
+    const out = generateAppEntryTemplate({ brand: { '500': '#7c3aed' } })
+    expect(out).toContain('enableJITCSS({ customColors:')
+    expect(out).toContain('"brand"')
+    expect(out).toContain('"500"')
+    expect(out).toContain('"#7c3aed"')
+  })
+
+  it('serializes multiple color families correctly', () => {
+    const out = generateAppEntryTemplate({
+      brand: { '100': '#ede9fe', '900': '#4c1d95' },
+      accent: { DEFAULT: '#f59e0b' },
+    })
+    expect(out).toContain('"brand"')
+    expect(out).toContain('"accent"')
+    expect(out).toContain('"DEFAULT"')
+    expect(out).toContain('"#f59e0b"')
+  })
+
+  it('serializes CSS variable references as color values', () => {
+    const out = generateAppEntryTemplate({
+      surface: { DEFAULT: 'var(--md-sys-color-surface)' },
+    })
+    expect(out).toContain('"surface"')
+    expect(out).toContain('var(--md-sys-color-surface)')
+  })
+
+  it('still includes all standard template content when customColors is provided', () => {
+    const out = generateAppEntryTemplate({ brand: { '500': '#ff0000' } })
+    expect(out).toContain('virtual:cer-jit-css')
+    expect(out).toContain('virtual:cer-routes')
+    expect(out).toContain('enableJITCSS')
+    expect(out).toContain('export { router }')
   })
 })

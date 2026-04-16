@@ -144,6 +144,25 @@ export interface JitCssConfig {
   content?: string[]
   /** Enable the extended color palette. Defaults to `false`. */
   extendedColors?: boolean
+  /**
+   * Project-specific color families registered in the JIT CSS engine at both
+   * build time and runtime. Each key is a color family name (e.g. `brand`);
+   * its value is a map of scale steps to CSS color values.
+   *
+   * Color family names must be a single lowercase word (no hyphens). Shades
+   * can be any string key — numeric steps (`'500'`) or semantic names
+   * (`'DEFAULT'`, `'on'`, `'container'`). When no shade is specified in a
+   * utility class (e.g. `bg-brand`), the `DEFAULT` shade is used.
+   *
+   * @example
+   * ```ts
+   * customColors: {
+   *   brand: { '100': '#ede9fe', '500': '#7c3aed', '900': '#4c1d95' },
+   *   surface: { DEFAULT: 'var(--md-sys-color-surface)' },
+   * }
+   * ```
+   */
+  customColors?: Record<string, Record<string, string>>
 }
 
 /** Fine-grained control over which auto-import categories are injected into page/layout/component files. All categories are enabled by default. */

@@ -142,12 +142,16 @@ Controls scroll-to-fragment (`#anchor`) behavior.
 
 ## `jitCss` options
 
-Passed to the runtime's `cerPlugin` for JIT (just-in-time) CSS generation.
+Passed to the runtime's `cerPlugin` for JIT (just-in-time) CSS generation at build time and to `enableJITCSS()` at runtime.
 
 ```ts
 jitCss: {
   content: ['./app/pages/**/*.ts', './app/components/**/*.ts', './app/layouts/**/*.ts'],
   extendedColors: false,
+  customColors: {
+    brand: { '100': '#ede9fe', '500': '#7c3aed', '900': '#4c1d95' },
+    surface: { DEFAULT: 'var(--md-sys-color-surface)' },
+  },
 }
 ```
 
@@ -164,6 +168,47 @@ Glob patterns pointing to files that use utility classes. The JIT compiler scans
 **Default:** `false`
 
 Enables the extended color palette in the JIT CSS system.
+
+### `jitCss.customColors`
+
+**Type:** `Record<string, Record<string, string>>`
+**Default:** `undefined`
+
+Registers project-specific color families in the JIT CSS engine. Each top-level key is a color family name; its value maps scale steps (or semantic names) to CSS color values. Custom colors are registered at both build time and runtime automatically:
+
+**Light DOM elements** — covered by the static stylesheet generated from the `content` scan. `customColors` is passed to the build-time scanner, so any custom color utility classes found in your source files are emitted into `virtual:cer-jit-css`, a global document stylesheet that applies to all light DOM elements.
+
+**Shadow DOM components** — covered at runtime. `customColors` is serialized into the `enableJITCSS()` call in the generated `.cer/app.ts`, so every component that renders after app startup has the custom colors available.
+
+Color family names must be a single lowercase word (no hyphens). Shade keys can be numeric steps (`'500'`) or semantic names (`'DEFAULT'`, `'on'`, `'container'`). When a utility class omits the shade (e.g. `bg-brand`), the `DEFAULT` shade is used automatically.
+
+Values can be any valid CSS color — hex strings, `rgb(...)`, `hsl(...)`, or CSS variable references:
+
+```ts
+jitCss: {
+  customColors: {
+    // Numeric scale
+    brand: { '100': '#ede9fe', '500': '#7c3aed', '900': '#4c1d95' },
+    // Semantic shades (DEFAULT used when no shade is specified)
+    accent: { DEFAULT: '#f59e0b', muted: '#fcd34d' },
+    // CSS variable references (ideal for bridging design-token systems)
+    mdprimary: { DEFAULT: 'var(--md-sys-color-primary)', on: 'var(--md-sys-color-on-primary)' },
+  },
+}
+```
+
+Once registered, all standard JIT CSS utility prefixes apply:
+
+| Utility | Example |
+|---|---|
+| Background | `bg-brand-500` |
+| Text | `text-brand-500` |
+| Border | `border-brand-500` |
+| Ring | `ring-brand-500` |
+| Shadow | `shadow-brand-500` |
+| Gradient stops | `from-brand-500 to-brand-900` |
+| With opacity modifier | `bg-brand-500/50` |
+| With variants | `hover:bg-brand-500 dark:text-brand-100` |
 
 ---
 

@@ -11,7 +11,7 @@ vi.mock('node:fs', async (importOriginal) => {
     appendFileSync: vi.fn(),
   }
 })
-vi.mock('../../runtime/app-template.js', () => ({ APP_ENTRY_TEMPLATE: '// app template' }))
+vi.mock('../../runtime/app-template.js', () => ({ generateAppEntryTemplate: vi.fn().mockReturnValue('// app template') }))
 
 import { existsSync, writeFileSync, mkdirSync, readFileSync, appendFileSync } from 'node:fs'
 import {
@@ -26,6 +26,7 @@ const ROOT = '/project'
 const mockConfig = {
   root: ROOT,
   srcDir: `${ROOT}/app`,
+  jitCss: { content: [], extendedColors: false },
 } as Parameters<typeof writeGeneratedDir>[0]
 
 beforeEach(() => {

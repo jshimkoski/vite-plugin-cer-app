@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { APP_ENTRY_TEMPLATE } from '../../runtime/app-template.js'
+import { generateAppEntryTemplate } from '../../runtime/app-template.js'
+
+const APP_ENTRY_TEMPLATE = generateAppEntryTemplate()
 
 // ─── Hydration strategy ───────────────────────────────────────────────────────
 

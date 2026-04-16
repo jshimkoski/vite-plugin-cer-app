@@ -1,7 +1,7 @@
 import { writeFileSync, existsSync, mkdirSync, readFileSync, appendFileSync } from 'node:fs'
 import { join } from 'pathe'
 import type { ResolvedCerConfig } from './dev-server.js'
-import { APP_ENTRY_TEMPLATE } from '../runtime/app-template.js'
+import { generateAppEntryTemplate } from '../runtime/app-template.js'
 import { ENTRY_SERVER_TEMPLATE } from '../runtime/entry-server-template.js'
 
 /** The name of the generated directory relative to the project root. */
@@ -107,7 +107,7 @@ export function writeGeneratedDir(config: ResolvedCerConfig): void {
   // Always write the generated app.ts — this is the framework entry point and
   // is never user-owned. Regenerating it on every dev/build ensures consumers
   // automatically get the latest bootstrap code on plugin update (Nuxt-style).
-  writeFileSync(join(dir, 'app.ts'), APP_ENTRY_TEMPLATE, 'utf-8')
+  writeFileSync(join(dir, 'app.ts'), generateAppEntryTemplate(config.jitCss.customColors), 'utf-8')
 
   // Always write the SSR entry — used by the dev server's ssrLoadModule call.
   // The production build injects this as a virtual module, but the dev server

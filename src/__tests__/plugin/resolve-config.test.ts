@@ -126,6 +126,30 @@ describe('resolveConfig', () => {
     expect(cfg.jitCss.extendedColors).toBe(false)
   })
 
+  it('defaults jitCss.customColors to undefined', () => {
+    const cfg = resolveConfig({}, ROOT)
+    expect(cfg.jitCss.customColors).toBeUndefined()
+  })
+
+  it('passes jitCss.customColors through unchanged', () => {
+    const customColors = { brand: { '500': '#7c3aed', '100': '#ede9fe' } }
+    const cfg = resolveConfig({ jitCss: { customColors } }, ROOT)
+    expect(cfg.jitCss.customColors).toEqual(customColors)
+  })
+
+  it('passes jitCss.customColors with CSS variable values through', () => {
+    const customColors = { surface: { DEFAULT: 'var(--md-sys-color-surface)' } }
+    const cfg = resolveConfig({ jitCss: { customColors } }, ROOT)
+    expect(cfg.jitCss.customColors).toEqual(customColors)
+  })
+
+  it('allows jitCss.customColors alongside extendedColors', () => {
+    const customColors = { accent: { '500': '#f59e0b' } }
+    const cfg = resolveConfig({ jitCss: { extendedColors: true, customColors } }, ROOT)
+    expect(cfg.jitCss.extendedColors).toBe(true)
+    expect(cfg.jitCss.customColors).toEqual(customColors)
+  })
+
   it('passes router.base through', () => {
     const cfg = resolveConfig({ router: { base: '/app', scrollToFragment: false } }, ROOT)
     expect(cfg.router.base).toBe('/app')

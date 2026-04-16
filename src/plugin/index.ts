@@ -8,7 +8,7 @@ import { autoImportTransform } from './transforms/auto-import.js'
 import { scanComposableExports, writeAutoImportDts, writeTsconfigPaths } from './dts-generator.js'
 import { configureCerDevServer } from './dev-server.js'
 import { writeGeneratedDir, getGeneratedDir } from './generated-dir.js'
-import { APP_ENTRY_TEMPLATE } from '../runtime/app-template.js'
+import { generateAppEntryTemplate } from '../runtime/app-template.js'
 import { generateRoutesCode } from './virtual/routes.js'
 import { generateLayoutsCode } from './virtual/layouts.js'
 import { generateComposablesCode } from './virtual/composables.js'
@@ -88,6 +88,7 @@ export function resolveConfig(userConfig: CerAppConfig, root: string = process.c
         `${srcDir}/layouts/**/*.ts`,
       ],
       extendedColors: userConfig.jitCss?.extendedColors ?? false,
+      customColors: userConfig.jitCss?.customColors,
     },
     autoImports: {
       components: userConfig.autoImports?.components ?? true,
@@ -312,7 +313,7 @@ export function cerApp(userConfig: CerAppConfig = {}): Plugin[] {
     },
 
     async load(id: string, options?: { ssr?: boolean }) {
-      if (id === RESOLVED_APP_ENTRY) return APP_ENTRY_TEMPLATE
+      if (id === RESOLVED_APP_ENTRY) return generateAppEntryTemplate(config.jitCss.customColors)
 
       const allResolved = Object.values(RESOLVED_IDS) as string[]
       if (!allResolved.includes(id)) return null

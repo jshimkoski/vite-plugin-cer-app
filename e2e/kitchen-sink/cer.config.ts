@@ -6,6 +6,12 @@ const LOG_FILE = '/tmp/cer-hooks-test.log'
 // Kitchen sink configuration — mode is overridden by --mode CLI flag
 export default {
   content: {},
+  jitCss: {
+    customColors: {
+      // A distinctive purple used to verify customColors reaches the runtime.
+      brand: { '500': '#7c3aed', '100': '#ede9fe', '900': '#4c1d95' },
+    },
+  },
   ssg: { routes: 'auto', concurrency: 2 },
   autoImports: { runtime: true, components: true, composables: true },
   runtimeConfig: {

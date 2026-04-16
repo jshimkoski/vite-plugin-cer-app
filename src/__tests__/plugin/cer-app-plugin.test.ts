@@ -38,7 +38,7 @@ vi.mock('../../plugin/virtual/content-components.js', () => ({ generateContentCo
 vi.mock('../../plugin/transforms/auto-import.js', () => ({ autoImportTransform: vi.fn().mockReturnValue(null) }))
 
 import { cerApp } from '../../plugin/index.js'
-import { APP_ENTRY_TEMPLATE } from '../../runtime/app-template.js'
+import { generateAppEntryTemplate } from '../../runtime/app-template.js'
 
 
 type TestPlugin = {
@@ -177,12 +177,12 @@ describe('cerApp plugin — resolveId hook', () => {
 })
 
 describe('cerApp plugin — load hook', () => {
-  it('loads \\0cer-app-entry with APP_ENTRY_TEMPLATE content', async () => {
+  it('loads \\0cer-app-entry with generated app entry content', async () => {
     const plugin = getCerPlugin()
     plugin.config({ root: '/project' }, { command: 'serve', mode: 'development' })
     plugin.configResolved(FAKE_RESOLVED)
     const result = await plugin.load('\0cer-app-entry')
-    expect(result).toBe(APP_ENTRY_TEMPLATE)
+    expect(result).toBe(generateAppEntryTemplate())
   })
 
   it('returns null for unknown resolved ids', async () => {

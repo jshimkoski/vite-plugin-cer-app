@@ -21,7 +21,7 @@ export interface ResolvedCerConfig {
   port: number
   ssg: { routes: 'auto' | string[]; concurrency: number; fallback: boolean }
   router: { base?: string; scrollToFragment?: boolean | object }
-  jitCss: { content: string[]; extendedColors: boolean }
+  jitCss: { content: string[]; extendedColors: boolean; customColors?: Record<string, Record<string, string>> }
   autoImports: { components: boolean; composables: boolean; directives: boolean; runtime: boolean }
   runtimeConfig: { public: Record<string, unknown>; private: import('../types/config.js').RuntimePrivateConfig }
   auth: import('../types/config.js').AuthConfig | null
