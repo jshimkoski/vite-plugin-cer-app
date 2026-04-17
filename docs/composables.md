@@ -868,16 +868,17 @@ import { queryContent } from '@jasonshimmy/vite-plugin-cer-app/composables'
 
 ### `useContentSearch()`
 
-Reactive full-text search over the content layer. Loads the MiniSearch index lazily on first use. Returns `query` and `results` refs that update reactively as the user types.
+Reactive full-text search over the content layer. Loads the MiniSearch index lazily on first use. Returns `query`, `results`, and `loading` refs that update reactively as the user types.
 
 Requires `content: {}` in `cer.config.ts`. See [content.md](./content.md) for full documentation.
 
 ```ts
 component('page-search', () => {
-  const { query, results } = useContentSearch()
+  const { query, results, loading } = useContentSearch()
 
   return html`
     <input type="search" :model="${query}" placeholder="Search…" />
+    ${loading.value ? html`<p>Searching…</p>` : ''}
     <ul>
       ${each(results.value, r => html`
         <li><a :href="${r._path}">${r.title}</a></li>
@@ -893,10 +894,11 @@ component('page-search', () => {
 interface UseContentSearchReturn {
   query: Ref<string>                   // bind with :model
   results: Ref<ContentSearchResult[]>  // reactive search results
+  loading: Ref<boolean>                // true while debounce is pending or search is in flight
 }
 ```
 
-Search activates when `query.value.length >= 2`. MiniSearch is loaded once and cached for the lifetime of the page. Searched fields are `title` and `description`.
+Search is debounced (200 ms) so the index is not queried on every keystroke. `loading` is set to `true` as soon as the user starts typing and returns to `false` once results arrive or the query is cleared. An empty query clears results immediately and cancels any in-flight search. MiniSearch is loaded once and cached for the lifetime of the page. Searched fields are `title` and `description`.
 
 If you need it outside auto-imported directories:
 

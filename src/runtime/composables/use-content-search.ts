@@ -50,11 +50,14 @@ export function resetIndexSingleton(): void {
 export interface UseContentSearchReturn {
   query: ReactiveState<string>
   results: ReactiveState<ContentSearchResult[]>
+  /** `true` from the moment the user starts typing until results (or an error) arrive. `false` when the query is empty or the search is complete. */
+  loading: ReactiveState<boolean>
 }
 
 const _factory = createComposable((): UseContentSearchReturn => {
   const query = ref('')
   const results = ref<ContentSearchResult[]>([])
+  const loading = ref(false)
 
   // Pre-warm index on mount
   useOnConnected(() => {
@@ -63,26 +66,45 @@ const _factory = createComposable((): UseContentSearchReturn => {
 
   // Monotonic counter to discard stale async results
   let _seq = 0
+  let _debounceTimer: ReturnType<typeof setTimeout> | null = null
 
-  watch(query, async (q: string) => {
-    const seq = ++_seq
+  watch(query, (q: string) => {
+    if (_debounceTimer !== null) {
+      clearTimeout(_debounceTimer)
+      _debounceTimer = null
+    }
 
-    if (!q || q.length < 2) {
+    if (!q) {
+      // Increment seq so any in-flight async search is discarded when it resolves
+      _seq++
+      loading.value = false
       results.value = []
       return
     }
 
-    try {
-      const index = await loadIndex() as { search(q: string, opts?: { prefix?: boolean }): ContentSearchResult[] }
-      if (seq !== _seq) return // stale — a newer query is in flight
-      results.value = index.search(q, { prefix: true }) as ContentSearchResult[]
-    } catch {
-      if (seq !== _seq) return
-      results.value = []
-    }
+    // Signal loading immediately so the UI can respond before the debounce fires
+    loading.value = true
+
+    _debounceTimer = setTimeout(async () => {
+      _debounceTimer = null
+      const seq = ++_seq
+
+      try {
+        const index = await loadIndex() as { search(q: string, opts?: { prefix?: boolean }): ContentSearchResult[] }
+        if (seq !== _seq) return // stale — a newer query is in flight
+        results.value = index.search(q, { prefix: true }) as ContentSearchResult[]
+      } catch {
+        if (seq !== _seq) return
+        results.value = []
+      } finally {
+        // Only clear loading for the most recent search; a newer in-flight search
+        // keeps loading=true until it settles.
+        if (seq === _seq) loading.value = false
+      }
+    }, 200)
   })
 
-  return { query, results }
+  return { query, results, loading }
 })
 
 /**
@@ -92,8 +114,10 @@ const _factory = createComposable((): UseContentSearchReturn => {
  * `/_content/search-index.json`. Both MiniSearch and the index are loaded via
  * dynamic import — neither is in the app bundle.
  *
- * Searches `title` and `description` fields. Results are empty until at least
- * 2 characters are entered.
+ * Searches `title` and `description` fields. Input is debounced (200 ms) so
+ * the index is not queried on every keystroke. `loading` becomes `true` as soon
+ * as the user starts typing and returns to `false` once results arrive. Results
+ * are empty when the query is empty.
  *
  * **SSR note**: search is always client-side. In SSR mode the component renders
  * with empty results and hydrates on mount.
@@ -101,10 +125,11 @@ const _factory = createComposable((): UseContentSearchReturn => {
  * @example
  * ```ts
  * component('site-search', () => {
- *   const { query, results } = useContentSearch()
+ *   const { query, results, loading } = useContentSearch()
  *
  *   return html`
  *     <input type="search" :model="${query}" placeholder="Search…" />
+ *     ${loading.value ? html`<p>Searching…</p>` : ''}
  *     ${when(results.value.length > 0, () => html`
  *       <ul>
  *         ${each(results.value, r => html`

@@ -240,14 +240,14 @@ describe('Content search — useContentSearch()', () => {
     cy.get('[data-cy=content-search-input]').should('exist')
   })
 
-  it('shows no results before typing 2 chars', () => {
+  it('shows results after typing a single character', () => {
     cy.visit('/content-search')
     cy.wait('@searchIndex')
     setSearchQuery('H')
-    cy.get('[data-cy=content-search-result]').should('not.exist')
+    cy.get('[data-cy=content-search-result]', { timeout: 8000 }).should('have.length.at.least', 1)
   })
 
-  it('shows results after typing a 2-char query', () => {
+  it('shows results after typing a multi-char query', () => {
     cy.visit('/content-search')
     cy.wait('@searchIndex')
     setSearchQuery('He')
@@ -273,6 +273,26 @@ describe('Content search — useContentSearch()', () => {
     cy.wait('@searchIndex')
     setSearchQuery('Hello')
     cy.get('[data-cy=content-search-result]', { timeout: 8000 }).first().should('have.attr', 'data-path')
+  })
+
+  it('shows loading indicator while search is in flight', () => {
+    cy.visit('/content-search')
+    cy.wait('@searchIndex')
+    setSearchQuery('Hello')
+    // loading indicator appears immediately after typing
+    cy.get('[data-cy=content-search-loading]').should('exist')
+    // loading indicator disappears once results arrive
+    cy.get('[data-cy=content-search-loading]', { timeout: 8000 }).should('not.exist')
+    cy.get('[data-cy=content-search-result]').should('have.length.at.least', 1)
+  })
+
+  it('clears loading indicator when query is cleared', () => {
+    cy.visit('/content-search')
+    cy.wait('@searchIndex')
+    setSearchQuery('Hello')
+    cy.get('[data-cy=content-search-loading]').should('exist')
+    setSearchQuery('')
+    cy.get('[data-cy=content-search-loading]').should('not.exist')
   })
 
   it('clearing query clears results', () => {

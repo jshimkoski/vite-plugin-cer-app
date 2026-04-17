@@ -7,9 +7,11 @@
  * - loadIndex() error path — fetch failure rejects cleanly; singleton reset allows retry
  * - loadIndex() returns a searchable MiniSearch instance
  *
- * Note: The full useContentSearch() composable (query reactive state, stale-seq
- * guard, useOnConnected pre-warm) requires a component context provided by the
+ * Note: The full useContentSearch() composable (debounce, stale-seq guard,
+ * useOnConnected pre-warm) requires a component context provided by the
  * custom-elements-runtime and is exercised by the e2e suite in content.cy.ts.
+ * Specifically: input is debounced (300 ms) and an empty query immediately
+ * clears results + increments the seq counter to cancel any in-flight search.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import MiniSearch from 'minisearch'
