@@ -1,7 +1,9 @@
 import {
   createComposable,
+  getCurrentComponentContext,
   ref,
   useOnConnected,
+  useOnDisconnected,
   watch,
 } from '@jasonshimmy/custom-elements-runtime'
 import type { ReactiveState } from '@jasonshimmy/custom-elements-runtime'
@@ -19,11 +21,14 @@ let _indexPromise: Promise<unknown> | null = null
  * Returns the same Promise on repeated calls — the index is built at most once
  * per session regardless of how many search components are mounted.
  *
+ * If the fetch fails the singleton is cleared so the next search attempt
+ * retries automatically (no page reload required after a transient error).
+ *
  * @internal Exported for unit testing only.
  */
-export async function loadIndex(): Promise<unknown> {
+export function loadIndex(): Promise<unknown> {
   if (_indexPromise) return _indexPromise
-  _indexPromise = (async () => {
+  const attempt = (async () => {
     const [{ default: MiniSearch }, raw] = await Promise.all([
       import('minisearch'),
       fetch(contentSearchIndexUrl()).then((r) => {
@@ -37,12 +42,45 @@ export async function loadIndex(): Promise<unknown> {
       idField: '_path',
     })
   })()
-  return _indexPromise
+  _indexPromise = attempt
+  // Clear the singleton on failure so the next call retries the fetch.
+  // The === guard ensures a newer concurrent attempt is not accidentally cleared.
+  attempt.catch(() => {
+    if (_indexPromise === attempt) _indexPromise = null
+  })
+  return attempt
 }
 
 /** Resets the module-level singleton. Used in tests only. @internal */
 export function resetIndexSingleton(): void {
   _indexPromise = null
+}
+
+// ─── Per-component debounce state ────────────────────────────────────────────
+
+// Stores the debounce timer handle and stale-seq counter directly on the
+// component context object (non-enumerable, same pattern the runtime uses for
+// _hookCallbacks). This makes the values stable across re-renders — the context
+// object is fixed for the lifetime of the element instance — without leaking
+// into the reactive proxy or triggering spurious updates.
+
+interface DebounceState {
+  seq: number
+  timer: ReturnType<typeof setTimeout> | null
+}
+
+const _STATE_KEY = '_cerSearchDebounce'
+
+function getDebounceState(ctx: Record<string, unknown>): DebounceState {
+  if (!Object.prototype.hasOwnProperty.call(ctx, _STATE_KEY)) {
+    Object.defineProperty(ctx, _STATE_KEY, {
+      value: { seq: 0, timer: null } as DebounceState,
+      writable: false,    // object ref is fixed; its properties are still mutable
+      enumerable: false,  // invisible to the reactive proxy set-trap
+      configurable: false,
+    })
+  }
+  return (ctx as Record<string, DebounceState>)[_STATE_KEY]
 }
 
 // ─── Composable ───────────────────────────────────────────────────────────────
@@ -59,24 +97,45 @@ const _factory = createComposable((): UseContentSearchReturn => {
   const results = ref<ContentSearchResult[]>([])
   const loading = ref(false)
 
-  // Pre-warm index on mount
+  // Debounce state lives on the component context, not in local render-body variables.
+  // Local variables are re-created on every re-render; the context object is stable
+  // for the lifetime of the element.  Storing state here lets the render-body
+  // watch() (see below) pick up the same timer and sequence counter across re-renders
+  // without the watcher accumulation that occurs when watch() is placed inside
+  // useOnConnected() (which runs once per mount but is not registered for cleanup
+  // by the reactive system, leaking watchers on every disconnect + reconnect cycle).
+  const state = getDebounceState(getCurrentComponentContext()! as Record<string, unknown>)
+
+  // Pre-warm the index on first mount so the first real search is faster.
   useOnConnected(() => {
     loadIndex().catch(() => {/* silently ignore pre-warm errors */})
   })
 
-  // Monotonic counter to discard stale async results
-  let _seq = 0
-  let _debounceTimer: ReturnType<typeof setTimeout> | null = null
+  // Cancel any in-flight debounce on unmount so stale async work doesn't land
+  // after the component is gone.
+  useOnDisconnected(() => {
+    if (state.timer !== null) {
+      clearTimeout(state.timer)
+      state.timer = null
+    }
+    state.seq++ // discard any in-flight async search
+    loading.value = false
+  })
 
+  // watch() is in the render body so the reactive system registers it under the
+  // current component and tears it down automatically on re-render and disconnect.
+  // The mutable state (seq / timer) lives on the context (above) and persists
+  // across re-renders — new watcher instances see the same timer and counter,
+  // which is what makes debounce cancellation correct even after a re-render.
   watch(query, (q: string) => {
-    if (_debounceTimer !== null) {
-      clearTimeout(_debounceTimer)
-      _debounceTimer = null
+    if (state.timer !== null) {
+      clearTimeout(state.timer)
+      state.timer = null
     }
 
     if (!q) {
       // Increment seq so any in-flight async search is discarded when it resolves
-      _seq++
+      state.seq++
       loading.value = false
       results.value = []
       return
@@ -85,21 +144,21 @@ const _factory = createComposable((): UseContentSearchReturn => {
     // Signal loading immediately so the UI can respond before the debounce fires
     loading.value = true
 
-    _debounceTimer = setTimeout(async () => {
-      _debounceTimer = null
-      const seq = ++_seq
+    state.timer = setTimeout(async () => {
+      state.timer = null
+      const seq = ++state.seq
 
       try {
         const index = await loadIndex() as { search(q: string, opts?: { prefix?: boolean }): ContentSearchResult[] }
-        if (seq !== _seq) return // stale — a newer query is in flight
+        if (seq !== state.seq) return // stale — a newer query is in flight
         results.value = index.search(q, { prefix: true }) as ContentSearchResult[]
       } catch {
-        if (seq !== _seq) return
+        if (seq !== state.seq) return
         results.value = []
       } finally {
         // Only clear loading for the most recent search; a newer in-flight search
         // keeps loading=true until it settles.
-        if (seq === _seq) loading.value = false
+        if (seq === state.seq) loading.value = false
       }
     }, 200)
   })

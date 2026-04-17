@@ -473,18 +473,19 @@ Important behavior notes:
 
 **Auto-imported** in pages, layouts, and components.
 
-Returns reactive `query` and `results` refs. The MiniSearch index is loaded once on the client (lazily, the first time the composable is used). Search is debounce-free — results update synchronously on each keypress, but the initial index fetch is async.
+Returns reactive `query`, `results`, and `loading` refs. The MiniSearch index is loaded lazily the first time the component mounts (pre-warmed via `useOnConnected`) and cached for the lifetime of the session. Input is debounced (200 ms) so the index is not queried on every keystroke.
 
 ```ts
-const { query, results } = useContentSearch()
+const { query, results, loading } = useContentSearch()
 ```
 
 ### Return value
 
 ```ts
 interface UseContentSearchReturn {
-  query: Ref<string>               // bind to an <input> value
+  query: Ref<string>                   // bind with :model or @input
   results: Ref<ContentSearchResult[]>  // reactive search results
+  loading: Ref<boolean>                // true from first keystroke until results arrive
 }
 ```
 
@@ -492,10 +493,11 @@ interface UseContentSearchReturn {
 
 ```ts
 component('page-search', () => {
-  const { query, results } = useContentSearch()
+  const { query, results, loading } = useContentSearch()
 
   return html`
     <input type="search" :model="${query}" placeholder="Search…" />
+    ${loading.value ? html`<p>Searching…</p>` : ''}
     <ul>
       ${each(results.value, r => html`
         <li><a :href="${r._path}">${r.title}</a></li>
@@ -505,7 +507,7 @@ component('page-search', () => {
 })
 ```
 
-Search activates when `query.value.length >= 2`. Empty or single-character queries return an empty array.
+`loading` becomes `true` as soon as the user types anything and returns to `false` once results arrive or the query is cleared. An empty query clears results immediately without waiting for the debounce. Search is always client-side — in SSR mode the component renders with empty results and hydrates on mount.
 
 ### Searched fields
 

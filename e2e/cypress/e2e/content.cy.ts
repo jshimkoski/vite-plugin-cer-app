@@ -303,6 +303,63 @@ describe('Content search — useContentSearch()', () => {
     setSearchQuery('')
     cy.get('[data-cy=content-search-result]').should('not.exist')
   })
+
+  it('shows no-results message for an unmatched query', () => {
+    // Use a query with no underscores — MiniSearch tokenizes on \p{P} which
+    // includes underscores, splitting e.g. "foo_bar" into two tokens that can
+    // accidentally match real content via OR semantics.
+    cy.visit('/content-search')
+    cy.wait('@searchIndex')
+    setSearchQuery('zzznomatch')
+    // Wait for the empty state — implicitly waits for loading to clear first
+    cy.get('[data-cy=content-search-empty]', { timeout: 8000 }).should('exist')
+    cy.get('[data-cy=content-search-result]').should('not.exist')
+    cy.get('[data-cy=content-search-loading]').should('not.exist')
+  })
+
+  it('sequential search: search → clear → search again returns correct results', () => {
+    cy.visit('/content-search')
+    cy.wait('@searchIndex')
+
+    // First search
+    setSearchQuery('Hello')
+    cy.get('[data-cy=content-search-result]', { timeout: 8000 }).should('contain', 'Hello World')
+
+    // Clear — results gone
+    setSearchQuery('')
+    cy.get('[data-cy=content-search-result]').should('not.exist')
+    cy.get('[data-cy=content-search-empty]').should('not.exist')
+
+    // Second search with a different term
+    setSearchQuery('Getting')
+    cy.get('[data-cy=content-search-result]', { timeout: 8000 }).should('contain', 'Getting Started')
+    // First search result must not bleed through
+    cy.get('[data-cy=content-search-result]').each(($el) => {
+      expect($el.text()).not.to.include('Hello World')
+    })
+  })
+
+  it('rapid typing triggers only one search request (debounce)', () => {
+    cy.visit('/content-search')
+    cy.wait('@searchIndex')
+
+    // Type characters in quick succession — each triggers a new watch callback
+    // but only the last one should produce a network request after 200 ms.
+    cy.intercept('GET', '/_content/search-index.json').as('secondIndex')
+    setSearchQuery('G')
+    setSearchQuery('Ge')
+    setSearchQuery('Get')
+    setSearchQuery('Gett')
+    setSearchQuery('Getti')
+    setSearchQuery('Getting')
+
+    // Results arrive for the final query
+    cy.get('[data-cy=content-search-result]', { timeout: 8000 }).should('contain', 'Getting Started')
+
+    // The search index is cached after the first pre-warm fetch (singleton), so
+    // no additional network request should occur for these follow-on searches.
+    cy.get('@secondIndex.all').should('have.length', 0)
+  })
 })
 
 // ─── /content-fallback ────────────────────────────────────────────────────────

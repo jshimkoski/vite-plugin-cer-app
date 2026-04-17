@@ -7,11 +7,10 @@
  * - loadIndex() error path — fetch failure rejects cleanly; singleton reset allows retry
  * - loadIndex() returns a searchable MiniSearch instance
  *
- * Note: The full useContentSearch() composable (debounce, stale-seq guard,
- * useOnConnected pre-warm) requires a component context provided by the
- * custom-elements-runtime and is exercised by the e2e suite in content.cy.ts.
- * Specifically: input is debounced (300 ms) and an empty query immediately
- * clears results + increments the seq counter to cancel any in-flight search.
+ * The full useContentSearch() composable (debounce, loading state, stale-seq
+ * guard) is tested in use-content-search-composable.test.ts, which mocks the
+ * runtime to exercise the watch callback and fake-timer debounce logic directly.
+ * End-to-end behaviour is covered by content.cy.ts.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import MiniSearch from 'minisearch'
@@ -101,7 +100,7 @@ describe('loadIndex', () => {
     resetIndexSingleton()
 
     const index = await loadIndex() as ReturnType<typeof MiniSearch.loadJSON>
-    const results = index.search('Hello', { prefix: true }) as Array<{ _path: string }>
+    const results = index.search('Hello', { prefix: true }) as unknown as Array<{ _path: string }>
     expect(results.some((r) => r._path === '/blog/hello')).toBe(true)
   })
 
@@ -137,5 +136,28 @@ describe('loadIndex', () => {
     } as unknown as Response)
     const index = await loadIndex() as ReturnType<typeof MiniSearch.loadJSON>
     expect(index).toBeDefined()
+  })
+
+  it('automatically retries after a fetch failure without manual singleton reset', async () => {
+    const { loadIndex, resetIndexSingleton } = await import('../../runtime/composables/use-content-search.js')
+    resetIndexSingleton()
+
+    // First call fails — singleton should be cleared automatically
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+    } as unknown as Response)
+    await expect(loadIndex()).rejects.toThrow()
+
+    // Second call without resetIndexSingleton — should retry and succeed
+    const indexJson = buildIndex()
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      text: () => Promise.resolve(indexJson),
+    } as unknown as Response)
+    const index = await loadIndex() as ReturnType<typeof MiniSearch.loadJSON>
+    expect(index).toBeDefined()
+    // Confirm the new singleton is cached (second call reuses it)
+    expect(await loadIndex()).toBe(index)
   })
 })
