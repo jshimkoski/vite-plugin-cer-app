@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.23.0] - 2026-04-17
+
+- feat: enhance useContentSearch with loading state and update related tests (d1cee0e)
+
 ## [v0.22.0] - 2026-04-16
 
 - feat: add customColors support for jitCss configuration and implement related tests (b8061ef)
