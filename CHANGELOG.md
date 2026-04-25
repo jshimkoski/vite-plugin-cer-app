@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.23.2] - 2026-04-25
+
+- fix: add siteUrl configuration for canonical links and robots.txt generation (05c53ca)
+
 ## [v0.23.1] - 2026-04-17
 
 - fix: fix useContentSearch loading state, debounce, and automatic retry on fetch failure (4d0207a)
