@@ -197,4 +197,37 @@ describe('resolveConfig', () => {
     expect(cfg.runtimeConfig.public).toEqual({ apiBase: '/api' })
     expect(cfg.runtimeConfig.private).toEqual({ token: '' })
   })
+
+  it('defaults siteUrl to null when not set', () => {
+    const cfg = resolveConfig({}, ROOT)
+    expect(cfg.siteUrl).toBeNull()
+  })
+
+  it('stores siteUrl with trailing slash stripped', () => {
+    const cfg = resolveConfig({ siteUrl: 'https://example.com/' }, ROOT)
+    expect(cfg.siteUrl).toBe('https://example.com')
+  })
+
+  it('stores siteUrl unchanged when no trailing slash', () => {
+    const cfg = resolveConfig({ siteUrl: 'https://example.com' }, ROOT)
+    expect(cfg.siteUrl).toBe('https://example.com')
+  })
+
+  it('exposes siteUrl in runtimeConfig.public', () => {
+    const cfg = resolveConfig({ siteUrl: 'https://example.com' }, ROOT)
+    expect(cfg.runtimeConfig.public['siteUrl']).toBe('https://example.com')
+  })
+
+  it('does not add siteUrl to runtimeConfig.public when not set', () => {
+    const cfg = resolveConfig({}, ROOT)
+    expect(Object.prototype.hasOwnProperty.call(cfg.runtimeConfig.public, 'siteUrl')).toBe(false)
+  })
+
+  it('user-supplied runtimeConfig.public.siteUrl overrides the siteUrl shorthand', () => {
+    const cfg = resolveConfig({
+      siteUrl: 'https://example.com',
+      runtimeConfig: { public: { siteUrl: 'https://override.com' } },
+    }, ROOT)
+    expect(cfg.runtimeConfig.public['siteUrl']).toBe('https://override.com')
+  })
 })

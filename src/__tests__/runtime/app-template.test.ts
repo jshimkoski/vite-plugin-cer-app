@@ -91,6 +91,16 @@ describe('APP_ENTRY_TEMPLATE — meta.hydrate', () => {
     expect(APP_ENTRY_TEMPLATE).toContain('return')
   })
 
+  it('keeps the SSR slot during the initRouter startup microtask navigation (before page chunk loads)', () => {
+    // initRouter() queues queueMicrotask(() => navigate(...)) to run guards on
+    // the entry URL. That microtask fires during await route.load() — before
+    // _currentPageTag is set. Without this guard, _cerHydrating would be set to
+    // false prematurely, dropping the SSR slot and showing an empty router-view.
+    expect(APP_ENTRY_TEMPLATE).toContain(
+      'if (_cerHydrating.value && _currentPageTag !== null) _cerHydrating.value = false',
+    )
+  })
+
   it('exposes router globally as __cerRouter', () => {
     expect(APP_ENTRY_TEMPLATE).toContain('__cerRouter')
   })

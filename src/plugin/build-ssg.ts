@@ -1,6 +1,12 @@
 import { writeFile, mkdir, readFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join } from 'pathe'
+import {
+  injectFaviconLink,
+  injectCanonicalLink,
+  addNoopenerToExternalLinks,
+  generateRobotsTxt,
+} from './html-post-process.js'
 import { createServer, type UserConfig } from 'vite'
 import type { ResolvedCerConfig } from './dev-server.js'
 import type { ContentItem } from '../types/content.js'
@@ -256,12 +262,58 @@ export async function writeRenderedPath(
 }
 
 /**
+ * Detects which favicon href to use from the project's public directory.
+ * Prefers .svg > .ico > .png. Returns null when none is found.
+ */
+function detectFaviconHref(root: string): string | null {
+  const candidates = ['/favicon.svg', '/favicon.ico', '/favicon.png']
+  for (const href of candidates) {
+    if (existsSync(join(root, 'public', href.slice(1)))) return href
+  }
+  return null
+}
+
+/**
+ * Applies all HTML post-processing transforms to a rendered page.
+ *
+ * - Injects `<link rel="icon">` when a favicon exists in public/ and none
+ *   is already declared in the HTML.
+ * - Injects `<link rel="canonical">` when `config.siteUrl` is set and none
+ *   is already declared.
+ * - Adds `rel="noopener noreferrer"` to every `<a target="_blank">` link
+ *   that is missing it.
+ */
+function postProcessHtml(
+  html: string,
+  path: string,
+  config: ResolvedCerConfig,
+  faviconHref: string | null,
+): string {
+  let out = html
+
+  if (faviconHref) {
+    out = injectFaviconLink(out, faviconHref)
+  }
+
+  if (config.siteUrl) {
+    const canonicalUrl = config.siteUrl + (path === '/' ? '' : path)
+    out = injectCanonicalLink(out, canonicalUrl)
+  }
+
+  out = addNoopenerToExternalLinks(out)
+
+  return out
+}
+
+/**
  * Full SSG build pipeline:
  * 1. Run the SSR dual-build (client + server bundles)
  * 2. Enumerate all paths to generate
  * 3. Render each path using the server bundle
- * 4. Write HTML files to dist/
- * 5. Write ssg-manifest.json
+ * 4. Post-process HTML (favicon, canonical, noopener)
+ * 5. Write HTML files to dist/
+ * 6. Write robots.txt (when not already present in public/)
+ * 7. Write ssg-manifest.json
  */
 export async function buildSSG(
   config: ResolvedCerConfig,
@@ -281,7 +333,10 @@ export async function buildSSG(
   const paths = await collectSsgPaths(config, viteUserConfig)
   console.log(`[cer-app] Found ${paths.length} path(s) to generate:`, paths)
 
-  // Step 3+4: Render and write paths with bounded concurrency.
+  // Detect favicon once for use in every page's post-processing pass.
+  const faviconHref = detectFaviconHref(config.root)
+
+  // Step 3+4+5: Render, post-process, and write paths with bounded concurrency.
   // The server bundle uses per-request router instances (initRouter returns the
   // router; the factory passes it to createStreamingSSRHandler as { vnode, router })
   // so concurrent renders are safe — each request carries its own router with its
@@ -299,7 +354,8 @@ export async function buildSSG(
     const results = await Promise.allSettled(
       chunk.map(async (path) => {
         console.log(`[cer-app] Generating: ${path}`)
-        const html = await renderPath(path, serverBundlePath)
+        const raw = await renderPath(path, serverBundlePath)
+        const html = postProcessHtml(raw, path, config, faviconHref)
         await writeRenderedPath(path, html, distDir)
         return path
       }),
@@ -316,7 +372,18 @@ export async function buildSSG(
     }
   }
 
-  // Step 5: Write SSG manifest
+  // Step 6: Write robots.txt unless the project supplies its own via public/robots.txt,
+  // which Vite copies to dist/ as-is. Always overwrite any previously generated file so
+  // that siteUrl changes (e.g. adding the Sitemap directive) take effect on rebuild.
+  const publicRobots = join(config.root, 'public', 'robots.txt')
+  if (!existsSync(publicRobots)) {
+    const distRobots = join(distDir, 'robots.txt')
+    await mkdir(distDir, { recursive: true })
+    await writeFile(distRobots, generateRobotsTxt(config.siteUrl), 'utf-8')
+    console.log('[cer-app] Generated robots.txt')
+  }
+
+  // Step 7: Write SSG manifest
   const manifest: SsgManifest = {
     generatedAt: new Date().toISOString(),
     paths: generatedPaths,

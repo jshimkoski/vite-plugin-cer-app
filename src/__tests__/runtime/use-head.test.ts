@@ -215,6 +215,29 @@ describe('useHead — client-side DOM updates', () => {
     expect(links.length).toBe(1)
   })
 
+  it('updates canonical href in-place when URL changes (no duplicate)', () => {
+    useHead({ link: [{ rel: 'canonical', href: 'https://example.com/page-a' }] })
+    useHead({ link: [{ rel: 'canonical', href: 'https://example.com/page-b' }] })
+    const links = document.querySelectorAll('link[rel="canonical"]')
+    expect(links.length).toBe(1)
+    expect(links[0].getAttribute('href')).toBe('https://example.com/page-b')
+  })
+
+  it('updates icon link in-place when href changes (no duplicate)', () => {
+    useHead({ link: [{ rel: 'icon', href: '/favicon.ico' }] })
+    useHead({ link: [{ rel: 'icon', href: '/favicon.svg' }] })
+    const links = document.querySelectorAll('link[rel="icon"]')
+    expect(links.length).toBe(1)
+    expect(links[0].getAttribute('href')).toBe('/favicon.svg')
+  })
+
+  it('does NOT deduplicate stylesheet links by rel alone (multiple hrefs allowed)', () => {
+    useHead({ link: [{ rel: 'stylesheet', href: '/a.css' }] })
+    useHead({ link: [{ rel: 'stylesheet', href: '/b.css' }] })
+    const links = document.querySelectorAll('link[rel="stylesheet"]')
+    expect(links.length).toBe(2)
+  })
+
   it('adds a script tag with src', () => {
     useHead({ script: [{ src: '/analytics.js' }] })
     const script = document.querySelector('script[src="/analytics.js"]')
@@ -262,5 +285,27 @@ describe('useHead — client-side DOM updates', () => {
     const scripts = document.querySelectorAll('script[type="application/json"]')
     expect(scripts.length).toBe(1)
     expect(scripts[0].textContent).toBe('window.x = 2')
+  })
+
+  it('updates existing application/ld+json content in-place (no duplicate)', () => {
+    useHead({ script: [{ type: 'application/ld+json', innerHTML: '{"@type":"WebPage","name":"A"}' }] })
+    useHead({ script: [{ type: 'application/ld+json', innerHTML: '{"@type":"WebPage","name":"B"}' }] })
+    const scripts = document.querySelectorAll('script[type="application/ld+json"]')
+    expect(scripts.length).toBe(1)
+    expect(scripts[0].textContent).toBe('{"@type":"WebPage","name":"B"}')
+  })
+
+  it('creates application/ld+json script when none exists', () => {
+    useHead({ script: [{ type: 'application/ld+json', innerHTML: '{"@type":"WebPage"}' }] })
+    const scripts = document.querySelectorAll('script[type="application/ld+json"]')
+    expect(scripts.length).toBe(1)
+    expect(scripts[0].textContent).toBe('{"@type":"WebPage"}')
+  })
+
+  it('does NOT deduplicate non-ld+json inline scripts', () => {
+    useHead({ script: [{ innerHTML: 'window.a = 1' }] })
+    useHead({ script: [{ innerHTML: 'window.b = 2' }] })
+    const scripts = document.querySelectorAll('script:not([src]):not([type])')
+    expect(scripts.length).toBe(2)
   })
 })

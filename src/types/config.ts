@@ -241,6 +241,14 @@ export interface RuntimeConfig {
 export interface CerAppConfig {
   mode?: 'spa' | 'ssr' | 'ssg'
   srcDir?: string // defaults to 'app'
+  /**
+   * The canonical origin of the site (e.g. `'https://example.com'`).
+   * No trailing slash. When set, the SSG build automatically:
+   * - Injects `<link rel="canonical" href="${siteUrl}${path}">` into every page.
+   * - Writes a `robots.txt` to `dist/` (skipped when a `public/robots.txt` already exists).
+   * Also available at runtime via `useRuntimeConfig().public.siteUrl`.
+   */
+  siteUrl?: string
   /** File-based content layer configuration. Reads from `content/` at the project root by default. */
   content?: import('./content.js').CerContentConfig
   /**

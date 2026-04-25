@@ -107,7 +107,7 @@ export function writeGeneratedDir(config: ResolvedCerConfig): void {
   // Always write the generated app.ts — this is the framework entry point and
   // is never user-owned. Regenerating it on every dev/build ensures consumers
   // automatically get the latest bootstrap code on plugin update (Nuxt-style).
-  writeFileSync(join(dir, 'app.ts'), generateAppEntryTemplate(config.jitCss.customColors), 'utf-8')
+  writeFileSync(join(dir, 'app.ts'), generateAppEntryTemplate(), 'utf-8')
 
   // Always write the SSR entry — used by the dev server's ssrLoadModule call.
   // The production build injects this as a virtual module, but the dev server

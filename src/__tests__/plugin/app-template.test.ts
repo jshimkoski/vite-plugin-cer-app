@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'pathe'
 import { generateAppEntryTemplate } from '../../runtime/app-template.js'
+import { generateJitInitModule } from '../../plugin/index.js'
 
 const src = readFileSync(
   resolve(import.meta.dirname, '../../runtime/app-template.ts'),
@@ -44,13 +45,25 @@ describe('app-template (source content)', () => {
     expect(src).toContain('custom-elements-runtime/router')
   })
 
-  it('imports enableJITCSS from the jit-css subpath', () => {
-    expect(src).toContain('enableJITCSS')
-    expect(src).toContain('custom-elements-runtime/jit-css')
-  })
-
   it('imports virtual:cer-jit-css', () => {
     expect(src).toContain('virtual:cer-jit-css')
+  })
+
+  it('imports virtual:cer-jit-init before virtual:cer-layouts so JIT CSS is enabled before elements upgrade', () => {
+    expect(src).toContain('virtual:cer-jit-init')
+    const initIdx = src.indexOf('virtual:cer-jit-init')
+    const layoutsIdx = src.indexOf('virtual:cer-layouts')
+    const pluginsIdx = src.indexOf('virtual:cer-plugins')
+    expect(initIdx).toBeLessThan(layoutsIdx)
+    expect(initIdx).toBeLessThan(pluginsIdx)
+  })
+
+  it('does not import enableJITCSS in the module body (delegated to virtual:cer-jit-init)', () => {
+    // The enableJITCSS import must not appear in the template literal — it belongs
+    // in virtual:cer-jit-init which runs during the static import phase, before
+    // virtual:cer-layouts and virtual:cer-plugins upgrade custom elements.
+    const templateStart = src.indexOf('return `')
+    expect(src.slice(templateStart)).not.toContain("import { enableJITCSS }")
   })
 
   it('imports virtual:cer-content-components for markdown-backed custom elements', () => {
@@ -63,20 +76,50 @@ describe('app-template (source content)', () => {
 })
 
 describe('generateAppEntryTemplate', () => {
-  it('calls enableJITCSS() with no arguments when customColors is omitted', () => {
+  it('includes virtual:cer-jit-init import', () => {
     const out = generateAppEntryTemplate()
+    expect(out).toContain("import 'virtual:cer-jit-init'")
+  })
+
+  it('places virtual:cer-jit-init before virtual:cer-layouts and virtual:cer-plugins', () => {
+    const out = generateAppEntryTemplate()
+    const initIdx = out.indexOf('virtual:cer-jit-init')
+    const layoutsIdx = out.indexOf('virtual:cer-layouts')
+    const pluginsIdx = out.indexOf('virtual:cer-plugins')
+    expect(initIdx).toBeGreaterThanOrEqual(0)
+    expect(initIdx).toBeLessThan(layoutsIdx)
+    expect(initIdx).toBeLessThan(pluginsIdx)
+  })
+
+  it('does not import enableJITCSS in the generated output (delegated to virtual:cer-jit-init)', () => {
+    const out = generateAppEntryTemplate()
+    expect(out).not.toContain("import { enableJITCSS }")
+  })
+
+  it('still includes all standard template content', () => {
+    const out = generateAppEntryTemplate()
+    expect(out).toContain('virtual:cer-jit-css')
+    expect(out).toContain('virtual:cer-routes')
+    expect(out).toContain('export { router }')
+  })
+})
+
+describe('generateJitInitModule', () => {
+  it('calls enableJITCSS() with no arguments when no options are set', () => {
+    const out = generateJitInitModule({ content: [], extendedColors: false, customColors: undefined })
     expect(out).toContain('enableJITCSS()')
     expect(out).not.toContain('customColors')
+    expect(out).not.toContain('extendedColors')
   })
 
   it('calls enableJITCSS() with no arguments when customColors is an empty object', () => {
-    const out = generateAppEntryTemplate({})
+    const out = generateJitInitModule({ content: [], extendedColors: false, customColors: {} })
     expect(out).toContain('enableJITCSS()')
     expect(out).not.toContain('customColors')
   })
 
   it('serializes a single color family into the enableJITCSS call', () => {
-    const out = generateAppEntryTemplate({ brand: { '500': '#7c3aed' } })
+    const out = generateJitInitModule({ content: [], extendedColors: false, customColors: { brand: { '500': '#7c3aed' } } })
     expect(out).toContain('enableJITCSS({ customColors:')
     expect(out).toContain('"brand"')
     expect(out).toContain('"500"')
@@ -84,9 +127,10 @@ describe('generateAppEntryTemplate', () => {
   })
 
   it('serializes multiple color families correctly', () => {
-    const out = generateAppEntryTemplate({
-      brand: { '100': '#ede9fe', '900': '#4c1d95' },
-      accent: { DEFAULT: '#f59e0b' },
+    const out = generateJitInitModule({
+      content: [],
+      extendedColors: false,
+      customColors: { brand: { '100': '#ede9fe', '900': '#4c1d95' }, accent: { DEFAULT: '#f59e0b' } },
     })
     expect(out).toContain('"brand"')
     expect(out).toContain('"accent"')
@@ -95,18 +139,28 @@ describe('generateAppEntryTemplate', () => {
   })
 
   it('serializes CSS variable references as color values', () => {
-    const out = generateAppEntryTemplate({
-      surface: { DEFAULT: 'var(--md-sys-color-surface)' },
+    const out = generateJitInitModule({
+      content: [],
+      extendedColors: false,
+      customColors: { surface: { DEFAULT: 'var(--md-sys-color-surface)' } },
     })
     expect(out).toContain('"surface"')
     expect(out).toContain('var(--md-sys-color-surface)')
   })
 
-  it('still includes all standard template content when customColors is provided', () => {
-    const out = generateAppEntryTemplate({ brand: { '500': '#ff0000' } })
-    expect(out).toContain('virtual:cer-jit-css')
-    expect(out).toContain('virtual:cer-routes')
+  it('includes extendedColors: true when set', () => {
+    const out = generateJitInitModule({ content: [], extendedColors: true, customColors: undefined })
+    expect(out).toContain('extendedColors: true')
+  })
+
+  it('includes extendedColors array when set', () => {
+    const out = generateJitInitModule({ content: [], extendedColors: ['slate', 'blue'], customColors: undefined })
+    expect(out).toContain('extendedColors: ["slate","blue"]')
+  })
+
+  it('imports enableJITCSS from the jit-css subpath', () => {
+    const out = generateJitInitModule({ content: [], extendedColors: false, customColors: undefined })
     expect(out).toContain('enableJITCSS')
-    expect(out).toContain('export { router }')
+    expect(out).toContain('custom-elements-runtime/jit-css')
   })
 })

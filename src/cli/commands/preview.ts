@@ -1,6 +1,7 @@
 import { Command } from 'commander'
 import { createServer as createHttpServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { createReadStream, existsSync, statSync } from 'node:fs'
+import { createGzip } from 'node:zlib'
 import { resolve, join, extname } from 'pathe'
 import { pathToFileURL } from 'node:url'
 import {
@@ -108,6 +109,22 @@ function getMimeType(filePath: string): string {
   return MIME_TYPES[ext] ?? 'application/octet-stream'
 }
 
+// MIME types that benefit from gzip compression. Binary formats (woff2, images)
+// are already compressed and should not be re-compressed.
+const GZIP_TYPES = new Set([
+  'text/html; charset=utf-8',
+  'application/javascript; charset=utf-8',
+  'text/css; charset=utf-8',
+  'application/json; charset=utf-8',
+  'image/svg+xml',
+  'application/json',
+])
+
+function acceptsGzip(req: IncomingMessage): boolean {
+  const ae = req.headers['accept-encoding'] ?? ''
+  return ae.includes('gzip')
+}
+
 /**
  * Returns the appropriate Cache-Control header value for a file.
  * Vite content-hashes assets placed in the /assets/ directory, so they
@@ -129,6 +146,8 @@ function setSecurityHeaders(res: ServerResponse): void {
 
 /**
  * Serves a static file from the dist directory.
+ * Applies gzip compression for compressible text types when the client
+ * signals support via the Accept-Encoding request header.
  * Returns true if the file was served, false otherwise.
  */
 function serveStaticFile(
@@ -161,10 +180,18 @@ function serveStaticFile(
     }
   }
 
-  res.setHeader('Content-Type', getMimeType(filePath))
+  const mimeType = getMimeType(filePath)
+  res.setHeader('Content-Type', mimeType)
   res.setHeader('Cache-Control', getCacheControl(filePath))
   setSecurityHeaders(res)
-  createReadStream(filePath).pipe(res)
+
+  const stream = createReadStream(filePath)
+  if (GZIP_TYPES.has(mimeType) && acceptsGzip(req)) {
+    res.setHeader('Content-Encoding', 'gzip')
+    stream.pipe(createGzip()).pipe(res)
+  } else {
+    stream.pipe(res)
+  }
   return true
 }
 
@@ -463,9 +490,16 @@ export function previewCommand(): Command {
               isPathBounded(clientDist, urlPath) &&
               existsSync(assetPath) && !statSync(assetPath).isDirectory()
             ) {
-              res.setHeader('Content-Type', getMimeType(assetPath))
+              const mimeType = getMimeType(assetPath)
+              res.setHeader('Content-Type', mimeType)
               res.setHeader('Cache-Control', getCacheControl(assetPath))
-              createReadStream(assetPath).pipe(res)
+              const stream = createReadStream(assetPath)
+              if (GZIP_TYPES.has(mimeType) && acceptsGzip(req)) {
+                res.setHeader('Content-Encoding', 'gzip')
+                stream.pipe(createGzip()).pipe(res)
+              } else {
+                stream.pipe(res)
+              }
               return
             }
           }

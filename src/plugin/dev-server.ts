@@ -9,6 +9,8 @@ export interface ResolvedCerConfig {
   mode: 'spa' | 'ssr' | 'ssg'
   srcDir: string
   root: string
+  /** Canonical site origin (no trailing slash). Null when not configured. */
+  siteUrl: string | null
   contentDir: string
   pagesDir: string
   layoutsDir: string

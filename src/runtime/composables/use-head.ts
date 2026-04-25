@@ -152,7 +152,14 @@ export function useHead(input: HeadInput): void {
         const rel = link.rel
         const href = link.href
         if (rel && href) {
-          let el = document.querySelector(`link[rel="${rel}"][href="${href}"]`)
+          // Canonical and icon links are singletons — find by rel alone so that
+          // updating the URL overwrites the existing tag rather than adding a
+          // duplicate. All other link types are matched by rel+href (e.g.
+          // stylesheets, where multiple hrefs are valid).
+          const isSingleton = rel === 'canonical' || rel === 'icon' || rel === 'shortcut icon'
+          let el = isSingleton
+            ? document.querySelector(`link[rel="${rel}"]`)
+            : document.querySelector(`link[rel="${rel}"][href="${href}"]`)
           if (!el) {
             el = document.createElement('link')
             document.head.appendChild(el)
@@ -176,12 +183,27 @@ export function useHead(input: HeadInput): void {
           }
           document.head.appendChild(el)
         } else if (innerHTML && !src) {
-          const el = document.createElement('script')
-          el.textContent = innerHTML
-          for (const [k, v] of Object.entries(rest)) {
-            el.setAttribute(k, v)
+          const type = rest.type ?? ''
+          if (type === 'application/ld+json') {
+            // JSON-LD is a singleton — update existing content rather than
+            // appending a duplicate on re-render or SPA navigation.
+            let el = document.querySelector('script[type="application/ld+json"]')
+            if (!el) {
+              el = document.createElement('script')
+              document.head.appendChild(el)
+              for (const [k, v] of Object.entries(rest)) {
+                el.setAttribute(k, v)
+              }
+            }
+            ;(el as HTMLScriptElement).textContent = innerHTML
+          } else {
+            const el = document.createElement('script')
+            el.textContent = innerHTML
+            for (const [k, v] of Object.entries(rest)) {
+              el.setAttribute(k, v)
+            }
+            document.head.appendChild(el)
           }
-          document.head.appendChild(el)
         }
       }
     }

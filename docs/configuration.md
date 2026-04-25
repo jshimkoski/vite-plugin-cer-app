@@ -277,6 +277,35 @@ Set any flag to `false` to opt out and manage imports manually.
 
 ---
 
+## `siteUrl`
+
+**Type:** `string`
+**Default:** `undefined`
+
+The canonical origin of the deployed site — scheme, host, and optional port with **no trailing slash**.
+
+```ts
+// cer.config.ts
+export default defineConfig({
+  siteUrl: 'https://example.com',
+})
+```
+
+When set, the SSG build automatically applies the following to every generated HTML page:
+
+| Feature | Behaviour |
+|---|---|
+| **Canonical link** | Injects `<link rel="canonical" href="${siteUrl}${path}">` before `</head>` on every page, unless a canonical is already present |
+| **robots.txt** | Writes `dist/robots.txt` with `Allow: /` and a `Sitemap:` directive pointing to `${siteUrl}/sitemap.xml` — skipped when `public/robots.txt` already exists |
+
+`siteUrl` is also available at runtime via `useRuntimeConfig().public.siteUrl`. User-supplied `runtimeConfig.public.siteUrl` takes precedence over the shorthand.
+
+> **Note:** `<link rel="icon">` is injected automatically whenever a `favicon.ico`, `favicon.svg`, or `favicon.png` is found in `public/` — this happens regardless of whether `siteUrl` is set.
+
+> **Note:** Every `<a target="_blank">` link in the generated HTML automatically receives `rel="noopener noreferrer"` if it is missing — also independent of `siteUrl`.
+
+---
+
 ## `adapter`
 
 **Type:** `'vercel' | 'netlify' | 'cloudflare' | ((root: string) => Promise<void>)`
