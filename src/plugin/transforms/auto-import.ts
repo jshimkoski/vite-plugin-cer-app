@@ -34,6 +34,7 @@ const RUNTIME_MAP: Record<string, string> = {
   useGlobalStyle: '@jasonshimmy/custom-elements-runtime',
   useExpose: '@jasonshimmy/custom-elements-runtime',
   useSlots: '@jasonshimmy/custom-elements-runtime',
+  useHost: '@jasonshimmy/custom-elements-runtime',
   provide: '@jasonshimmy/custom-elements-runtime',
   inject: '@jasonshimmy/custom-elements-runtime',
   createComposable: '@jasonshimmy/custom-elements-runtime',
@@ -73,6 +74,12 @@ const FRAMEWORK_MAP: Record<string, string> = {
   useLocale: '@jasonshimmy/vite-plugin-cer-app/composables',
   queryContent: '@jasonshimmy/vite-plugin-cer-app/composables',
   useContentSearch: '@jasonshimmy/vite-plugin-cer-app/composables',
+  defineContentPageLoader: '@jasonshimmy/vite-plugin-cer-app/composables',
+  normalizeContentPath: '@jasonshimmy/vite-plugin-cer-app/composables',
+  useContentBreadcrumbs: '@jasonshimmy/vite-plugin-cer-app/composables',
+  useContentHeadings: '@jasonshimmy/vite-plugin-cer-app/composables',
+  useContentSeo: '@jasonshimmy/vite-plugin-cer-app/composables',
+  useActiveHeadings: '@jasonshimmy/vite-plugin-cer-app/composables',
 }
 
 // All identifier maps — processed in order. Earlier maps take precedence for

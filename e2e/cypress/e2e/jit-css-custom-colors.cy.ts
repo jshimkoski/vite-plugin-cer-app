@@ -9,35 +9,42 @@
  */
 
 describe('jitCss.customColors', () => {
+  const page = () =>
+    cy
+      .get('page-jit-css-custom-colors-test')
+      .should(($host) => {
+        expect($host).to.have.attr('data-cer-hydrated')
+      })
+      .shadow()
+
   beforeEach(() => {
     cy.visit('/jit-css-custom-colors-test')
-    cy.get('cer-layout-view').shadow().find('page-jit-css-custom-colors-test').should('exist')
+    page().find('[data-cy="heading"]').should('exist')
   })
 
   it('applies custom color as background-color', () => {
-    cy.get('cer-layout-view')
-      .shadow()
-      .find('page-jit-css-custom-colors-test')
-      .shadow()
+    page()
       .find('[data-cy="brand-bg"]')
       .should('have.css', 'background-color', 'rgb(124, 58, 237)')
   })
 
   it('applies custom color as text color', () => {
-    cy.get('cer-layout-view')
-      .shadow()
-      .find('page-jit-css-custom-colors-test')
-      .shadow()
+    page()
       .find('[data-cy="brand-text"]')
       .should('have.css', 'color', 'rgb(124, 58, 237)')
   })
 
   it('applies a different shade of the custom color', () => {
-    cy.get('cer-layout-view')
-      .shadow()
-      .find('page-jit-css-custom-colors-test')
-      .shadow()
+    page()
       .find('[data-cy="brand-light-bg"]')
       .should('have.css', 'background-color', 'rgb(237, 233, 254)')
+  })
+
+  it('applies custom colors when the page is created by client-side navigation', () => {
+    cy.visit('/')
+    cy.window().then((win) => (win as any).__cerRouter.push('/jit-css-custom-colors-test'))
+    page()
+      .find('[data-cy="brand-bg"]')
+      .should('have.css', 'background-color', 'rgb(124, 58, 237)')
   })
 })

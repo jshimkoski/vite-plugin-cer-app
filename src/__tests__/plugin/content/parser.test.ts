@@ -118,6 +118,19 @@ ${'A'.repeat(200)}
 
 A paragraph here.
 `)
+
+  writeFileSync(join(contentDir, 'javascript-frontmatter.md'), `---js
+({ title: 'Executable metadata' })
+---
+
+# Safe Body
+`)
+
+  writeFileSync(join(contentDir, 'unclosed-frontmatter.md'), `---
+title: Missing delimiter
+
+# Body
+`)
 })
 
 function makeFile(filePath: string, ext: 'md' | 'json'): ContentFile {
@@ -149,6 +162,20 @@ describe('parseContentFile — Markdown', () => {
     expect(item.date).toBeTruthy()
     expect(item.draft).toBe(false)
     expect(item.tags).toEqual(['web'])
+  })
+
+  it('rejects executable JavaScript frontmatter', () => {
+    const file = makeFile(join(contentDir, 'javascript-frontmatter.md'), 'md')
+    expect(() => parseContentFile(file, contentDir)).toThrow(
+      /Unsupported frontmatter language.*YAML/i,
+    )
+  })
+
+  it('reports an unclosed frontmatter block with the source path', () => {
+    const file = makeFile(join(contentDir, 'unclosed-frontmatter.md'), 'md')
+    expect(() => parseContentFile(file, contentDir)).toThrow(
+      /Unclosed frontmatter.*unclosed-frontmatter\.md/i,
+    )
   })
 
   it('renders Markdown body to HTML', () => {
@@ -276,10 +303,7 @@ describe('toContentMeta', () => {
 // ─── Date normalisation ───────────────────────────────────────────────────────
 
 describe('parseContentFile — date normalisation', () => {
-  it('converts a gray-matter Date object to a YYYY-MM-DD string', () => {
-    // gray-matter parses `date: 2026-04-01` as a JS Date object.
-    // The parser must normalise it to a string so the in-memory server store and
-    // the client (after JSON round-trip) are consistent.
+  it('keeps bare YAML dates as stable YYYY-MM-DD strings', () => {
     const item = parseContentFile(makeFile(join(contentDir, 'about.md'), 'md'), contentDir)
     expect(typeof item.date).toBe('string')
     expect(item.date as string).toMatch(/^\d{4}-\d{2}-\d{2}$/)

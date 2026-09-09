@@ -9,7 +9,7 @@
  */
 
 const LOG_FILE = '/tmp/cer-hooks-test.log'
-const isSSR = () => Cypress.env('mode') === 'ssr'
+const isSSR = () => Cypress.expose('mode') === 'ssr'
 
 describe('Observability hooks — log output (SSR only)', () => {
   before(() => {

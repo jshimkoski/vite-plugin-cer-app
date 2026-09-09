@@ -6,7 +6,7 @@
  * over the global error component.
  */
 
-const mode = Cypress.env('mode') as 'spa' | 'ssr' | 'ssg'
+const mode = Cypress.expose('mode') as 'spa' | 'ssr' | 'ssg'
 
 describe('Per-route error components (P2-2)', () => {
   context('co-located *.error.ts', () => {

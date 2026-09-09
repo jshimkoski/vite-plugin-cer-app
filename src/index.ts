@@ -3,7 +3,7 @@ export { cerApp } from './plugin/index.js'
 export { defineConfig } from './types/config.js'
 
 // Re-export all types
-export type { CerAppConfig, SsgConfig, JitCssConfig, AutoImportsConfig, AuthConfig, OAuthProviderConfig, OAuthTokens } from './types/config.js'
+export type { CerAppConfig, CerAppIntegration, SsgConfig, JitCssConfig, AutoImportsConfig, AuthConfig, OAuthProviderConfig, OAuthTokens } from './types/config.js'
 export type { HydrateStrategy, SsgPathsContext, PageSsgConfig, PageMeta, PageLoaderContext, PageLoader } from './types/page.js'
 export type { ApiRequest, ApiResponse, ApiHandler, ApiContext } from './types/api.js'
 export type { AppContext, AppPlugin } from './types/plugin.js'
@@ -18,3 +18,11 @@ export type { ResolvedCerConfig } from './plugin/dev-server.js'
 
 // Content layer types
 export type { ContentItem, ContentMeta, ContentHeading, ContentSearchResult, CerContentConfig } from './types/content.js'
+export type {
+  ContentBreadcrumb,
+  ContentBreadcrumbOptions,
+  ContentPageData,
+  ContentPageLoaderOptions,
+  ContentSeoOptions,
+} from './runtime/composables/use-content-page.js'
+export type { ActiveHeadingsOptions } from './runtime/composables/use-active-headings.js'

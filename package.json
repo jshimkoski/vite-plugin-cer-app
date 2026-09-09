@@ -19,28 +19,30 @@
     "url": "git+https://github.com/jshimkoski/vite-plugin-cer-app.git"
   },
   "homepage": "https://github.com/jshimkoski/vite-plugin-cer-app#readme",
-  "sideEffects": [
-    "**/*.css",
-    "e2e/cypress/support/*.ts"
+  "files": [
+    "dist"
   ],
-  "main": "dist/index.cjs",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "require": "./dist/index.cjs",
-      "types": "./dist/index.d.ts"
+      "default": "./dist/index.js"
     },
     "./composables": {
+      "types": "./dist/runtime/composables/index.d.ts",
       "import": "./dist/runtime/composables/index.js",
-      "require": "./dist/runtime/composables/index.cjs",
-      "types": "./dist/runtime/composables/index.d.ts"
+      "default": "./dist/runtime/composables/index.js"
     },
     "./types": {
+      "types": "./dist/types/index.d.ts",
       "import": "./dist/types/index.js",
-      "require": "./dist/types/index.cjs",
-      "types": "./dist/types/index.d.ts"
+      "default": "./dist/types/index.js"
     },
     "./isr": {
       "import": "./dist/runtime/isr-handler.js",
@@ -57,7 +59,8 @@
   },
   "scripts": {
     "validate": "npm run lint && npm test && npm run build && npm run e2e",
-    "build": "tsc -p tsconfig.build.json && cp -r src/cli/create/templates dist/cli/create/templates",
+    "prebuild": "node scripts/clean-dist.mjs",
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-templates.mjs",
     "dev": "tsc -p tsconfig.build.json --watch",
     "lint": "eslint",
     "test": "vitest run",
@@ -73,10 +76,10 @@
     "e2e:serve:ssr": "node dist/cli/index.js preview --root e2e/kitchen-sink --port 4175 --ssr",
     "e2e:serve:ssg": "node dist/cli/index.js preview --root e2e/kitchen-sink --port 4176",
     "e2e:serve:dev": "node dist/cli/index.js dev --root e2e/kitchen-sink --port 4177 --mode ssr",
-    "e2e:run:spa": "cypress run --config baseUrl=http://localhost:4174 --env mode=spa",
-    "e2e:run:ssr": "cypress run --config baseUrl=http://localhost:4175 --env mode=ssr",
-    "e2e:run:ssg": "cypress run --config baseUrl=http://localhost:4176 --env mode=ssg",
-    "e2e:run:dev": "cypress run --config baseUrl=http://localhost:4177 --env mode=dev",
+    "e2e:run:spa": "cypress run --config baseUrl=http://localhost:4174 --expose mode=spa",
+    "e2e:run:ssr": "cypress run --config baseUrl=http://localhost:4175 --expose mode=ssr",
+    "e2e:run:ssg": "cypress run --config baseUrl=http://localhost:4176 --expose mode=ssg",
+    "e2e:run:dev": "cypress run --config baseUrl=http://localhost:4177 --expose mode=dev",
     "e2e:spa": "npm run e2e:build:spa && start-server-and-test e2e:serve:spa http://localhost:4174 e2e:run:spa",
     "e2e:ssr": "npm run e2e:build:ssr && start-server-and-test e2e:serve:ssr http://localhost:4175 e2e:run:ssr",
     "e2e:ssg": "npm run e2e:build:ssg && start-server-and-test e2e:serve:ssg http://localhost:4176 e2e:run:ssg",
@@ -85,20 +88,20 @@
     "cypress:open": "cypress open"
   },
   "peerDependencies": {
-    "@jasonshimmy/custom-elements-runtime": ">=3.4.0",
+    "@jasonshimmy/custom-elements-runtime": ">=3.9.0",
     "vite": ">=5.0.0"
   },
   "dependencies": {
     "commander": "^14.0.3",
     "fast-glob": "^3.3.3",
-    "gray-matter": "^4.0.3",
     "magic-string": "^0.30.21",
     "marked": "^18.0.0",
     "minisearch": "^7.2.0",
-    "pathe": "^2.0.3"
+    "pathe": "^2.0.3",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
-    "@jasonshimmy/custom-elements-runtime": "^3.7.5",
+    "@jasonshimmy/custom-elements-runtime": "^3.9.0",
     "@types/node": "^25.6.0",
     "@vitest/coverage-v8": "^4.1.2",
     "cypress": "^15.13.1",

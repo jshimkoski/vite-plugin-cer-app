@@ -6,7 +6,7 @@
  * (not 500) and render the global error component if defined.
  */
 
-const mode = Cypress.env('mode') as 'spa' | 'ssr' | 'ssg'
+const mode = Cypress.expose('mode') as 'spa' | 'ssr' | 'ssg'
 
 describe('Synthetic 404 fallback (P1-1)', () => {
   context('visiting a completely unknown route', () => {

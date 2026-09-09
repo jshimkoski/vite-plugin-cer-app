@@ -16,7 +16,7 @@
  * Only meaningful in SSR mode where the server renders pages on-request.
  */
 
-const mode = Cypress.env('mode') as 'spa' | 'ssr' | 'ssg'
+const mode = Cypress.expose('mode') as 'spa' | 'ssr' | 'ssg'
 
 if (mode === 'ssr') {
   describe('SSR render error resilience — P0-1', () => {

@@ -6,7 +6,7 @@
  * - Old sessions signed with a secondary secret are still readable.
  */
 
-const mode = Cypress.env('mode') as 'spa' | 'ssr' | 'ssg'
+const mode = Cypress.expose('mode') as 'spa' | 'ssr' | 'ssg'
 
 if (mode === 'ssr') {
   describe('Session secret rotation (P1-3)', () => {

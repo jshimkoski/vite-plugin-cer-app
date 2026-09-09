@@ -9,6 +9,14 @@
  *   /fr/i18n-test   → renders in locale (fr)
  */
 
+const i18nPage = () =>
+  cy
+    .get('page-i18n-test')
+    .should(($host) => {
+      expect($host).to.have.attr('data-cer-hydrated')
+    })
+    .shadow()
+
 describe('i18n routing — useLocale()', () => {
   context('default locale (unprefixed path)', () => {
     it('renders the i18n-test page at /i18n-test', () => {
@@ -65,14 +73,14 @@ describe('i18n routing — useLocale()', () => {
 
     it('clicking the switch-to-en link navigates to the default-locale path', () => {
       cy.visit('/fr/i18n-test')
-      cy.get('[data-cy=switch-to-en]').click({ force: true })
+      i18nPage().find('[data-cy=switch-to-en]').click()
       cy.url().should('include', '/i18n-test')
       cy.url().should('not.include', '/fr/')
     })
 
     it('clicking the switch-to-fr link from /i18n-test navigates to /fr/i18n-test', () => {
       cy.visit('/i18n-test')
-      cy.get('[data-cy=switch-to-fr]').click({ force: true })
+      i18nPage().find('[data-cy=switch-to-fr]').click()
       cy.url().should('include', '/fr/i18n-test')
     })
   })

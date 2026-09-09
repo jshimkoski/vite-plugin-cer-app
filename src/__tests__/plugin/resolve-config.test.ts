@@ -94,6 +94,31 @@ describe('resolveConfig', () => {
     expect(cfg.ssg.fallback).toBe(false)
   })
 
+  it('fails SSG builds on render errors by default and allows an explicit opt-out', () => {
+    expect(resolveConfig({}, ROOT).ssg.failOnError).toBe(true)
+    expect(resolveConfig({ ssg: { failOnError: false } }, ROOT).ssg.failOnError).toBe(false)
+  })
+
+  it('defaults ssg.inlineStylesheets to false', () => {
+    const cfg = resolveConfig({}, ROOT)
+    expect(cfg.ssg.inlineStylesheets).toBe(false)
+  })
+
+  it('resolves true as an unlimited stylesheet byte budget', () => {
+    const cfg = resolveConfig({ ssg: { inlineStylesheets: true } }, ROOT)
+    expect(cfg.ssg.inlineStylesheets).toBe(Number.POSITIVE_INFINITY)
+  })
+
+  it('preserves a positive stylesheet byte budget', () => {
+    const cfg = resolveConfig({ ssg: { inlineStylesheets: 16_384 } }, ROOT)
+    expect(cfg.ssg.inlineStylesheets).toBe(16_384)
+  })
+
+  it('disables invalid stylesheet byte budgets', () => {
+    expect(resolveConfig({ ssg: { inlineStylesheets: 0 } }, ROOT).ssg.inlineStylesheets).toBe(false)
+    expect(resolveConfig({ ssg: { inlineStylesheets: -1 } }, ROOT).ssg.inlineStylesheets).toBe(false)
+  })
+
   it('defaults autoImports.components to true', () => {
     const cfg = resolveConfig({}, ROOT)
     expect(cfg.autoImports.components).toBe(true)
@@ -119,6 +144,16 @@ describe('resolveConfig', () => {
     expect(cfg.jitCss.content).toContain('/project/app/pages/**/*.ts')
     expect(cfg.jitCss.content).toContain('/project/app/components/**/*.ts')
     expect(cfg.jitCss.content).toContain('/project/app/layouts/**/*.ts')
+  })
+
+  it('resolves user jitCss globs relative to the configured project root', () => {
+    const cfg = resolveConfig({ jitCss: { content: ['src/**/*.ts'] } }, ROOT)
+    expect(cfg.jitCss.content).toEqual(['/project/src/**/*.ts'])
+  })
+
+  it('preserves absolute user jitCss globs', () => {
+    const cfg = resolveConfig({ jitCss: { content: ['/shared/**/*.ts'] } }, ROOT)
+    expect(cfg.jitCss.content).toEqual(['/shared/**/*.ts'])
   })
 
   it('defaults jitCss.extendedColors to false', () => {

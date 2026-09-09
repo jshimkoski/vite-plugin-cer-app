@@ -2,7 +2,7 @@ import { writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { readFileSync } from 'node:fs'
 import { join, relative } from 'pathe'
 import { scanDirectory } from './scanner.js'
-import { GENERATED_DIR_NAME } from './generated-dir.js'
+import { GENERATED_DIR_NAME, writeFileIfChanged } from './generated-dir.js'
 
 /**
  * Writes `.cer/tsconfig.json` containing path aliases for the `~/` prefix
@@ -29,11 +29,22 @@ export function writeTsconfigPaths(root: string, srcDir: string): void {
   }
 
   const tsconfig = {
-    compilerOptions: { paths },
+    compilerOptions: {
+      target: 'ES2022',
+      module: 'ESNext',
+      moduleResolution: 'Bundler',
+      lib: ['ES2022', 'DOM', 'DOM.Iterable'],
+      skipLibCheck: true,
+      // Keep workspace/file-linked packages at their consumer-visible path so
+      // their peer imports resolve through the application's dependency tree.
+      // This prevents nominal runtime types from being duplicated in linked
+      // development setups.
+      preserveSymlinks: true,
+      paths,
+    },
     include: [
-      '../app/**/*.ts',
+      `${srcRel}/**/*.ts`,
       '../server/**/*.ts',
-      './**/*.ts',
       './**/*.d.ts',
     ],
     exclude: ['../node_modules', '../dist'],
@@ -68,6 +79,7 @@ const RUNTIME_GLOBALS = [
   'useGlobalStyle',
   'useExpose',
   'useSlots',
+  'useHost',
   'provide',
   'inject',
   'createComposable',
@@ -82,7 +94,31 @@ const RUNTIME_GLOBALS = [
 
 const DIRECTIVE_GLOBALS = ['when', 'each', 'match', 'anchorBlock']
 
-const FRAMEWORK_GLOBALS = ['useHead', 'usePageData', 'useInject', 'useRuntimeConfig', 'defineMiddleware', 'defineServerMiddleware', 'useSeoMeta', 'useCookie', 'useSession', 'useAuth', 'useFetch', 'useRoute', 'navigateTo', 'useState', 'useLocale', 'queryContent', 'useContentSearch']
+const FRAMEWORK_GLOBALS = [
+  'useHead',
+  'usePageData',
+  'useInject',
+  'useRuntimeConfig',
+  'defineMiddleware',
+  'defineServerMiddleware',
+  'useSeoMeta',
+  'useCookie',
+  'useSession',
+  'useAuth',
+  'useFetch',
+  'useRoute',
+  'navigateTo',
+  'useState',
+  'useLocale',
+  'queryContent',
+  'useContentSearch',
+  'defineContentPageLoader',
+  'normalizeContentPath',
+  'useContentBreadcrumbs',
+  'useContentHeadings',
+  'useContentSeo',
+  'useActiveHeadings',
+]
 
 /**
  * Scans a composables directory and returns a map of export name → file path.
@@ -158,6 +194,12 @@ export async function generateAutoImportDts(
   lines.push(`  type ContentItem = import('@jasonshimmy/vite-plugin-cer-app').ContentItem`)
   lines.push(`  type ContentHeading = import('@jasonshimmy/vite-plugin-cer-app').ContentHeading`)
   lines.push(`  type ContentSearchResult = import('@jasonshimmy/vite-plugin-cer-app').ContentSearchResult`)
+  lines.push(`  type ContentPageData = import('@jasonshimmy/vite-plugin-cer-app').ContentPageData`)
+  lines.push(`  type ContentBreadcrumb = import('@jasonshimmy/vite-plugin-cer-app').ContentBreadcrumb`)
+  lines.push(`  type ContentBreadcrumbOptions = import('@jasonshimmy/vite-plugin-cer-app').ContentBreadcrumbOptions`)
+  lines.push(`  type ContentPageLoaderOptions = import('@jasonshimmy/vite-plugin-cer-app').ContentPageLoaderOptions`)
+  lines.push(`  type ContentSeoOptions = import('@jasonshimmy/vite-plugin-cer-app').ContentSeoOptions`)
+  lines.push(`  type ActiveHeadingsOptions = import('@jasonshimmy/vite-plugin-cer-app').ActiveHeadingsOptions`)
   lines.push('')
   lines.push('  // SSR loader data injected as window.__CER_DATA__ by the server.')
   lines.push('  // Consumed once by usePageData() during client hydration.')
@@ -211,7 +253,7 @@ export async function generateVirtualModuleDts(
 
   for (const [name, filePath] of exports) {
     const rel = '../' + relative(root, filePath).replace(/\.ts$/, '')
-    lines.push(`  export { ${name} } from '${rel}'`)
+    lines.push(`  export const ${name}: typeof import('${rel}')['${name}']`)
   }
 
   lines.push(`}`)
@@ -268,6 +310,6 @@ export async function writeAutoImportDts(
   const scanned = composableExports ?? await scanComposableExports(composablesDir)
   const autoImportsContent = await generateAutoImportDts(root, composablesDir, scanned)
   const envContent = await generateVirtualModuleDts(root, composablesDir, scanned)
-  writeFileSync(join(cerDir, 'auto-imports.d.ts'), autoImportsContent, 'utf-8')
-  writeFileSync(join(cerDir, 'env.d.ts'), envContent, 'utf-8')
+  writeFileIfChanged(join(cerDir, 'auto-imports.d.ts'), autoImportsContent)
+  writeFileIfChanged(join(cerDir, 'env.d.ts'), envContent)
 }

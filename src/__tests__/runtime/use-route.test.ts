@@ -136,14 +136,45 @@ describe('useRoute() — client path (__cerRouter)', () => {
     expect(route.params).toEqual({})
     expect(route.meta).toBeNull()
   })
+
+  it('keeps a route handle live across client-side navigation', () => {
+    let path = '/first'
+    g['__cerRouter'] = {
+      getCurrent: () => ({ path, query: path === '/first' ? {} : { from: 'nav' } }),
+      matchRoute: (currentPath: string) => ({
+        route: { meta: { title: currentPath } },
+        params: currentPath === '/posts/9' ? { id: '9' } : {},
+      }),
+    }
+
+    const route = useRoute()
+    expect(route.path).toBe('/first')
+
+    path = '/posts/9'
+    expect(route.path).toBe('/posts/9')
+    expect(route.params).toEqual({ id: '9' })
+    expect(route.query).toEqual({ from: 'nav' })
+    expect(route.meta).toEqual({ title: '/posts/9' })
+  })
 })
 
 // ─── Fallback ─────────────────────────────────────────────────────────────────
 
 describe('useRoute() — fallback (no store, no router)', () => {
+  let originalLocation: PropertyDescriptor | undefined
+
   beforeEach(() => {
     delete g['__CER_ROUTE_STORE__']
     delete g['__cerRouter']
+    originalLocation = Object.getOwnPropertyDescriptor(globalThis, 'location')
+  })
+
+  afterEach(() => {
+    if (originalLocation) {
+      Object.defineProperty(globalThis, 'location', originalLocation)
+    } else {
+      delete g.location
+    }
   })
 
   it('returns a default route object', () => {
@@ -152,5 +183,36 @@ describe('useRoute() — fallback (no store, no router)', () => {
     expect(route.params).toEqual({})
     expect(route.query).toEqual({})
     expect(route.meta).toBeNull()
+  })
+
+  it('uses the browser URL when components connect before router bootstrap', () => {
+    Object.defineProperty(globalThis, 'location', {
+      value: {
+        pathname: '/music/amps/line-6/badonk',
+        search: '?view=details',
+      },
+      configurable: true,
+    })
+
+    const route = useRoute()
+    expect(route.path).toBe('/music/amps/line-6/badonk')
+    expect(route.query).toEqual({ view: 'details' })
+  })
+
+  it('starts from location and reads the router once bootstrap completes', () => {
+    Object.defineProperty(globalThis, 'location', {
+      value: { pathname: '/initial', search: '' },
+      configurable: true,
+    })
+    const route = useRoute()
+    expect(route.path).toBe('/initial')
+
+    g['__cerRouter'] = {
+      getCurrent: () => ({ path: '/ready', query: {} }),
+      matchRoute: () => ({ route: { meta: { ready: true } }, params: {} }),
+    }
+
+    expect(route.path).toBe('/ready')
+    expect(route.meta).toEqual({ ready: true })
   })
 })

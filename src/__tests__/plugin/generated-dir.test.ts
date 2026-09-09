@@ -21,13 +21,14 @@ import {
   generateDefaultHtml,
   writeGeneratedDir,
 } from '../../plugin/generated-dir.js'
+import { ENTRY_SERVER_TEMPLATE } from '../../runtime/entry-server-template.js'
 
 const ROOT = '/project'
 const mockConfig = {
   root: ROOT,
   srcDir: `${ROOT}/app`,
   jitCss: { content: [], extendedColors: false },
-} as Parameters<typeof writeGeneratedDir>[0]
+} as unknown as Parameters<typeof writeGeneratedDir>[0]
 
 beforeEach(() => {
   vi.mocked(existsSync).mockReturnValue(false)
@@ -116,6 +117,22 @@ describe('writeGeneratedDir', () => {
     writeGeneratedDir(mockConfig)
     const paths = vi.mocked(writeFileSync).mock.calls.map(([p]) => String(p))
     expect(paths.some(p => p.endsWith('/.cer/index.html'))).toBe(true)
+  })
+
+  it('does not rewrite generated files whose content is unchanged', () => {
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(readFileSync).mockImplementation((path) => {
+      const value = String(path)
+      if (value.endsWith('/app.ts')) return '// app template'
+      if (value.endsWith('/entry-server.ts')) return ENTRY_SERVER_TEMPLATE
+      if (value.endsWith('/index.html')) return generateDefaultHtml()
+      if (value.endsWith('/.gitignore')) return '.cer/\n'
+      return ''
+    })
+
+    writeGeneratedDir(mockConfig)
+
+    expect(writeFileSync).not.toHaveBeenCalled()
   })
 
   it('creates .gitignore when absent', () => {

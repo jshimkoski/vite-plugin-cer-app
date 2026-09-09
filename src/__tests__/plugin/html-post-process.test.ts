@@ -4,6 +4,7 @@ import {
   injectCanonicalLink,
   addNoopenerToExternalLinks,
   generateRobotsTxt,
+  generateSitemapXml,
 } from '../../plugin/html-post-process.js'
 
 // ---------------------------------------------------------------------------
@@ -119,6 +120,64 @@ describe('addNoopenerToExternalLinks', () => {
     ].join('')
     const result = addNoopenerToExternalLinks(html)
     expect(result.match(/rel="noopener noreferrer"/g)?.length).toBe(2)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// generateRobotsTxt
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// generateSitemapXml
+// ---------------------------------------------------------------------------
+
+describe('generateSitemapXml', () => {
+  it('produces a valid XML declaration and urlset root', () => {
+    const xml = generateSitemapXml('https://example.com', ['/'], '2026-01-01')
+    expect(xml).toContain('<?xml version="1.0" encoding="UTF-8"?>')
+    expect(xml).toContain('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">')
+    expect(xml).toContain('</urlset>')
+  })
+
+  it('uses siteUrl for the root path loc', () => {
+    const xml = generateSitemapXml('https://example.com', ['/'], '2026-01-01')
+    expect(xml).toContain('<loc>https://example.com</loc>')
+  })
+
+  it('appends non-root paths directly to siteUrl', () => {
+    const xml = generateSitemapXml('https://example.com', ['/about', '/blog'], '2026-01-01')
+    expect(xml).toContain('<loc>https://example.com/about</loc>')
+    expect(xml).toContain('<loc>https://example.com/blog</loc>')
+  })
+
+  it('includes lastmod for every url entry', () => {
+    const xml = generateSitemapXml('https://example.com', ['/a', '/b'], '2026-04-25')
+    const lastmodMatches = xml.match(/<lastmod>2026-04-25<\/lastmod>/g) ?? []
+    expect(lastmodMatches).toHaveLength(2)
+  })
+
+  it('emits one <url> block per path', () => {
+    const paths = ['/', '/about', '/blog', '/contact']
+    const xml = generateSitemapXml('https://example.com', paths, '2026-01-01')
+    const urlBlocks = xml.match(/<url>/g) ?? []
+    expect(urlBlocks).toHaveLength(paths.length)
+  })
+
+  it('handles an empty paths array', () => {
+    const xml = generateSitemapXml('https://example.com', [], '2026-01-01')
+    expect(xml).toContain('<urlset')
+    expect(xml).not.toContain('<url>')
+  })
+
+  it('escapes & in URLs', () => {
+    const xml = generateSitemapXml('https://example.com', ['/search?a=1&b=2'], '2026-01-01')
+    expect(xml).toContain('&amp;')
+    expect(xml).not.toContain('&b')
+  })
+
+  it('ends with a newline', () => {
+    const xml = generateSitemapXml('https://example.com', ['/'], '2026-01-01')
+    expect(xml.endsWith('\n')).toBe(true)
   })
 })
 

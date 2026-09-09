@@ -7,6 +7,17 @@ import { ENTRY_SERVER_TEMPLATE } from '../runtime/entry-server-template.js'
 /** The name of the generated directory relative to the project root. */
 export const GENERATED_DIR_NAME = '.cer'
 
+/** Writes generated text only when its bytes would change. */
+export function writeFileIfChanged(path: string, content: string): boolean {
+  try {
+    if (existsSync(path) && readFileSync(path, 'utf-8') === content) return false
+  } catch {
+    // Regenerate after a transient read failure.
+  }
+  writeFileSync(path, content, 'utf-8')
+  return true
+}
+
 /**
  * Returns the absolute path to the .cer/ generated directory.
  */
@@ -104,18 +115,17 @@ export function writeGeneratedDir(config: ResolvedCerConfig): void {
     mkdirSync(dir, { recursive: true })
   }
 
-  // Always write the generated app.ts — this is the framework entry point and
-  // is never user-owned. Regenerating it on every dev/build ensures consumers
-  // automatically get the latest bootstrap code on plugin update (Nuxt-style).
-  writeFileSync(join(dir, 'app.ts'), generateAppEntryTemplate(), 'utf-8')
+  // These files are never user-owned. Skip byte-identical writes so Vite,
+  // TypeScript, editors, and backup tools are not woken on every startup.
+  writeFileIfChanged(join(dir, 'app.ts'), generateAppEntryTemplate(config.globalImports))
 
   // Always write the SSR entry — used by the dev server's ssrLoadModule call.
   // The production build injects this as a virtual module, but the dev server
   // needs a real file on disk because ssrLoadModule resolves by file path.
-  writeFileSync(join(dir, 'entry-server.ts'), ENTRY_SERVER_TEMPLATE, 'utf-8')
+  writeFileIfChanged(join(dir, 'entry-server.ts'), ENTRY_SERVER_TEMPLATE)
 
   // Always write the default index.html so builds and the dev server can use it.
-  writeFileSync(join(dir, 'index.html'), generateDefaultHtml(), 'utf-8')
+  writeFileIfChanged(join(dir, 'index.html'), generateDefaultHtml())
 
   ensureGitignore(config.root)
 }

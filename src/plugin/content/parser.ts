@@ -1,5 +1,5 @@
-import matter from 'gray-matter'
 import { marked, type Token } from 'marked'
+import { parse as parseYaml } from 'yaml'
 import { readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import type { ContentHeading, ContentItem, ContentMeta } from '../../types/content.js'
@@ -118,15 +118,76 @@ renderer.heading = function ({ tokens, depth }) {
 
 // ─── Parser ───────────────────────────────────────────────────────────────────
 
+type ParsedFrontmatter = {
+  data: Record<string, unknown>
+  content: string
+}
+
+/**
+ * Extract YAML frontmatter without loading an executable metadata engine.
+ * Supporting JavaScript frontmatter in a build tool turns content files into
+ * code execution; CER deliberately accepts YAML mappings only.
+ */
+function parseFrontmatter(raw: string, filePath: string): ParsedFrontmatter {
+  const source = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw
+  const firstLineEnd = source.indexOf('\n')
+  const firstLine = (firstLineEnd === -1 ? source : source.slice(0, firstLineEnd))
+    .replace(/\r$/, '')
+
+  if (/^---[a-z][\w-]*\s*$/i.test(firstLine)) {
+    throw new Error(
+      `Unsupported frontmatter language in "${filePath}". CER content frontmatter must use YAML.`,
+    )
+  }
+
+  if (!/^---[\t ]*$/.test(firstLine)) {
+    return { data: {}, content: source }
+  }
+
+  if (firstLineEnd === -1) {
+    throw new Error(`Unclosed frontmatter block in "${filePath}".`)
+  }
+
+  const closingDelimiter = /^---[\t ]*\r?$/gm
+  closingDelimiter.lastIndex = firstLineEnd + 1
+  const closing = closingDelimiter.exec(source)
+  if (!closing) {
+    throw new Error(`Unclosed frontmatter block in "${filePath}".`)
+  }
+
+  const yamlSource = source.slice(firstLineEnd + 1, closing.index)
+  let data: unknown
+  try {
+    data = parseYaml(yamlSource, { maxAliasCount: 100 })
+  } catch (error) {
+    throw new Error(
+      `Invalid YAML frontmatter in "${filePath}": ${(error as Error).message}`,
+    )
+  }
+
+  if (data == null) data = {}
+  if (typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error(
+      `Invalid YAML frontmatter in "${filePath}": expected a key-value mapping.`,
+    )
+  }
+
+  let contentStart = closing.index + closing[0].length
+  if (source[contentStart] === '\r') contentStart++
+  if (source[contentStart] === '\n') contentStart++
+
+  return {
+    data: data as Record<string, unknown>,
+    content: source.slice(contentStart),
+  }
+}
+
 /**
  * Core parse logic shared by both the sync and async variants.
  * Accepts pre-read `raw` content so the caller controls I/O scheduling.
  *
- * Date normalization: gray-matter parses bare YAML dates (e.g. `date: 2026-04-03`)
- * as JavaScript `Date` objects. This causes a type mismatch — the in-memory server
- * store contains `Date` objects while the client, which reads via JSON.stringify/parse,
- * always gets ISO strings. All `Date` values are normalised to `YYYY-MM-DD` strings
- * here so both paths are consistent.
+ * Date normalization keeps the in-memory server store consistent with the
+ * JSON-serialized client store if a custom YAML tag produces a Date object.
  */
 function parseContentFileFromRaw(
   file: ContentFile,
@@ -156,7 +217,7 @@ function parseContentFileFromRaw(
   }
 
   // ── Markdown ─────────────────────────────────────────────────────────────
-  const parsed = matter(raw)
+  const parsed = parseFrontmatter(raw, file.filePath)
   const frontmatter = parsed.data as ContentMeta
   const content = parsed.content
 
@@ -209,8 +270,8 @@ function parseContentFileFromRaw(
     item.excerpt = excerpt
   }
 
-  // Normalise any Date objects introduced by gray-matter's YAML parser to
-  // YYYY-MM-DD strings. Without this, the server in-memory store holds Date
+  // Normalise any Date objects introduced by custom YAML tags to YYYY-MM-DD
+  // strings. Without this, the server in-memory store holds Date
   // objects while the client (after JSON round-trip) holds strings, causing
   // date comparisons in .where() predicates to silently misbehave server-side.
   for (const key of Object.keys(item)) {

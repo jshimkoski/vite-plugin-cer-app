@@ -6,11 +6,16 @@
  * SSR path: reads from req.headers.cookie on initial request.
  */
 
-const mode = Cypress.env('mode') as 'spa' | 'ssr' | 'ssg'
+const mode = Cypress.expose('mode') as 'spa' | 'ssr' | 'ssg'
 
 // Helper: find an element inside the page-cookie-test shadow DOM (post-hydration).
 const cookiePage = () =>
-  cy.get('cer-layout-view').shadow().find('page-cookie-test').shadow()
+  cy
+    .get('page-cookie-test')
+    .should(($host) => {
+      expect($host).to.have.attr('data-cer-hydrated')
+    })
+    .shadow()
 
 describe('useCookie() — client-side read/write/remove', () => {
   beforeEach(() => {

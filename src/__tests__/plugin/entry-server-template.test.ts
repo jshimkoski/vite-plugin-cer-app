@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'pathe'
+import {
+  collectDsdHostTags,
+  deferEntryModulesForFirstPaint,
+} from '../../runtime/entry-server-template.js'
 
 const src = readFileSync(
   resolve(import.meta.dirname, '../../runtime/entry-server-template.ts'),
@@ -50,6 +54,11 @@ describe('entry-server-template (ENTRY_SERVER_TEMPLATE content)', () => {
     expect(src).toContain('renderToStreamWithJITCSSDSD')
     expect(src).toContain('DSD_POLYFILL_SCRIPT')
     expect(src).toContain('custom-elements-runtime/ssr')
+  })
+
+  it('passes the resolved project JIT options to every SSR render', () => {
+    expect(src).toContain("import ssrConfig from 'virtual:cer-ssr-config'")
+    expect(src).toContain('jit: ssrConfig?.jit')
   })
 
   it('imports initRouter from router subpath', () => {
@@ -138,7 +147,16 @@ describe('entry-server-template (ENTRY_SERVER_TEMPLATE content)', () => {
     // Dev mode: per-request global takes precedence over module-level _clientTemplate
     expect(src).toContain('_resolvedClientTemplate')
     expect(src).toContain('(globalThis).__CER_CLIENT_TEMPLATE__ ?? _clientTemplate')
-    expect(src).toContain('_mergeWithClientTemplate(ssrHtml, _resolvedClientTemplate)')
+    expect(src).toContain('_mergeWithClientTemplate(ssrHtml, _resolvedClientTemplate, _requestPath, hydrationStrategy, _dsdTags)')
+    expect(src).toContain('data-cer-route=')
+    expect(src).toContain('encodeURIComponent(renderedPath)')
+  })
+
+  it('defers client entry evaluation until after first paint for hydrate:none routes', () => {
+    expect(src).toContain("const hydrationStrategy = route?.meta?.hydrate ?? 'load'")
+    expect(src).toContain('hydrationStrategy === \'none\'')
+    expect(src).toContain('_deferEntryModulesForFirstPaint(clientTemplate, dsdTags)')
+    expect(src).toContain('data-cer-route-hydrate=')
   })
 
   it('exports handler as both named and default export', () => {
@@ -381,5 +399,52 @@ describe('entry-server-template (ENTRY_SERVER_TEMPLATE content)', () => {
 
   it('swallows exceptions thrown by onError so hooks cannot crash the handler', () => {
     expect(src).toContain('/* hooks must not crash the handler */')
+  })
+})
+
+describe('deferEntryModulesForFirstPaint', () => {
+  it('preloads external module entries but evaluates them after a paint opportunity', () => {
+    const html = '<head><script type="module" crossorigin src="/assets/app.js"></script></head>'
+    const result = deferEntryModulesForFirstPaint(html, ['layout-default', 'md-button'])
+
+    expect(result).toContain('<link rel="modulepreload" crossorigin href="/assets/app.js">')
+    expect(result).toContain('<script data-cer-deferred-entry>')
+    expect(result).toContain('PerformanceObserver')
+    expect(result).toContain("first-contentful-paint")
+    expect(result).toContain("observer.observe({type:'paint',buffered:true})")
+    expect(result).toContain('requestAnimationFrame')
+    expect(result).toContain('setTimeout')
+    expect(result).toContain("document.addEventListener('click',capture,true)")
+    expect(result).toContain("document.removeEventListener('click',capture,true)")
+    expect(result).toContain('target.dispatchEvent(clone)')
+    expect(result).toContain("document.querySelector('cer-layout-view')")
+    expect(result).toContain("attributeFilter:['data-cer-hydrated']")
+    expect(result).toContain("performance.mark('cer:entry-start')")
+    expect(result).toContain('globalThis.__CER_STATIC_ENTRY__=true')
+    expect(result).toContain('globalThis.__CER_DSD_TAGS__=new Set(["layout-default","md-button"])')
+    expect(result).toContain('import("/assets/app.js")')
+    expect(result).not.toContain('type="module" crossorigin src=')
+  })
+
+  it('collects only DSD tags whose every host explicitly opts into deferred hydration', () => {
+    const html = '<x-one data-cer-hydrate="none"><template shadowrootmode="open"></template></x-one>' +
+      '<div><x-two data-cer-hydrate="load">\n<template shadowrootmode="open"></template></x-two></div>' +
+      '<x-one data-cer-hydrate="visible"><template shadowrootmode="open"></template></x-one>' +
+      '<x-two><template shadowrootmode="open"></template></x-two>'
+
+    expect(collectDsdHostTags(html)).toEqual(['x-one'])
+  })
+
+  it('leaves inline modules and non-module scripts unchanged', () => {
+    const html = '<script type="module">boot()</script><script src="/legacy.js"></script>'
+    expect(deferEntryModulesForFirstPaint(html)).toBe(html)
+  })
+
+  it('escapes generated attributes and inline script data', () => {
+    const html = '<script type="module" src="/assets/app&test.js"></script>'
+    const result = deferEntryModulesForFirstPaint(html)
+
+    expect(result).toContain('href="/assets/app&amp;test.js"')
+    expect(result).toContain('import("/assets/app\\u0026test.js")')
   })
 })

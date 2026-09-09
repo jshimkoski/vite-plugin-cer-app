@@ -14,8 +14,34 @@ import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'pathe'
 
-// Mock buildSSR so the SSG pipeline skips the Vite build step.
-vi.mock('../../plugin/build-ssr.js', () => ({ buildSSR: vi.fn().mockResolvedValue(undefined) }))
+// Mock buildSSR while still recreating its server output. buildSSG deliberately
+// clears dist/ before delegating, so a bundle prepared only in beforeAll would
+// be stale output and must not survive the clean build boundary.
+vi.mock('../../plugin/build-ssr.js', () => ({
+  buildSSR: vi.fn(async (config: { root: string }) => {
+    const { mkdir, writeFile } = await import('node:fs/promises')
+    const serverDir = `${config.root}/dist/server`
+    await mkdir(serverDir, { recursive: true })
+    const streaming = config.root.includes('cer-ssg-stream-')
+    const source = streaming
+      ? `export const handler = async (_req, res) => {
+          res.setHeader('Content-Type', 'text/html');
+          res.setHeader('Transfer-Encoding', 'chunked');
+          res.write('<html><head></head>');
+          res.write('<body>streamed</body>');
+          res.end('</html>');
+        };`
+      : `export const handler = async (req, res) => {
+          res.setHeader('Content-Type', 'text/html');
+          res.end('<!DOCTYPE html><html><head></head><body>Hello from ' + req.url + '</body></html>');
+        };`
+    await writeFile(
+      `${serverDir}/server.js`,
+      `${source}\nexport const apiRoutes = [];\nexport const plugins = [];\nexport const layouts = {};\n`,
+      'utf-8',
+    )
+  }),
+}))
 vi.mock('fast-glob', () => ({ default: vi.fn().mockResolvedValue([]) }))
 // Intentionally NOT mocking node:fs or node:fs/promises so real writes work.
 

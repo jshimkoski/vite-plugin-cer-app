@@ -65,6 +65,47 @@ describe('useFetch() — SSR path', () => {
     })
   })
 
+  it('returns settled SSR cache entries synchronously', async () => {
+    vi.stubGlobal('fetch', mockFetchWith({ ok: true, json: async () => ({ cached: true }) }))
+
+    await runWithFetchStore(async () => {
+      await useFetch('/api/item')
+      const cached = useFetch('/api/item')
+      expect(cached.data).toEqual({ cached: true })
+      expect(cached.pending).toBe(false)
+    })
+  })
+
+  it('deduplicates concurrent calls for the same key within one request', async () => {
+    let resolveResponse!: (value: unknown) => void
+    const mockFn = vi.fn(() => new Promise((resolve) => { resolveResponse = resolve }))
+    vi.stubGlobal('fetch', mockFn)
+
+    await runWithFetchStore(async () => {
+      const first = useFetch('/api/concurrent')
+      const second = useFetch('/api/concurrent')
+      expect(mockFn).toHaveBeenCalledTimes(1)
+
+      resolveResponse({ ok: true, json: async () => ({ value: 1 }) })
+      const [firstResult, secondResult] = await Promise.all([first, second])
+      expect(firstResult.data).toEqual({ value: 1 })
+      expect(secondResult.data).toEqual({ value: 1 })
+    })
+  })
+
+  it('stores raw data so cached transforms are applied exactly once', async () => {
+    const transform = vi.fn((value: unknown) => (value as number) + 1)
+    vi.stubGlobal('fetch', mockFetchWith({ ok: true, json: async () => 1 }))
+
+    await runWithFetchStore(async () => {
+      const first = await useFetch<number>('/api/transformed', { transform })
+      const second = await useFetch<number>('/api/transformed', { transform })
+      expect(first.data).toBe(2)
+      expect(second.data).toBe(2)
+      expect(transform).toHaveBeenCalledTimes(2)
+    })
+  })
+
   it('applies pick option', async () => {
     vi.stubGlobal('fetch', mockFetchWith({ ok: true, json: async () => ({ id: 1, name: 'Alice', secret: 'x' }) }))
 
@@ -155,9 +196,25 @@ describe('useFetch() — SSR path', () => {
 
     await runWithFetchStore(async () => {
       await useFetch('/api/create', { method: 'POST', body: { title: 'hello' } })
-      const [, init] = mockFn.mock.calls[0] as [string, RequestInit]
+      const [, init] = mockFn.mock.calls[0] as unknown as [string, RequestInit]
       expect(init.method).toBe('POST')
       expect(init.body).toBe(JSON.stringify({ title: 'hello' }))
+    })
+  })
+
+  it('does not expose request bodies or authorization headers in hydration keys', async () => {
+    vi.stubGlobal('fetch', mockFetchWith({ ok: true, json: async () => ({ ok: true }) }))
+
+    await runWithFetchStore(async (map) => {
+      await useFetch('/api/login', {
+        method: 'POST',
+        body: { password: 'super-secret-password' },
+        headers: { Authorization: 'Bearer private-token' },
+      })
+
+      const serializedKeys = JSON.stringify([...map.keys()])
+      expect(serializedKeys).not.toContain('super-secret-password')
+      expect(serializedKeys).not.toContain('private-token')
     })
   })
 })
@@ -268,10 +325,27 @@ describe('useFetch() — client fetch path', () => {
 
     await useFetch('/api/items', { method: 'POST', body: { name: 'test' } })
 
-    const [, init] = mockFn.mock.calls[0] as [string, RequestInit]
+    const [, init] = mockFn.mock.calls[0] as unknown as [string, RequestInit]
     expect(init.method).toBe('POST')
     expect(init.body).toBe(JSON.stringify({ name: 'test' }))
     expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json')
+  })
+
+  it('does not deduplicate different POST bodies that share a URL', async () => {
+    const mockFn = vi.fn(async (_url: string, init: RequestInit) => ({
+      ok: true,
+      json: async () => JSON.parse(String(init.body)),
+    }))
+    vi.stubGlobal('fetch', mockFn)
+
+    const [first, second] = await Promise.all([
+      useFetch('/api/items', { method: 'POST', body: { id: 1 } }),
+      useFetch('/api/items', { method: 'POST', body: { id: 2 } }),
+    ])
+
+    expect(mockFn).toHaveBeenCalledTimes(2)
+    expect(first.data).toEqual({ id: 1 })
+    expect(second.data).toEqual({ id: 2 })
   })
 
   it('accepts a url function and evaluates it at call time', async () => {
@@ -283,6 +357,19 @@ describe('useFetch() — client fetch path', () => {
 
     const calledUrl = (mockFn.mock.calls[0] as unknown[])[0] as string
     expect(calledUrl).toBe('/api/items/1')
+  })
+
+  it('re-evaluates a URL function when refresh() runs', async () => {
+    const mockFn = mockFetchWith({ ok: true, json: async () => 42 })
+    vi.stubGlobal('fetch', mockFn)
+    let currentId = 1
+
+    const result = await useFetch(() => `/api/items/${currentId}`)
+    currentId = 2
+    await result.refresh()
+
+    expect(mockFn).toHaveBeenNthCalledWith(1, '/api/items/1', expect.any(Object))
+    expect(mockFn).toHaveBeenNthCalledWith(2, '/api/items/2', expect.any(Object))
   })
 
   it('refresh() on a hydrated-state result issues a new fetch', async () => {

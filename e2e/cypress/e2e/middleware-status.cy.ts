@@ -5,7 +5,7 @@
  * response should use that status code rather than defaulting to 500.
  */
 
-const mode = Cypress.env('mode') as 'spa' | 'ssr' | 'ssg'
+const mode = Cypress.expose('mode') as 'spa' | 'ssr' | 'ssg'
 
 if (mode === 'ssr') {
   describe('Server middleware status codes (P1-2)', () => {

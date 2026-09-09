@@ -10,7 +10,7 @@
  *   /content-fallback — title/description derived from body when frontmatter omits them
  */
 
-const mode = Cypress.env('mode') as 'spa' | 'ssr' | 'ssg' | 'dev'
+const mode = Cypress.expose('mode') as 'spa' | 'ssr' | 'ssg' | 'dev'
 
 // ─── /content-index ───────────────────────────────────────────────────────────
 
@@ -217,20 +217,24 @@ describe('Content guides — numeric directory and file prefixes', () => {
 // ─── /content-search ──────────────────────────────────────────────────────────
 
 // Helper: set the search input value and fire the input event.
-// We navigate directly to the shadow root of page-content-search to get
-// exactly one element (the JS-hydrated input with the @input listener).
+// Retained DSD upgrades the server-rendered page host in place, so there is a
+// single page tree. Scope directly to that host's live shadow root.
 function setSearchQuery(value: string) {
-  cy.get('cer-layout-view').shadow().find('page-content-search').shadow()
+  const input = cy
+    .get('page-content-search')
+    .should(($host) => {
+      expect($host).to.have.attr('data-cer-hydrated')
+    })
+    .shadow()
     .find('[data-cy=content-search-input]')
-    .invoke('val', value)
-    .trigger('input', { force: true })
+  input.clear({ force: true })
+  if (value) input.type(value, { force: true })
 }
 
 describe('Content search — useContentSearch()', () => {
-  // Before each search test, intercept the pre-built search index so we can
-  // wait for the component's useOnConnected pre-warm to complete (signals full
-  // hydration).  useContentSearch loads /_content/search-index.json (not the
-  // manifest) via MiniSearch.loadJSON.
+  // Search is intentionally lazy: merely visiting the page must not download
+  // MiniSearch or the pre-built index. The first non-empty query fetches the
+  // index, and subsequent queries reuse the module-level singleton.
   beforeEach(() => {
     cy.intercept('GET', '/_content/search-index.json').as('searchIndex')
   })
@@ -238,49 +242,50 @@ describe('Content search — useContentSearch()', () => {
   it('renders search input', () => {
     cy.visit('/content-search')
     cy.get('[data-cy=content-search-input]').should('exist')
+    cy.get('@searchIndex.all').should('have.length', 0)
   })
 
   it('shows results after typing a single character', () => {
     cy.visit('/content-search')
-    cy.wait('@searchIndex')
     setSearchQuery('H')
+    cy.wait('@searchIndex').its('response.statusCode').should('eq', 200)
     cy.get('[data-cy=content-search-result]', { timeout: 8000 }).should('have.length.at.least', 1)
   })
 
   it('shows results after typing a multi-char query', () => {
     cy.visit('/content-search')
-    cy.wait('@searchIndex')
     setSearchQuery('He')
+    cy.wait('@searchIndex')
     cy.get('[data-cy=content-search-result]', { timeout: 8000 }).should('have.length.at.least', 1)
   })
 
   it('searching "Hello" finds Hello World post', () => {
     cy.visit('/content-search')
-    cy.wait('@searchIndex')
     setSearchQuery('Hello')
+    cy.wait('@searchIndex')
     cy.get('[data-cy=content-search-result]', { timeout: 8000 }).should('contain', 'Hello World')
   })
 
   it('searching "Getting" finds Getting Started doc', () => {
     cy.visit('/content-search')
-    cy.wait('@searchIndex')
     setSearchQuery('Getting')
+    cy.wait('@searchIndex')
     cy.get('[data-cy=content-search-result]', { timeout: 8000 }).should('contain', 'Getting Started')
   })
 
   it('result items have data-path attribute', () => {
     cy.visit('/content-search')
-    cy.wait('@searchIndex')
     setSearchQuery('Hello')
+    cy.wait('@searchIndex')
     cy.get('[data-cy=content-search-result]', { timeout: 8000 }).first().should('have.attr', 'data-path')
   })
 
   it('shows loading indicator while search is in flight', () => {
     cy.visit('/content-search')
-    cy.wait('@searchIndex')
     setSearchQuery('Hello')
     // loading indicator appears immediately after typing
     cy.get('[data-cy=content-search-loading]').should('exist')
+    cy.wait('@searchIndex')
     // loading indicator disappears once results arrive
     cy.get('[data-cy=content-search-loading]', { timeout: 8000 }).should('not.exist')
     cy.get('[data-cy=content-search-result]').should('have.length.at.least', 1)
@@ -288,7 +293,6 @@ describe('Content search — useContentSearch()', () => {
 
   it('clears loading indicator when query is cleared', () => {
     cy.visit('/content-search')
-    cy.wait('@searchIndex')
     setSearchQuery('Hello')
     cy.get('[data-cy=content-search-loading]').should('exist')
     setSearchQuery('')
@@ -297,8 +301,8 @@ describe('Content search — useContentSearch()', () => {
 
   it('clearing query clears results', () => {
     cy.visit('/content-search')
-    cy.wait('@searchIndex')
     setSearchQuery('Hello')
+    cy.wait('@searchIndex')
     cy.get('[data-cy=content-search-result]', { timeout: 8000 }).should('have.length.at.least', 1)
     setSearchQuery('')
     cy.get('[data-cy=content-search-result]').should('not.exist')
@@ -309,8 +313,8 @@ describe('Content search — useContentSearch()', () => {
     // includes underscores, splitting e.g. "foo_bar" into two tokens that can
     // accidentally match real content via OR semantics.
     cy.visit('/content-search')
-    cy.wait('@searchIndex')
     setSearchQuery('zzznomatch')
+    cy.wait('@searchIndex')
     // Wait for the empty state — implicitly waits for loading to clear first
     cy.get('[data-cy=content-search-empty]', { timeout: 8000 }).should('exist')
     cy.get('[data-cy=content-search-result]').should('not.exist')
@@ -319,10 +323,10 @@ describe('Content search — useContentSearch()', () => {
 
   it('sequential search: search → clear → search again returns correct results', () => {
     cy.visit('/content-search')
-    cy.wait('@searchIndex')
 
     // First search
     setSearchQuery('Hello')
+    cy.wait('@searchIndex')
     cy.get('[data-cy=content-search-result]', { timeout: 8000 }).should('contain', 'Hello World')
 
     // Clear — results gone
@@ -341,11 +345,9 @@ describe('Content search — useContentSearch()', () => {
 
   it('rapid typing triggers only one search request (debounce)', () => {
     cy.visit('/content-search')
-    cy.wait('@searchIndex')
 
     // Type characters in quick succession — each triggers a new watch callback
     // but only the last one should produce a network request after 200 ms.
-    cy.intercept('GET', '/_content/search-index.json').as('secondIndex')
     setSearchQuery('G')
     setSearchQuery('Ge')
     setSearchQuery('Get')
@@ -353,12 +355,12 @@ describe('Content search — useContentSearch()', () => {
     setSearchQuery('Getti')
     setSearchQuery('Getting')
 
+    cy.wait('@searchIndex')
     // Results arrive for the final query
     cy.get('[data-cy=content-search-result]', { timeout: 8000 }).should('contain', 'Getting Started')
 
-    // The search index is cached after the first pre-warm fetch (singleton), so
-    // no additional network request should occur for these follow-on searches.
-    cy.get('@secondIndex.all').should('have.length', 0)
+    // All debounced keystrokes share the same lazy index load.
+    cy.get('@searchIndex.all').should('have.length', 1)
   })
 })
 
@@ -417,8 +419,8 @@ describe('Content fallback — title and description derived from body', () => {
   it('derived item appears in search results when searching by derived title', () => {
     cy.intercept('GET', '/_content/search-index.json').as('searchIndex')
     cy.visit('/content-search')
-    cy.wait('@searchIndex')
     setSearchQuery('Derived')
+    cy.wait('@searchIndex')
     cy.get('[data-cy=content-search-result]', { timeout: 8000 })
       .should('contain', 'Derived From Body')
   })

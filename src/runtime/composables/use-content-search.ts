@@ -2,7 +2,6 @@ import {
   createComposable,
   getCurrentComponentContext,
   ref,
-  useOnConnected,
   useOnDisconnected,
   watch,
 } from '@jasonshimmy/custom-elements-runtime'
@@ -105,11 +104,6 @@ const _factory = createComposable((): UseContentSearchReturn => {
   // useOnConnected() (which runs once per mount but is not registered for cleanup
   // by the reactive system, leaking watchers on every disconnect + reconnect cycle).
   const state = getDebounceState(getCurrentComponentContext()! as Record<string, unknown>)
-
-  // Pre-warm the index on first mount so the first real search is faster.
-  useOnConnected(() => {
-    loadIndex().catch(() => {/* silently ignore pre-warm errors */})
-  })
 
   // Cancel any in-flight debounce on unmount so stale async work doesn't land
   // after the component is gone.

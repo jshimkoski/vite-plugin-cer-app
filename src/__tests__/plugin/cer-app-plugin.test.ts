@@ -90,6 +90,37 @@ describe('cerApp()', () => {
     const names = plugins.map((p) => (p as { name: string }).name)
     expect(names).not.toContain('cer-component-imports')
   })
+
+  it('includes plugins supplied by application integrations', () => {
+    const plugins = cerApp({
+      integrations: [{
+        name: 'test-ui',
+        plugins: [{ name: 'test-ui-build-plugin' }],
+      }],
+    })
+
+    expect(plugins.map((plugin) => (plugin as { name: string }).name)).toContain(
+      'test-ui-build-plugin',
+    )
+  })
+
+  it('passes package component resolvers to the runtime import transform', async () => {
+    const { cerComponentImports } = await import('@jasonshimmy/custom-elements-runtime/vite-plugin')
+    vi.mocked(cerComponentImports).mockClear()
+    const resolver = vi.fn((tag: string) => tag === 'ui-button' ? 'ui/components/button' : undefined)
+    const plugins = cerApp({
+      integrations: [{ name: 'test-ui', componentResolver: resolver }],
+    })
+    const appPlugin = plugins[0] as unknown as TestPlugin
+    appPlugin.config({ root: '/project' }, { command: 'build', mode: 'production' })
+    appPlugin.configResolved(FAKE_RESOLVED)
+
+    await (plugins.find((plugin) => (plugin as { name?: string }).name === 'cer-component-imports') as unknown as TestPlugin).buildStart()
+
+    expect(cerComponentImports).toHaveBeenCalledWith(expect.objectContaining({
+      resolvers: [resolver],
+    }))
+  })
 })
 
 describe('cerApp plugin — config hook', () => {
@@ -103,6 +134,30 @@ describe('cerApp plugin — config hook', () => {
     const plugin = getCerPlugin()
     const result = plugin.config({ root: '/project' }, { command: 'serve', mode: 'development' })
     expect(result).toBeDefined()
+  })
+
+  it('deduplicates the runtime so linked component packages share one instance', () => {
+    const plugin = getCerPlugin()
+    const result = plugin.config(
+      { root: '/project' },
+      { command: 'build', mode: 'production' },
+    ) as { resolve?: { dedupe?: string[] } }
+
+    expect(result.resolve?.dedupe).toContain('@jasonshimmy/custom-elements-runtime')
+  })
+
+  it('updates the runtime JIT scanner with the final Vite root', async () => {
+    const { cerPlugin } = await import('@jasonshimmy/custom-elements-runtime/vite-plugin')
+    vi.mocked(cerPlugin).mockClear()
+    const plugins = cerApp({ jitCss: { content: ['src/**/*.ts'] } })
+    const runtimeOptions = vi.mocked(cerPlugin).mock.calls[0][0]
+
+    ;(plugins[0] as unknown as TestPlugin).config(
+      { root: '/workspace/site' },
+      { command: 'build', mode: 'production' },
+    )
+
+    expect(runtimeOptions.content).toEqual(['/workspace/site/src/**/*.ts'])
   })
 })
 
@@ -522,6 +577,33 @@ describe('cerApp plugin — configureServer hook', () => {
     const callsBeforeEvent = vi.mocked(scanComposableExports).mock.calls.length
     await capturedCallback!('add', '/project/app/composables/use-new.ts')
     expect(vi.mocked(scanComposableExports).mock.calls.length).toBeGreaterThan(callsBeforeEvent)
+  })
+
+  it('re-scans composables when exported identifiers change', async () => {
+    const { createWatcher } = await import('../../plugin/scanner.js')
+    const { scanComposableExports } = await import('../../plugin/dts-generator.js')
+    vi.mocked(scanComposableExports).mockClear()
+
+    let capturedCallback: ((event: string, file: string) => void) | null = null
+    vi.mocked(createWatcher).mockImplementationOnce((_watcher, _dirs, cb) => {
+      capturedCallback = cb
+      return { on: vi.fn(), close: vi.fn() } as unknown as ReturnType<typeof createWatcher>
+    })
+
+    const plugin = getCerPlugin()
+    plugin.config({ root: '/project' }, { command: 'serve', mode: 'development' })
+    plugin.configResolved(FAKE_RESOLVED)
+    const wsSend = vi.fn()
+    await plugin.configureServer({
+      watcher: { on: vi.fn() },
+      moduleGraph: { getModuleById: vi.fn().mockReturnValue(null), invalidateModule: vi.fn() },
+      ws: { send: wsSend },
+    })
+
+    const before = vi.mocked(scanComposableExports).mock.calls.length
+    await capturedCallback!('change', '/project/app/composables/use-example.ts')
+    expect(vi.mocked(scanComposableExports).mock.calls.length).toBeGreaterThan(before)
+    expect(wsSend).toHaveBeenCalledWith({ type: 'full-reload' })
   })
 
   it('does not trigger HMR on non-add/unlink events', async () => {

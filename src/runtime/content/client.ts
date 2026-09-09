@@ -84,7 +84,7 @@ export const ContentClient = {
     // and dist/client/_content/ by cerContent's closeBundle hook.
     // _ssrManifest is a module-level cache — populated once and reused for the
     // lifetime of the process so manifest.json is only read and parsed once at scale.
-    if (typeof window === 'undefined' && typeof process !== 'undefined') {
+    if (import.meta.env.SSR) {
       if (_ssrManifest) return _ssrManifest
       try {
         const { readFileSync, existsSync } = await import('node:fs')
@@ -127,7 +127,7 @@ export const ContentClient = {
     // _ssrItemCache is a module-level Map so each document is read and parsed at
     // most once per process lifetime, regardless of how many concurrent requests
     // ask for the same path.
-    if (typeof window === 'undefined' && typeof process !== 'undefined') {
+    if (import.meta.env.SSR) {
       if (_ssrItemCache.has(path)) return _ssrItemCache.get(path) ?? null
       try {
         const { readFileSync, existsSync } = await import('node:fs')

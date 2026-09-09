@@ -1,3 +1,11 @@
+// Route-owned shared state must be set by every route that owns it. Previously
+// this happened to reset through a document reload; progressive navigation now
+// correctly keeps useState() values alive across routes.
+export const loader = async () => {
+  useState<string>('pageTitle').value = 'Kitchen Sink'
+  return {}
+}
+
 component('page-index', () => {
   useHead({
     title: 'Home — Kitchen Sink',

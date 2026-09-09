@@ -93,7 +93,7 @@ describe('buildSearchIndex', () => {
     })
     const results = index.search('web')
     expect(results.length).toBeGreaterThan(0)
-    const r = results[0] as { _path: string; title: string; description?: string }
+    const r = results[0] as unknown as { _path: string; title: string; description?: string }
     expect(r._path).toBeDefined()
     expect(r.title).toBeDefined()
   })

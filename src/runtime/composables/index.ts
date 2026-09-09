@@ -25,3 +25,19 @@ export type { LocaleComposable } from './use-locale.js'
 export { queryContent, QueryBuilder } from './use-content.js'
 export { useContentSearch } from './use-content-search.js'
 export type { UseContentSearchReturn } from './use-content-search.js'
+export {
+  defineContentPageLoader,
+  normalizeContentPath,
+  useContentBreadcrumbs,
+  useContentHeadings,
+  useContentSeo,
+} from './use-content-page.js'
+export type {
+  ContentBreadcrumb,
+  ContentBreadcrumbOptions,
+  ContentPageData,
+  ContentPageLoaderOptions,
+  ContentSeoOptions,
+} from './use-content-page.js'
+export { useActiveHeadings } from './use-active-headings.js'
+export type { ActiveHeadingsOptions } from './use-active-headings.js'

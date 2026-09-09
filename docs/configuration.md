@@ -15,6 +15,8 @@ export default defineConfig({
     routes: 'auto',
     concurrency: 4,
     fallback: false,
+    failOnError: true,
+    inlineStylesheets: false,
   },
 
   router: {
@@ -32,6 +34,8 @@ export default defineConfig({
     directives: true,
     runtime: true,
   },
+
+  integrations: [],
 })
 ```
 
@@ -85,6 +89,8 @@ ssg: {
   routes: 'auto',
   concurrency: 4,
   fallback: false,
+  failOnError: true,
+  inlineStylesheets: false,
 }
 ```
 
@@ -111,6 +117,38 @@ Number of pages rendered in parallel during the SSG build.
 **Default:** `false`
 
 When `true`, unenumerated dynamic routes fall back to SSR at request time instead of returning 404.
+
+### `ssg.failOnError`
+
+**Type:** `boolean`
+**Default:** `true`
+
+Fails the production build when any enumerated route cannot be rendered. The
+SSG manifest is still written first so CI retains route-level diagnostics. Set
+this to `false` only when a deliberately partial static output is useful; the
+default prevents a successful deployment containing silently missing pages.
+
+### `ssg.inlineStylesheets`
+
+**Type:** `boolean | number`
+**Default:** `false`
+
+Optionally replaces root-relative stylesheet links in generated SSG pages with inline `<style>` elements. This can improve first paint by removing a render-blocking request when an application has a small critical stylesheet.
+
+```ts
+ssg: {
+  // Inline only stylesheets no larger than 20 KiB.
+  inlineStylesheets: 20 * 1024,
+}
+```
+
+- `false` keeps all stylesheet links unchanged.
+- `true` inlines every root-relative stylesheet that can be read from the client build.
+- A positive number is the maximum UTF-8 byte size of each stylesheet to inline. Larger files remain external and cacheable.
+
+Only root-relative local URLs such as `/assets/app.css` are eligible. Cross-origin, protocol-relative, alternate, disabled, missing, and unreadable stylesheets remain unchanged. Repeated links are loaded once during each page's post-processing pass. Relevant style attributes such as `media`, `nonce`, and `title` are preserved.
+
+Inlining repeats CSS in every generated HTML document, so use a byte limit for sites with many pages or larger stylesheets. It also changes Content Security Policy requirements: configure a nonce or allow the resulting inline styles through your `style-src` policy. This option affects SSG output only; SPA and runtime SSR responses are unchanged.
 
 ---
 
@@ -297,6 +335,7 @@ When set, the SSG build automatically applies the following to every generated H
 |---|---|
 | **Canonical link** | Injects `<link rel="canonical" href="${siteUrl}${path}">` before `</head>` on every page, unless a canonical is already present |
 | **robots.txt** | Writes `dist/robots.txt` with `Allow: /` and a `Sitemap:` directive pointing to `${siteUrl}/sitemap.xml` — skipped when `public/robots.txt` already exists |
+| **sitemap.xml** | Writes `dist/sitemap.xml` containing one `<url>` entry per successfully-rendered page, using today's build date as `<lastmod>` — skipped when `public/sitemap.xml` already exists |
 
 `siteUrl` is also available at runtime via `useRuntimeConfig().public.siteUrl`. User-supplied `runtimeConfig.public.siteUrl` takes precedence over the shorthand.
 
@@ -649,6 +688,48 @@ import type {
   RequestHookContext,
   ResponseHookContext,
 } from '@jasonshimmy/vite-plugin-cer-app/types'
+```
+
+---
+
+## Integrations
+
+Use `integrations` for UI or framework packages that provide component
+resolution, entry imports, and companion Vite plugins as one tested unit. This
+lets package custom elements work directly in templates while retaining
+per-component code splitting.
+
+```ts
+import { defineConfig } from '@jasonshimmy/vite-plugin-cer-app'
+import { cerMaterial } from '@jasonshimmy/cer-material/vite'
+
+export default defineConfig({
+  integrations: [cerMaterial({
+    symbols: { include: ['dynamic_icon'] },
+  })],
+})
+```
+
+Local components take precedence over integration-provided tags, so an
+application can intentionally override a package component. Integration global
+imports are included in both generated client and server entries.
+
+---
+
+## Additional Vite plugins
+
+Use `plugins` for standalone Vite plugins that do not need component resolution
+or generated-entry imports. They run after CER App's built-in routing, JIT CSS,
+auto-import, and content plugins. This is separate from application plugins
+discovered in `app/plugins/`.
+
+```ts
+import { defineConfig } from '@jasonshimmy/vite-plugin-cer-app'
+import inspect from 'vite-plugin-inspect'
+
+export default defineConfig({
+  plugins: [inspect()],
+})
 ```
 
 ---

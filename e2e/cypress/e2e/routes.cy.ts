@@ -2,7 +2,7 @@
  * Routes test — verifies every route renders correct content in all build modes.
  */
 
-const mode = Cypress.env('mode') as 'spa' | 'ssr' | 'ssg'
+const mode = Cypress.expose('mode') as 'spa' | 'ssr' | 'ssg'
 
 describe('Route rendering', () => {
   context('Home page (/)', () => {

@@ -5,7 +5,7 @@
  * In all modes: tags should be set after client-side hydration.
  */
 
-const mode = Cypress.env('mode') as 'spa' | 'ssr' | 'ssg'
+const mode = Cypress.expose('mode') as 'spa' | 'ssr' | 'ssg'
 
 describe('useHead() — document title', () => {
   it('sets title to "Home — Kitchen Sink" on home page', () => {

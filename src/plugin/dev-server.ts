@@ -21,10 +21,17 @@ export interface ResolvedCerConfig {
   serverApiDir: string
   serverMiddlewareDir: string
   port: number
-  ssg: { routes: 'auto' | string[]; concurrency: number; fallback: boolean }
+  ssg: {
+    routes: 'auto' | string[]
+    concurrency: number
+    fallback: boolean
+    failOnError: boolean
+    inlineStylesheets: false | number
+  }
   router: { base?: string; scrollToFragment?: boolean | object }
-  jitCss: { content: string[]; extendedColors: boolean; customColors?: Record<string, Record<string, string>> }
+  jitCss: { content: string[]; extendedColors: boolean | string[]; customColors?: Record<string, Record<string, string>> }
   autoImports: { components: boolean; composables: boolean; directives: boolean; runtime: boolean }
+  globalImports: string[]
   runtimeConfig: { public: Record<string, unknown>; private: import('../types/config.js').RuntimePrivateConfig }
   auth: import('../types/config.js').AuthConfig | null
   i18n: { locales: string[]; defaultLocale: string; strategy: 'prefix' | 'prefix_except_default' | 'no_prefix' } | null

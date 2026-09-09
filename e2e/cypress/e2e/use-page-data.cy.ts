@@ -19,7 +19,14 @@
 
 export {}
 
-const mode = Cypress.env('mode') as 'spa' | 'ssr' | 'ssg' | 'dev'
+const mode = Cypress.expose('mode') as 'spa' | 'ssr' | 'ssg' | 'dev'
+const hydratedPage = (tag: string) =>
+  cy
+    .get(tag)
+    .should(($host) => {
+      expect($host).to.have.attr('data-cer-hydrated')
+    })
+    .shadow()
 
 // ─── Blog list — hard refresh ─────────────────────────────────────────────
 
@@ -35,10 +42,9 @@ describe('usePageData() — blog list hard refresh', () => {
 
     it('usePageData() is non-null during hydration re-render (data-source = "ssr")', () => {
       cy.visit('/blog')
-      // Scope to the live shadow DOM (not the DSD pre-render copy) so the assertion
-      // targets the element created during hydration where usePageData() was called.
+      // Scope to the live retained DSD shadow root upgraded during hydration.
       // 'ssr' proves queueMicrotask deferred the delete until after the render ran.
-      cy.get('cer-layout-view').shadow().find('page-blog').shadow()
+      hydratedPage('page-blog')
         .find('[data-cy=blog-data-source]').should('have.text', 'ssr')
     })
   }
@@ -51,7 +57,7 @@ describe('usePageData() — blog list hard refresh', () => {
       cy.intercept('GET', '/api/posts').as('apiFetch')
       cy.visit('/blog')
       // Wait for the page component to fully hydrate before asserting no requests.
-      cy.get('cer-layout-view').shadow().find('page-blog').shadow()
+      hydratedPage('page-blog')
         .find('[data-cy=blog-list]').should('exist')
       cy.get('@apiFetch.all').should('have.length', 0)
     })
@@ -76,7 +82,7 @@ describe('usePageData() — blog detail hard refresh', () => {
 
     it('usePageData() is non-null during hydration re-render on detail page', () => {
       cy.visit('/blog/first-post')
-      cy.get('cer-layout-view').shadow().find('page-blog-slug').shadow()
+      hydratedPage('page-blog-slug')
         .find('[data-cy=blog-detail-data-source]').should('have.text', 'ssr')
     })
   }
@@ -85,7 +91,7 @@ describe('usePageData() — blog detail hard refresh', () => {
     it('no /api/posts/:slug network request is made — usePageData() skips client fetch', () => {
       cy.intercept('GET', '/api/posts/*').as('apiPostDetail')
       cy.visit('/blog/first-post')
-      cy.get('cer-layout-view').shadow().find('page-blog-slug').shadow()
+      hydratedPage('page-blog-slug')
         .find('[data-cy=post-title]').should('exist')
       cy.get('@apiPostDetail.all').should('have.length', 0)
     })
@@ -107,16 +113,24 @@ describe('usePageData() — blog detail hard refresh', () => {
 describe('usePageData() — client-side navigation', () => {
   it('navigating to blog from home shows posts', () => {
     cy.visit('/')
-    cy.get('[data-cy=page-nav]').find('a[href="/blog"]').first().click({ force: true })
-    cy.get('[data-cy=blog-item]', { timeout: 8000 }).should('have.length.at.least', 2)
+    hydratedPage('page-index').find('[data-cy=page-nav] a[href="/blog"]').click()
+    hydratedPage('page-blog')
+      .find('[data-cy=blog-item]', { timeout: 8000 })
+      .should('have.length.at.least', 2)
   })
 
   it('navigating between blog posts loads correct data each time', () => {
     cy.visit('/blog/first-post')
-    cy.get('[data-cy=post-title]', { timeout: 8000 }).should('contain', 'First Post')
-    cy.get('[data-cy=post-back]').first().click({ force: true })
+    hydratedPage('page-blog-slug')
+      .find('[data-cy=post-title]', { timeout: 8000 })
+      .should('contain', 'First Post')
+    hydratedPage('page-blog-slug').find('[data-cy=post-back]').click()
     cy.url().should('include', '/blog')
-    cy.get('[data-cy=blog-link-second-post]', { timeout: 8000 }).first().click({ force: true })
-    cy.get('[data-cy=post-title]', { timeout: 8000 }).should('contain', 'Second Post')
+    hydratedPage('page-blog')
+      .find('[data-cy=blog-link-second-post]', { timeout: 8000 })
+      .click()
+    hydratedPage('page-blog-slug')
+      .find('[data-cy=post-title]', { timeout: 8000 })
+      .should('contain', 'Second Post')
   })
 })

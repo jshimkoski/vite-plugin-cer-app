@@ -13,7 +13,16 @@ import { fileURLToPath } from 'node:url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
-type AppMode = 'spa' | 'ssr' | 'ssg'
+export type AppMode = 'spa' | 'ssr' | 'ssg'
+
+export interface CreateProjectOptions {
+  projectName: string
+  targetDir: string
+  mode: AppMode
+  material?: boolean
+  content?: boolean
+  tests?: boolean
+}
 
 /**
  * Prompts the user for input on stdin.
@@ -127,6 +136,136 @@ function getModeTemplateDir(mode: AppMode): string {
   return join(__dirname, 'templates', mode)
 }
 
+async function readOwnVersion(): Promise<string> {
+  const packagePath = join(__dirname, '../../../package.json')
+  const pkg = JSON.parse(await readFile(packagePath, 'utf-8')) as { version?: string }
+  if (!pkg.version) throw new Error(`Missing package version in ${packagePath}`)
+  return pkg.version
+}
+
+async function addMaterialPreset(targetDir: string): Promise<void> {
+  const packagePath = join(targetDir, 'package.json')
+  const pkg = JSON.parse(await readFile(packagePath, 'utf-8')) as {
+    dependencies: Record<string, string>
+  }
+  pkg.dependencies['@jasonshimmy/cer-material'] = '^0.7.2'
+  pkg.dependencies['material-symbols'] = '^0.46.0'
+  await writeFile(packagePath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf-8')
+
+  const configPath = join(targetDir, 'cer.config.ts')
+  const config = await readFile(configPath, 'utf-8')
+  const withImport = config.replace(
+    "import { defineConfig } from '@jasonshimmy/vite-plugin-cer-app'",
+    "import { defineConfig } from '@jasonshimmy/vite-plugin-cer-app'\nimport { cerMaterial } from '@jasonshimmy/cer-material/vite'",
+  )
+  const configured = withImport.replace(/\n}\)\s*$/, '\n  integrations: [cerMaterial()],\n})\n')
+  await writeFile(configPath, configured, 'utf-8')
+}
+
+async function addContentPreset(targetDir: string): Promise<void> {
+  const pagesDir = join(targetDir, 'app/pages')
+  const contentDir = join(targetDir, 'content')
+  await mkdir(pagesDir, { recursive: true })
+  await mkdir(contentDir, { recursive: true })
+  await writeFile(join(pagesDir, '[...all].ts'), `component('page-content', () => {
+  const props = useProps({ all: '' })
+  const data = usePageData<ContentPageData>()
+  const path = normalizeContentPath(props.all)
+  const doc = data?.doc ?? null
+  const breadcrumbs = useContentBreadcrumbs(path, doc, data?.existingPaths)
+
+  useContentSeo({
+    doc,
+    path,
+    siteUrl: useRuntimeConfig().public.siteUrl as string ?? 'http://localhost:3000',
+    breadcrumbs,
+  })
+
+  return doc ? html\`
+    <nav aria-label="Breadcrumb">
+      \${breadcrumbs.map((crumb) => crumb.isLast
+        ? html\`<span aria-current="page">\${crumb.label}</span>\`
+        : crumb.hasPage
+          ? html\`<a :href="\${crumb.path}">\${crumb.label}</a> / \`
+          : html\`<span>\${crumb.label}</span> / \`)}
+    </nav>
+    <article>\${unsafeHTML(doc.body)}</article>
+  \` : html\`<h1>Page not found</h1>\`
+})
+
+export const loader = defineContentPageLoader()
+export const meta = { hydrate: 'none' as const }
+`, 'utf-8')
+  await writeFile(join(contentDir, 'getting-started.md'), `---
+title: Getting Started
+description: Build your first CER application.
+---
+
+# Getting Started
+
+Add your Markdown content here. File paths become application routes automatically.
+
+## Next steps
+
+Edit \`app/layouts/default.ts\` to customize the surrounding application shell.
+`, 'utf-8')
+}
+
+async function addTestsPreset(targetDir: string): Promise<void> {
+  const packagePath = join(targetDir, 'package.json')
+  const pkg = JSON.parse(await readFile(packagePath, 'utf-8')) as {
+    scripts: Record<string, string>
+    devDependencies: Record<string, string>
+  }
+  pkg.scripts['test:e2e'] = 'start-server-and-test preview http://127.0.0.1:4173 "cypress run"'
+  pkg.scripts.validate += ' && npm run test:e2e'
+  pkg.devDependencies.cypress = '^15.21.0'
+  pkg.devDependencies['start-server-and-test'] = '^2.1.3'
+  await writeFile(packagePath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf-8')
+
+  await mkdir(join(targetDir, 'cypress/e2e'), { recursive: true })
+  await writeFile(join(targetDir, 'cypress.config.ts'), `import { defineConfig } from 'cypress'
+
+export default defineConfig({
+  video: false,
+  e2e: {
+    baseUrl: 'http://127.0.0.1:4173',
+    includeShadowDom: true,
+    supportFile: false,
+  },
+})
+`, 'utf-8')
+  await writeFile(join(targetDir, 'cypress/e2e/smoke.cy.ts'), `describe('generated application', () => {
+  it('renders and navigates without a document reload', () => {
+    cy.visit('/')
+    cy.get('cer-layout-view').should('exist')
+    cy.get('main').should('exist')
+  })
+})
+`, 'utf-8')
+}
+
+/** Generate a project without prompting. Exported so every scaffold variant is testable. */
+export async function createProject(options: CreateProjectOptions): Promise<void> {
+  const sharedDir = getSharedTemplateDir()
+  const modeDir = getModeTemplateDir(options.mode)
+  if (!existsSync(sharedDir) || !existsSync(modeDir)) {
+    throw new Error(`[create-cer-app] Template directory is missing: ${!existsSync(sharedDir) ? sharedDir : modeDir}`)
+  }
+
+  const files = new Map<string, string>()
+  for (const [key, value] of await readTemplateFiles(sharedDir)) files.set(key, value)
+  for (const [key, value] of await readTemplateFiles(modeDir)) files.set(key, value)
+  await writeTemplateFiles(files, options.targetDir, {
+    projectName: options.projectName,
+    pluginVersion: await readOwnVersion(),
+  })
+
+  if (options.material) await addMaterialPreset(options.targetDir)
+  if (options.content) await addContentPreset(options.targetDir)
+  if (options.tests) await addTestsPreset(options.targetDir)
+}
+
 async function main(): Promise<void> {
   const program = new Command()
 
@@ -136,7 +275,10 @@ async function main(): Promise<void> {
     .argument('[project-name]', 'Name of the project to create')
     .option('--mode <mode>', 'App mode: spa, ssr, or ssg')
     .option('--dir <dir>', 'Directory to create the project in (defaults to project name)')
-    .action(async (projectNameArg?: string, options?: { mode?: string; dir?: string }) => {
+    .option('--material', 'Add CER Material with automatic component imports and optimized symbols')
+    .option('--content', 'Add a loader-backed Markdown content route')
+    .option('--tests', 'Add a Cypress smoke suite')
+    .action(async (projectNameArg?: string, options?: { mode?: string; dir?: string; material?: boolean; content?: boolean; tests?: boolean }) => {
       console.log('\nWelcome to create-cer-app!\n')
 
       // Gather inputs
@@ -155,24 +297,14 @@ async function main(): Promise<void> {
         }
       }
 
-      // Load template files: shared first, then mode-specific (mode overrides shared)
-      const sharedDir = getSharedTemplateDir()
-      const modeDir = getModeTemplateDir(mode)
-
-      if (!existsSync(sharedDir) && !existsSync(modeDir)) {
-        // Fallback: generate minimal template inline
-        console.warn(`[create-cer-app] Template directory not found at ${modeDir}, using inline template.`)
-        await generateInlineTemplate(targetDir, projectName, mode)
-      } else {
-        const files = new Map<string, string>()
-        if (existsSync(sharedDir)) {
-          for (const [k, v] of await readTemplateFiles(sharedDir)) files.set(k, v)
-        }
-        if (existsSync(modeDir)) {
-          for (const [k, v] of await readTemplateFiles(modeDir)) files.set(k, v)
-        }
-        await writeTemplateFiles(files, targetDir, { projectName })
-      }
+      await createProject({
+        projectName,
+        targetDir,
+        mode,
+        material: options?.material,
+        content: options?.content,
+        tests: options?.tests,
+      })
 
       console.log(`\nProject created! To get started:\n`)
       console.log(`  cd ${basename(targetDir)}`)
@@ -183,93 +315,9 @@ async function main(): Promise<void> {
   await program.parseAsync(process.argv)
 }
 
-/**
- * Generates a minimal project structure inline when templates aren't available.
- */
-async function generateInlineTemplate(
-  targetDir: string,
-  projectName: string,
-  mode: AppMode,
-): Promise<void> {
-  await mkdir(join(targetDir, 'app/pages'), { recursive: true })
-  await mkdir(join(targetDir, 'app/layouts'), { recursive: true })
-  await mkdir(join(targetDir, 'app/components'), { recursive: true })
-  await mkdir(join(targetDir, 'app/composables'), { recursive: true })
-  await mkdir(join(targetDir, 'app/plugins'), { recursive: true })
-  await mkdir(join(targetDir, 'app/middleware'), { recursive: true })
-
-  // package.json
-  await writeFile(
-    join(targetDir, 'package.json'),
-    JSON.stringify(
-      {
-        name: projectName,
-        version: '0.1.0',
-        type: 'module',
-        scripts: {
-          dev: 'cer-app dev',
-          build: 'cer-app build',
-          preview: 'cer-app preview',
-        },
-        dependencies: {
-          '@jasonshimmy/custom-elements-runtime': '^3.2.1',
-        },
-        devDependencies: {
-          vite: '^8.0.1',
-          '@jasonshimmy/vite-plugin-cer-app': '^0.4.2',
-          typescript: '^5.9.3',
-        },
-      },
-      null,
-      2,
-    ),
-    'utf-8',
-  )
-
-  // cer.config.ts
-  await writeFile(
-    join(targetDir, 'cer.config.ts'),
-    `import { defineConfig } from '@jasonshimmy/vite-plugin-cer-app'\n\nexport default defineConfig({\n  mode: '${mode}',\n  autoImports: { components: true, composables: true, directives: true, runtime: true },\n})\n`,
-    'utf-8',
-  )
-
-  // app/pages/index.ts
-  await writeFile(
-    join(targetDir, 'app/pages/index.ts'),
-    `component('page-index', () => {\n  return html\`\n    <div>\n      <h1>Welcome to ${projectName}</h1>\n      <p>Edit <code>app/pages/index.ts</code> to get started.</p>\n    </div>\n  \`\n})\n`,
-    'utf-8',
-  )
-
-  // app/layouts/default.ts
-  await writeFile(
-    join(targetDir, 'app/layouts/default.ts'),
-    `component('layout-default', () => {\n  return html\`\n    <header><nav><router-link to="/">Home</router-link></nav></header>\n    <main><slot></slot></main>\n    <footer><p>Built with CER App</p></footer>\n  \`\n})\n`,
-    'utf-8',
-  )
-
-  // .gitignore
-  await writeFile(
-    join(targetDir, '.gitignore'),
-    `# Dependencies\nnode_modules/\n\n# Build output\ndist/\n\n# CER App generated directory\n.cer/\n\n# Environment variables\n.env.local\n.env.*.local\n\n# Editor\n.vscode/\n.idea/\n*.suo\n*.sw?\n\n# OS\n.DS_Store\nThumbs.db\n\n# Logs\n*.log\n`,
-    'utf-8',
-  )
-
-  // tsconfig.json
-  await writeFile(
-    join(targetDir, 'tsconfig.json'),
-    `{\n  "extends": "./.cer/tsconfig.json"\n}\n`,
-    'utf-8',
-  )
-
-  // index.html
-  await writeFile(
-    join(targetDir, 'index.html'),
-    `<!DOCTYPE html>\n<html lang="en">\n  <head>\n    <meta charset="UTF-8">\n    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n    <title>${projectName}</title>\n  </head>\n  <body>\n    <cer-layout-view></cer-layout-view>\n    <script type="module" src="/@cer/app.ts"></script>\n  </body>\n</html>\n`,
-    'utf-8',
-  )
+if (process.argv[1] && resolve(process.argv[1]) === __filename) {
+  main().catch((err) => {
+    console.error('[create-cer-app] Fatal error:', err)
+    process.exit(1)
+  })
 }
-
-main().catch((err) => {
-  console.error('[create-cer-app] Fatal error:', err)
-  process.exit(1)
-})

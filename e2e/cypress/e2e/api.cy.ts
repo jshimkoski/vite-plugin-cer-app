@@ -4,7 +4,7 @@
  * Only run in SSR mode — SSG and SPA don't have live API endpoints.
  */
 
-const mode = Cypress.env('mode') as 'spa' | 'ssr' | 'ssg'
+const mode = Cypress.expose('mode') as 'spa' | 'ssr' | 'ssg'
 
 if (mode !== 'ssr') {
   describe('Server API routes', () => {

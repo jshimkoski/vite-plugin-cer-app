@@ -36,11 +36,20 @@ Project created! To get started:
   npm run dev
 ```
 
-You can also skip the prompts with flags:
+You can also skip the prompts and add production-ready presets with flags:
 
 ```sh
-npx --package @jasonshimmy/vite-plugin-cer-app create-cer-app my-app --mode ssr
+npx --package @jasonshimmy/vite-plugin-cer-app create-cer-app my-app \
+  --mode ssg --material --content --tests
 ```
+
+- `--material` installs and configures the `cerMaterial()` integration, including
+  per-component imports, theme CSS, and production Material Symbols subsetting.
+- `--content` adds a Markdown-backed catch-all route using the built-in content
+  loader, breadcrumbs, SEO, and path normalization helpers.
+- `--tests` adds a Cypress smoke test and includes it in `npm run validate`.
+
+Presets compose, so use only the pieces the application needs.
 
 ---
 
@@ -147,6 +156,13 @@ The framework automatically generates `.cer/tsconfig.json` with `~/` path aliase
   "extends": "./.cer/tsconfig.json"
 }
 ```
+
+The generated base config targets ES2022 with bundler module resolution and
+the modern DOM libraries expected by Vite. It type-checks your configured
+source directory, `server/`, and the generated declaration files, while
+excluding framework-owned implementation files such as `.cer/app.ts` and
+`.cer/entry-server.ts`. As a result, `tsc --noEmit` reports application errors
+without leaking internal bootstrap diagnostics into your project.
 
 The generated aliases map:
 

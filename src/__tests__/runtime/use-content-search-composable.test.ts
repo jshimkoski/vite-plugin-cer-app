@@ -52,7 +52,7 @@ const ITEMS: ContentItem[] = [
 //
 // The mock simulates just enough of the runtime for these unit tests:
 //   _currentMockContext    — fresh plain object each test; receives _cerSearchDebounce
-//   _connectedCallbacks    — useOnConnected callbacks (pre-warm only in new implementation)
+//   _connectedCallbacks    — useOnConnected callbacks (search should not register one)
 //   _disconnectedCallbacks — useOnDisconnected callbacks (timer cleanup)
 //   _watchCallback         — the single watch(query, cb) handler registered during render
 
@@ -76,7 +76,7 @@ vi.mock('@jasonshimmy/custom-elements-runtime', () => ({
   watch: (_state: unknown, cb: (val: string) => void) => {
     _watchCallback = cb
   },
-  // Capture useOnConnected callbacks for manual triggering (pre-warm only).
+  // Capture useOnConnected callbacks so eager index loading is observable.
   useOnConnected: (cb: () => void) => {
     _connectedCallbacks.push(cb)
   },
@@ -317,16 +317,15 @@ describe('useContentSearch() composable', () => {
     expect((result.results as Ref<unknown[]>).value).toEqual([])
   })
 
-  // ─── Pre-warm ──────────────────────────────────────────────────────────────
+  // ─── Lazy index loading ────────────────────────────────────────────────────
 
-  it('registers a useOnConnected callback for index pre-warming', () => {
-    expect(_connectedCallbacks).toHaveLength(1)
+  it('does not register a mount callback just to pre-warm search', () => {
+    expect(_connectedCallbacks).toHaveLength(0)
   })
 
-  it('pre-warms the index on mount (triggers a fetch)', async () => {
+  it('does not fetch the search index when the search UI merely mounts', () => {
     triggerConnected()
-    // fetch is called by the pre-warm (loadIndex inside useOnConnected)
-    expect(globalThis.fetch).toHaveBeenCalledTimes(1)
+    expect(globalThis.fetch).not.toHaveBeenCalled()
   })
 
   // ─── Re-render stability ───────────────────────────────────────────────────

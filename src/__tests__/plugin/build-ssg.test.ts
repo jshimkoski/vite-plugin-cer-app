@@ -1,10 +1,17 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 
-vi.mock('node:fs', () => ({ existsSync: vi.fn().mockReturnValue(false) }))
+vi.mock('node:fs', () => ({
+  existsSync: vi.fn().mockReturnValue(false),
+  statSync: vi.fn().mockReturnValue({ isDirectory: () => false }),
+}))
 vi.mock('node:fs/promises', () => ({
   writeFile: vi.fn().mockResolvedValue(undefined),
   mkdir: vi.fn().mockResolvedValue(undefined),
   readFile: vi.fn().mockResolvedValue(''),
+  readdir: vi.fn().mockResolvedValue([]),
+  copyFile: vi.fn().mockResolvedValue(undefined),
+  cp: vi.fn().mockResolvedValue(undefined),
+  rm: vi.fn().mockResolvedValue(undefined),
 }))
 vi.mock('fast-glob', () => ({ default: vi.fn().mockResolvedValue([]) }))
 vi.mock('vite', () => ({
@@ -15,22 +22,23 @@ vi.mock('../../plugin/build-ssr.js', () => ({ buildSSR: vi.fn().mockResolvedValu
 vi.mock('../../plugin/path-utils.js', () => ({ buildRouteEntry: vi.fn() }))
 
 import { existsSync } from 'node:fs'
-import { writeFile, mkdir, readFile } from 'node:fs/promises'
+import { writeFile, mkdir, readFile, cp, readdir, rm } from 'node:fs/promises'
 import fg from 'fast-glob'
 import { createServer } from 'vite'
 import { buildSSR } from '../../plugin/build-ssr.js'
 import { buildRouteEntry } from '../../plugin/path-utils.js'
-import { buildSSG, writeRenderedPath } from '../../plugin/build-ssg.js'
+import { buildSSG, copyClientPublicAssets, writeRenderedPath } from '../../plugin/build-ssg.js'
 import type { ResolvedCerConfig } from '../../plugin/dev-server.js'
 
 function makeConfig(overrides: Partial<ResolvedCerConfig> = {}): ResolvedCerConfig {
+  const { ssg, ...rest } = overrides
   return {
     root: '/project',
     srcDir: '/project/app',
     pagesDir: '/project/app/pages',
     mode: 'ssg',
-    ssg: { concurrency: 4 },
-    ...overrides,
+    ssg: { concurrency: 4, failOnError: false, ...ssg },
+    ...rest,
   } as unknown as ResolvedCerConfig
 }
 
@@ -38,6 +46,7 @@ beforeEach(() => {
   vi.mocked(buildSSR).mockClear()
   vi.mocked(writeFile).mockClear()
   vi.mocked(mkdir).mockClear()
+  vi.mocked(rm).mockClear()
   vi.mocked(fg).mockClear()
   vi.mocked(readFile).mockClear()
   vi.mocked(existsSync).mockReturnValue(false)
@@ -47,6 +56,14 @@ beforeEach(() => {
 })
 
 describe('buildSSG — buildSSR delegation', () => {
+  it('cleans the generated deployment directory before rebuilding', async () => {
+    await buildSSG(makeConfig())
+    expect(rm).toHaveBeenCalledWith('/project/dist', { recursive: true, force: true })
+    expect(vi.mocked(rm).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(buildSSR).mock.invocationCallOrder[0],
+    )
+  })
+
   it('calls buildSSR as step 1', async () => {
     await buildSSG(makeConfig())
     expect(buildSSR).toHaveBeenCalledTimes(1)
@@ -56,6 +73,37 @@ describe('buildSSG — buildSSR delegation', () => {
     const config = makeConfig()
     await buildSSG(config)
     expect(vi.mocked(buildSSR).mock.calls[0][0]).toBe(config)
+  })
+})
+
+describe('copyClientPublicAssets', () => {
+  it('copies compiled assets and public entries but not the client HTML shell', async () => {
+    vi.mocked(existsSync).mockImplementation((path) => String(path) === '/project/dist/client')
+    vi.mocked(readdir).mockResolvedValueOnce([
+      'assets',
+      'index.html',
+      'favicon.ico',
+      'images',
+    ] as never)
+
+    await copyClientPublicAssets('/project/dist/client', '/project/dist')
+
+    expect(cp).toHaveBeenCalledWith(
+      '/project/dist/client/favicon.ico',
+      '/project/dist/favicon.ico',
+      { recursive: true, force: true },
+    )
+    expect(cp).toHaveBeenCalledWith(
+      '/project/dist/client/images',
+      '/project/dist/images',
+      { recursive: true, force: true },
+    )
+    expect(cp).toHaveBeenCalledWith(
+      '/project/dist/client/assets',
+      '/project/dist/assets',
+      { recursive: true, force: true },
+    )
+    expect(vi.mocked(cp).mock.calls.some(([path]) => String(path).endsWith('/index.html'))).toBe(false)
   })
 })
 
@@ -121,6 +169,21 @@ describe('buildSSG — ssg-manifest.json', () => {
       expect(manifest.errors[0]).toHaveProperty('path')
       expect(manifest.errors[0]).toHaveProperty('error')
     }
+  })
+
+  it('fails the build after writing the manifest when a route cannot render', async () => {
+    const config = makeConfig({
+      ssg: { routes: ['/fail'], concurrency: 1, failOnError: true },
+    } as Partial<ResolvedCerConfig>)
+
+    await expect(buildSSG(config)).rejects.toThrow(/failed to render 1 of 1 page/i)
+    const manifestCall = vi.mocked(writeFile).mock.calls.find(([path]) =>
+      String(path).includes('ssg-manifest.json'),
+    )
+    expect(manifestCall).toBeDefined()
+    const manifest = JSON.parse(String(manifestCall![1]))
+    expect(manifest.errors).toHaveLength(1)
+    expect(manifest.errors[0].path).toBe('/fail')
   })
 })
 
@@ -281,6 +344,36 @@ describe('buildSSG — path collection', () => {
     )
     const manifest = JSON.parse(String(manifestCall![1]))
     expect(manifest.paths.length + manifest.errors.length).toBe(3)
+
+    delete (globalThis as Record<string, unknown>).__CER_CONTENT_STORE__
+  })
+
+  it('auto-expands catch-all pages using the reusable content page loader', async () => {
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(fg).mockResolvedValue(['/project/app/pages/[...all].ts'])
+    vi.mocked(readFile).mockResolvedValue('export const loader = defineContentPageLoader()')
+    vi.mocked(buildRouteEntry).mockReturnValueOnce({
+      routePath: '/:all*',
+      isDynamic: true,
+      isCatchAll: true,
+    } as ReturnType<typeof buildRouteEntry>)
+
+    ;(globalThis as Record<string, unknown>).__CER_CONTENT_STORE__ = [
+      { _path: '/docs/production' },
+    ]
+
+    vi.mocked(createServer).mockResolvedValue({
+      ssrLoadModule: vi.fn().mockResolvedValue({}),
+      close: vi.fn().mockResolvedValue(undefined),
+    } as unknown as Awaited<ReturnType<typeof createServer>>)
+
+    await buildSSG(makeConfig({ ssg: { concurrency: 1 } } as Partial<ResolvedCerConfig>))
+
+    const manifestCall = vi.mocked(writeFile).mock.calls.find(([p]) =>
+      String(p).includes('ssg-manifest.json'),
+    )
+    const manifest = JSON.parse(String(manifestCall![1]))
+    expect(manifest.paths.length + manifest.errors.length).toBe(2)
 
     delete (globalThis as Record<string, unknown>).__CER_CONTENT_STORE__
   })
@@ -594,5 +687,66 @@ describe('buildSSG — i18n locale path expansion', () => {
     )
     const manifest = JSON.parse(String(manifestCall![1]))
     expect(manifest.paths.length + manifest.errors.length).toBe(1)
+  })
+})
+
+// ─── sitemap.xml generation ───────────────────────────────────────────────────
+
+describe('buildSSG — sitemap.xml', () => {
+  it('does not write sitemap.xml when siteUrl is not set', async () => {
+    await buildSSG(makeConfig())
+    const sitemapCall = vi.mocked(writeFile).mock.calls.find(([p]) =>
+      String(p).includes('sitemap.xml'),
+    )
+    expect(sitemapCall).toBeUndefined()
+  })
+
+  it('writes sitemap.xml to dist/ when siteUrl is set', async () => {
+    const config = makeConfig({ siteUrl: 'https://example.com' })
+    await buildSSG(config)
+    const sitemapCall = vi.mocked(writeFile).mock.calls.find(([p]) =>
+      String(p).includes('sitemap.xml'),
+    )
+    expect(sitemapCall).toBeDefined()
+    expect(String(sitemapCall![0])).toContain('/project/dist/sitemap.xml')
+  })
+
+  it('sitemap content starts with XML declaration', async () => {
+    const config = makeConfig({ siteUrl: 'https://example.com' })
+    await buildSSG(config)
+    const sitemapCall = vi.mocked(writeFile).mock.calls.find(([p]) =>
+      String(p).includes('sitemap.xml'),
+    )
+    expect(String(sitemapCall![1])).toContain('<?xml version="1.0" encoding="UTF-8"?>')
+  })
+
+  it('sitemap content contains urlset with sitemap protocol namespace', async () => {
+    const config = makeConfig({ siteUrl: 'https://example.com' })
+    await buildSSG(config)
+    const sitemapCall = vi.mocked(writeFile).mock.calls.find(([p]) =>
+      String(p).includes('sitemap.xml'),
+    )
+    expect(String(sitemapCall![1])).toContain(
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    )
+  })
+
+  it('does not write sitemap.xml when public/sitemap.xml already exists', async () => {
+    vi.mocked(existsSync).mockImplementation((p) => String(p).includes('public/sitemap.xml'))
+    const config = makeConfig({ siteUrl: 'https://example.com' })
+    await buildSSG(config)
+    const sitemapCall = vi.mocked(writeFile).mock.calls.find(([p]) =>
+      String(p).includes('sitemap.xml'),
+    )
+    expect(sitemapCall).toBeUndefined()
+  })
+
+  it('writes sitemap.xml with utf-8 encoding', async () => {
+    const config = makeConfig({ siteUrl: 'https://example.com' })
+    await buildSSG(config)
+    const sitemapCall = vi.mocked(writeFile).mock.calls.find(([p]) =>
+      String(p).includes('sitemap.xml'),
+    )
+    expect(sitemapCall![2]).toBe('utf-8')
   })
 })

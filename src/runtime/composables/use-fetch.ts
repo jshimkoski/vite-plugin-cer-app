@@ -75,7 +75,8 @@ export interface UseFetchReactiveReturn<T = unknown> {
 /** Options for `useFetch()`. Controls caching, SSR behaviour, data transformation, and HTTP request details. */
 export interface UseFetchOptions<T = unknown> {
   /**
-   * Unique cache key.  Defaults to the full URL string (including query params).
+   * Unique cache key. Defaults to a request signature containing the full URL,
+   * HTTP method, body, and headers. Plain GET requests use the URL itself.
    *
    * On the server, calls sharing the same key within one request reuse the
    * first result without issuing a second network request.  On the client,
@@ -187,6 +188,66 @@ function appendQuery(url: string, query?: Record<string, string>): string {
   return url + sep + new URLSearchParams(query).toString()
 }
 
+/** Compact 128-bit request fingerprint; keeps bodies and headers out of HTML keys. */
+function fingerprintRequest(input: string): string {
+  let h1 = 1779033703
+  let h2 = 3144134277
+  let h3 = 1013904242
+  let h4 = 2773480762
+  for (let i = 0; i < input.length; i++) {
+    const code = input.charCodeAt(i)
+    h1 = h2 ^ Math.imul(h1 ^ code, 597399067)
+    h2 = h3 ^ Math.imul(h2 ^ code, 2869860233)
+    h3 = h4 ^ Math.imul(h3 ^ code, 951274213)
+    h4 = h1 ^ Math.imul(h4 ^ code, 2716044179)
+  }
+  h1 = Math.imul(h3 ^ (h1 >>> 18), 597399067)
+  h2 = Math.imul(h4 ^ (h2 >>> 22), 2869860233)
+  h3 = Math.imul(h1 ^ (h3 >>> 17), 951274213)
+  h4 = Math.imul(h2 ^ (h4 >>> 19), 2716044179)
+  h1 ^= h2 ^ h3 ^ h4
+  h2 ^= h1
+  h3 ^= h1
+  h4 ^= h1
+  return [h1, h2, h3, h4]
+    .map((value) => (value >>> 0).toString(16).padStart(8, '0'))
+    .join('')
+}
+
+function getRequestKey<T>(resolvedUrl: string, options?: UseFetchOptions<T>): string {
+  if (options?.key) return options.key
+  const method = (options?.method ?? 'GET').toUpperCase()
+  const hasRequestVariants =
+    method !== 'GET' ||
+    options?.body !== undefined ||
+    (options?.headers !== undefined && Object.keys(options.headers).length > 0)
+  if (!hasRequestVariants) return resolvedUrl
+  const variant = JSON.stringify({
+    method,
+    body: options?.body,
+    headers: options?.headers ?? {},
+  })
+  return `${resolvedUrl}#${fingerprintRequest(variant)}`
+}
+
+function fetchRaw<T>(
+  key: string,
+  resolvedUrl: string,
+  options?: UseFetchOptions<T>,
+): Promise<unknown> {
+  const existing = _inflight.get(key)
+  if (existing) return existing
+
+  const request = _fetch(resolvedUrl, buildInit(options))
+    .then(async (res) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`)
+      return res.json()
+    })
+    .finally(() => { _inflight.delete(key) })
+  _inflight.set(key, request)
+  return request
+}
+
 function makeResult<T>(
   state: UseFetchReturn<T>,
   settling: Promise<void> | null,
@@ -240,22 +301,21 @@ function makeComponentFetch<T>(
 ): UseFetchReactiveReturn<T> {
   const factory = createComposable((): UseFetchReactiveReturn<T> => {
     const isLazy = options?.lazy === true || options?.server === false
-    const resolvedUrl = appendQuery(
-      typeof url === 'function' ? url() : url,
-      options?.query,
-    )
 
     const data = ref<T | null>(options?.default ? options.default() : null)
     const pending = ref(false)
     const error = ref<Error | null>(null)
 
     const doFetch = async (): Promise<void> => {
+      const resolvedUrl = appendQuery(
+        typeof url === 'function' ? url() : url,
+        options?.query,
+      )
+      const key = getRequestKey(resolvedUrl, options)
       pending.value = true
       error.value = null
       try {
-        const res = await _fetch(resolvedUrl, buildInit(options))
-        if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`)
-        const raw = await res.json()
+        const raw = await fetchRaw(key, resolvedUrl, options)
         data.value = applyTransform<T>(raw, options)
       } catch (err) {
         error.value = err instanceof Error ? err : new Error(String(err))
@@ -300,11 +360,14 @@ export function useFetch<T = unknown>(
     return makeComponentFetch(url, options, componentCtx)
   }
   const g = globalThis as Record<string, unknown>
-  const resolvedUrl = appendQuery(
-    typeof url === 'function' ? url() : url,
-    options?.query,
-  )
-  const key = options?.key ?? resolvedUrl
+  const resolveRequest = () => {
+    const resolvedUrl = appendQuery(
+      typeof url === 'function' ? url() : url,
+      options?.query,
+    )
+    return { resolvedUrl, key: getRequestKey(resolvedUrl, options) }
+  }
+  const { resolvedUrl, key } = resolveRequest()
   const isLazy = options?.lazy === true || options?.server === false
   const defaultValue = (options?.default ? options.default() : null) as T | null
 
@@ -315,15 +378,36 @@ export function useFetch<T = unknown>(
     const fetchMap = fetchStoreAls.getStore() as Map<string, unknown> | null
 
     if (fetchMap) {
-      // Already fetched in this request — return cached result synchronously.
+      // Reuse either a settled raw response or the in-flight raw response.
+      // Raw values are cached so every caller applies its own transform once.
       if (fetchMap.has(key)) {
+        const cached = fetchMap.get(key)
+        if (!(cached instanceof Promise)) {
+          const state: UseFetchReturn<T> = {
+            data: applyTransform(cached, options),
+            pending: false,
+            error: null,
+            refresh: async () => state,
+          }
+          return makeResult(state, null)
+        }
         const state: UseFetchReturn<T> = {
-          data: applyTransform(fetchMap.get(key), options),
-          pending: false,
+          data: defaultValue,
+          pending: true,
           error: null,
           refresh: async () => state,
         }
-        return makeResult(state, null)
+        const settling = cached.then(
+          (raw) => {
+            state.data = applyTransform(raw, options)
+            state.pending = false
+          },
+          (err: unknown) => {
+            state.error = err instanceof Error ? err : new Error(String(err))
+            state.pending = false
+          },
+        )
+        return makeResult(state, settling)
       }
 
       if (isLazy) {
@@ -344,21 +428,23 @@ export function useFetch<T = unknown>(
         refresh: async () => state,
       }
 
+      const rawRequest = _fetch(resolvedUrl, buildInit(options)).then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`)
+        return res.json()
+      })
+      // Publish the promise before awaiting it so concurrent SSR calls share
+      // one network request. Replace it with the raw value after settlement so
+      // the request map can be serialized directly for client hydration.
+      fetchMap.set(key, rawRequest)
+
       const settling = (async () => {
         try {
-          const res = await _fetch(resolvedUrl, buildInit(options))
-          if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`)
-          const raw = await res.json()
-          const transformed = applyTransform<T>(raw, options)
-          // Store in per-request map so the same key isn't fetched twice.
-          fetchMap.set(key, transformed)
-          // Also write to the flat accumulator that the entry-server serialises.
-          const acc = (g['__CER_FETCH_DATA__'] ?? {}) as Record<string, unknown>
-          acc[key] = transformed
-          ;(g as Record<string, unknown>)['__CER_FETCH_DATA__'] = acc
-          state.data = transformed
+          const raw = await rawRequest
+          fetchMap.set(key, raw)
+          state.data = applyTransform<T>(raw, options)
           state.pending = false
         } catch (err) {
+          if (fetchMap.get(key) === rawRequest) fetchMap.delete(key)
           state.error = err instanceof Error ? err : new Error(String(err))
           state.pending = false
         }
@@ -380,7 +466,10 @@ export function useFetch<T = unknown>(
       data: hydrated,
       pending: false,
       error: null,
-      refresh: () => doClientFetch(key, resolvedUrl, options, state),
+      refresh: () => {
+        const request = resolveRequest()
+        return doClientFetch(request.key, request.resolvedUrl, options, state)
+      },
     }
     return makeResult(state, null)
   }
@@ -392,7 +481,10 @@ export function useFetch<T = unknown>(
     error: null,
     refresh: async () => state,
   }
-  state.refresh = () => doClientFetch(key, resolvedUrl, options, state)
+  state.refresh = () => {
+    const request = resolveRequest()
+    return doClientFetch(request.key, request.resolvedUrl, options, state)
+  }
 
   let settling: Promise<void> | null = null
   if (!isLazy) {
@@ -408,23 +500,11 @@ async function doClientFetch<T>(
   options: UseFetchOptions<T> | undefined,
   state: UseFetchReturn<T>,
 ): Promise<UseFetchReturn<T>> {
-  // P2-3: Deduplicate concurrent requests for the same key.
-  // If another request for this key is already in-flight, share its raw Promise.
-  let rawPromise: Promise<unknown>
-
-  if (_inflight.has(key)) {
-    rawPromise = _inflight.get(key)!
-  } else {
-    state.pending = true
-    state.error = null
-    rawPromise = _fetch(resolvedUrl, buildInit(options))
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`)
-        return res.json()
-      })
-      .finally(() => { _inflight.delete(key) })
-    _inflight.set(key, rawPromise)
-  }
+  // Deduplicate only identical request signatures. Calls with an explicit
+  // shared key intentionally opt into sharing even if their options differ.
+  state.pending = true
+  state.error = null
+  const rawPromise = fetchRaw(key, resolvedUrl, options)
 
   try {
     const raw = await rawPromise

@@ -5,6 +5,7 @@ import type { CerAppConfig } from '../types/config.js'
 import type { ResolvedCerConfig } from './dev-server.js'
 import { cerPlugin, cerComponentImports } from '@jasonshimmy/custom-elements-runtime/vite-plugin'
 import { autoImportTransform } from './transforms/auto-import.js'
+import { pruneRuntimeExtendedColorVariables } from './transforms/prune-runtime-css.js'
 import { scanComposableExports, writeAutoImportDts, writeTsconfigPaths } from './dts-generator.js'
 import { configureCerDevServer } from './dev-server.js'
 import { writeGeneratedDir, getGeneratedDir } from './generated-dir.js'
@@ -58,6 +59,7 @@ const RESOLVED_APP_ENTRY = '\0cer-app-entry'
 export function resolveConfig(userConfig: CerAppConfig, root: string = process.cwd()): ResolvedCerConfig {
   const mode = userConfig.mode ?? 'spa'
   const srcDir = resolve(root, userConfig.srcDir ?? 'app')
+  const inlineStylesheets = userConfig.ssg?.inlineStylesheets
 
   return {
     mode,
@@ -78,17 +80,25 @@ export function resolveConfig(userConfig: CerAppConfig, root: string = process.c
       routes: userConfig.ssg?.routes ?? 'auto',
       concurrency: userConfig.ssg?.concurrency ?? 4,
       fallback: userConfig.ssg?.fallback ?? false,
+      failOnError: userConfig.ssg?.failOnError ?? true,
+      inlineStylesheets: inlineStylesheets === true
+        ? Number.POSITIVE_INFINITY
+        : typeof inlineStylesheets === 'number' && inlineStylesheets > 0
+          ? inlineStylesheets
+          : false,
     },
     router: {
       base: userConfig.router?.base,
       scrollToFragment: userConfig.router?.scrollToFragment,
     },
     jitCss: {
-      content: userConfig.jitCss?.content ?? [
-        `${srcDir}/pages/**/*.ts`,
-        `${srcDir}/components/**/*.ts`,
-        `${srcDir}/layouts/**/*.ts`,
-      ],
+      content: userConfig.jitCss?.content
+        ? userConfig.jitCss.content.map((pattern) => resolve(root, pattern))
+        : [
+            `${srcDir}/pages/**/*.ts`,
+            `${srcDir}/components/**/*.ts`,
+            `${srcDir}/layouts/**/*.ts`,
+          ],
       extendedColors: userConfig.jitCss?.extendedColors ?? false,
       customColors: userConfig.jitCss?.customColors,
     },
@@ -98,6 +108,9 @@ export function resolveConfig(userConfig: CerAppConfig, root: string = process.c
       directives: userConfig.autoImports?.directives ?? true,
       runtime: userConfig.autoImports?.runtime ?? true,
     },
+    globalImports: [...new Set(
+      (userConfig.integrations ?? []).flatMap((integration) => integration.globalImports ?? []),
+    )],
     runtimeConfig: {
       public: {
         ...(userConfig.siteUrl ? { siteUrl: userConfig.siteUrl.replace(/\/$/, '') } : {}),
@@ -292,6 +305,12 @@ function getDirtyVirtualIds(filePath: string, config: ResolvedCerConfig): string
 export function cerApp(userConfig: CerAppConfig = {}): Plugin[] {
   let config: ResolvedCerConfig
   let composableExports = new Map<string, string>()
+  // cerPlugin captures this array before Vite resolves `root`. Mutate the
+  // stable reference from the config hooks so CLI --root and workspaces scan
+  // the intended app instead of process.cwd().
+  const jitContent = userConfig.jitCss?.content
+    ? [...userConfig.jitCss.content]
+    : ['__cer_pending_root__']
 
   // Cache for generated virtual module code (invalidated on file changes)
   const moduleCache = new Map<string, string>()
@@ -302,7 +321,14 @@ export function cerApp(userConfig: CerAppConfig = {}): Plugin[] {
     config(viteConfig) {
       const root = viteConfig.root ? resolve(viteConfig.root) : process.cwd()
       config = resolveConfig(userConfig, root)
+      jitContent.splice(0, jitContent.length, ...config.jitCss.content)
       return {
+        resolve: {
+          // Component libraries and the app must share the same runtime
+          // registry, reactive classes, and component context. This also makes
+          // npm link/file workspace development behave like a published app.
+          dedupe: ['@jasonshimmy/custom-elements-runtime'],
+        },
         build: {
           target: 'esnext',
           rollupOptions: {
@@ -324,6 +350,7 @@ export function cerApp(userConfig: CerAppConfig = {}): Plugin[] {
     configResolved(resolvedConfig) {
       // Re-resolve with the final root
       config = resolveConfig(userConfig, resolvedConfig.root)
+      jitContent.splice(0, jitContent.length, ...config.jitCss.content)
       // Write .cer/ immediately after config is resolved so the physical
       // app.ts exists for IDE/TypeScript support before any Vite hooks fire.
       writeGeneratedDir(config)
@@ -344,7 +371,7 @@ export function cerApp(userConfig: CerAppConfig = {}): Plugin[] {
     },
 
     async load(id: string, options?: { ssr?: boolean }) {
-      if (id === RESOLVED_APP_ENTRY) return generateAppEntryTemplate()
+      if (id === RESOLVED_APP_ENTRY) return generateAppEntryTemplate(config.globalImports)
 
       const allResolved = Object.values(RESOLVED_IDS) as string[]
       if (!allResolved.includes(id)) return null
@@ -374,6 +401,12 @@ export function cerApp(userConfig: CerAppConfig = {}): Plugin[] {
 
     transform(code: string, id: string) {
       if (!config) return null
+      const optimizedCss = pruneRuntimeExtendedColorVariables(
+        code,
+        id,
+        config.jitCss.extendedColors,
+      )
+      if (optimizedCss !== code) return { code: optimizedCss, map: null }
       if (config.autoImports?.runtime === false) return null
       // Skip virtual modules
       if (id.startsWith('\0')) return null
@@ -445,16 +478,22 @@ export function cerApp(userConfig: CerAppConfig = {}): Plugin[] {
       ]
 
       createWatcher(server.watcher, watchDirs, async (event, file) => {
-        if (event === 'add' || event === 'unlink') {
+        const isStructuralChange = event === 'add' || event === 'unlink'
+        const isComposableChange = file.startsWith(config.composablesDir)
+        if (isStructuralChange || (event === 'change' && isComposableChange)) {
           // Re-scan composables and regenerate .d.ts if a composable changed
-          if (file.startsWith(config.composablesDir)) {
+          if (isComposableChange) {
             composableExports = await scanComposableExports(config.composablesDir)
             await writeAutoImportDts(config.root, config.composablesDir, composableExports)
           }
           // Invalidate relevant virtual modules
           const dirtyIds = getDirtyVirtualIds(file, config)
           for (const resolvedId of dirtyIds) {
-            moduleCache.delete(resolvedId)
+            for (const key of moduleCache.keys()) {
+              if (key === resolvedId || key.startsWith(`${resolvedId}:`)) {
+                moduleCache.delete(key)
+              }
+            }
             const mod = server.moduleGraph.getModuleById(resolvedId)
             if (mod) {
               server.moduleGraph.invalidateModule(mod)
@@ -501,15 +540,21 @@ export function cerApp(userConfig: CerAppConfig = {}): Plugin[] {
   // Include cerPlugin from the runtime for JIT CSS support
   // Resolve config eagerly so cerPlugin can use the final resolved values
   const resolvedForJit = resolveConfig(userConfig)
-  const { content, ...jitOptions } = resolvedForJit.jitCss
+  const jitOptions = {
+    extendedColors: resolvedForJit.jitCss.extendedColors,
+    customColors: resolvedForJit.jitCss.customColors,
+  }
+  // Runtime and application packages can intentionally use different compatible
+  // Vite versions. Treat plugin objects as the public structural boundary so a
+  // linked workspace does not acquire nominal private Vite types twice.
   const jitPlugins = cerPlugin({
-    content,
+    content: jitContent,
     ...jitOptions,
     ssr: {
       dsd: true,
       jit: jitOptions,
     },
-  })
+  }) as unknown as Plugin[]
 
   // cerComponentImports must be initialized lazily — it needs the root-resolved
   // config.componentsDir and config.srcDir, which are only available after Vite
@@ -552,10 +597,16 @@ export function cerApp(userConfig: CerAppConfig = {}): Plugin[] {
     buildStart(opts) {
       // Initialize here so config is guaranteed to be fully resolved.
       // All configResolved hooks (including cerAppPlugin's) fire before any buildStart.
-      _componentImports = cerComponentImports({
+      const resolverOptions = {
         componentsDir: config.componentsDir,
         appRoot: config.srcDir,
-      }) as Plugin
+        resolvers: (userConfig.integrations ?? [])
+          .map((integration) => integration.componentResolver)
+          .filter((resolver): resolver is (tag: string) => string | undefined => !!resolver),
+      } as Parameters<typeof cerComponentImports>[0] & {
+        resolvers: Array<(tag: string) => string | undefined>
+      }
+      _componentImports = cerComponentImports(resolverOptions) as Plugin
       return (_componentImports?.buildStart as ((this: unknown, o: unknown) => void) | undefined)
         ?.call(this, opts)
     },
@@ -580,5 +631,8 @@ export function cerApp(userConfig: CerAppConfig = {}): Plugin[] {
     cerContent(
       userConfig.content,
     ),
+    ...((userConfig.integrations ?? [])
+      .flatMap((integration) => integration.plugins ?? []) as unknown as Plugin[]),
+    ...(userConfig.plugins ?? []),
   ]
 }

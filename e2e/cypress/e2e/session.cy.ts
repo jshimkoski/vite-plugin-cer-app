@@ -11,7 +11,7 @@
  * SSR mode where the session secret is available.
  */
 
-const mode = Cypress.env('mode') as 'spa' | 'ssr' | 'ssg'
+const mode = Cypress.expose('mode') as 'spa' | 'ssr' | 'ssg'
 
 if (mode === 'ssr') {
   describe('useSession() — session create / read / clear (SSR)', () => {

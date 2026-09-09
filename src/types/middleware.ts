@@ -7,7 +7,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
  * - `false`  — block navigation
  * - `string` — redirect to that path
  */
-export type GuardResult = boolean | string | Promise<boolean | string>
+export type GuardResult = boolean | string | void | Promise<boolean | string | void>
 
 /**
  * Route middleware function.
@@ -38,7 +38,7 @@ export type MiddlewareFn = (
   to: RouteState,
   from: RouteState | null,
   next: () => Promise<void>,
-) => GuardResult | void
+) => GuardResult
 
 /**
  * Server middleware function. Receives the raw Node.js `req`/`res` pair and a `next`

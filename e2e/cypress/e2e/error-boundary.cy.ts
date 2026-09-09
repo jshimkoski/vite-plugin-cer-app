@@ -8,7 +8,7 @@
  * and the error boundary component is displayed.
  */
 
-const mode = Cypress.env('mode') as 'spa' | 'ssr' | 'ssg'
+const mode = Cypress.expose('mode') as 'spa' | 'ssr' | 'ssg'
 
 // Client-side loader error boundary — works in all modes via client-side navigation
 describe('Client-side error boundary — loader throws during navigation', () => {

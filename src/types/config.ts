@@ -1,6 +1,18 @@
 import type { RouterConfig } from '@jasonshimmy/custom-elements-runtime/router'
 import type { IncomingMessage } from 'node:http'
 
+/** A package-provided bundle of component resolution, global imports, and Vite plugins. */
+export interface CerAppIntegration {
+  /** Stable name used in diagnostics. */
+  name: string
+  /** Resolve a rendered custom-element tag to its side-effect registration module. */
+  componentResolver?: (tag: string) => string | undefined
+  /** Imports that must run once in the generated client entry (for example global CSS). */
+  globalImports?: readonly string[]
+  /** Build plugins required by the integration. */
+  plugins?: import('vite').Plugin[]
+}
+
 // ─── Observability hook context types ─────────────────────────────────────────
 
 /**
@@ -132,18 +144,32 @@ export interface SsgConfig {
    * - `string[]` — explicit list of paths (e.g. `['/about', '/contact']`).
    */
   routes?: 'auto' | string[]
-  /** Maximum number of pages rendered in parallel. Defaults to `1`. Increase for faster SSG builds at the cost of higher memory usage. */
+  /** Maximum number of pages rendered in parallel. Defaults to `4`. Increase for faster SSG builds at the cost of higher memory usage. */
   concurrency?: number
   /** When `true`, unenumerated routes fall back to SSR at runtime instead of returning 404. */
   fallback?: boolean
+  /** Fail the build when any route cannot be rendered. Defaults to `true`; set to `false` only for intentionally partial output. */
+  failOnError?: boolean
+  /**
+   * Inline root-relative CSS assets into each generated HTML document.
+   *
+   * - `false` (default) keeps stylesheet links unchanged.
+   * - `true` inlines every root-relative stylesheet.
+   * - A positive number inlines only stylesheets at or below that UTF-8 byte size.
+   *
+   * This removes a render-blocking request for small critical stylesheets at the
+   * cost of repeating their bytes in each page. Inline styles also require an
+   * appropriate Content Security Policy (`style-src`) when CSP is enabled.
+   */
+  inlineStylesheets?: boolean | number
 }
 
 /** JIT (Just-In-Time) CSS configuration for shadow-DOM style injection. */
 export interface JitCssConfig {
   /** Additional glob patterns for content files scanned by the JIT CSS engine. */
   content?: string[]
-  /** Enable the extended color palette. Defaults to `false`. */
-  extendedColors?: boolean
+  /** Enable every extended color family or list only the families to retain. Defaults to `false`. */
+  extendedColors?: boolean | string[]
   /**
    * Project-specific color families registered in the JIT CSS engine at both
    * build time and runtime. Each key is a color family name (e.g. `brand`);
@@ -269,6 +295,8 @@ export interface CerAppConfig {
   router?: Pick<RouterConfig, 'base' | 'scrollToFragment'>
   jitCss?: JitCssConfig
   autoImports?: AutoImportsConfig
+  /** UI/framework integrations composed into generated entries and component code splitting. */
+  integrations?: CerAppIntegration[]
   port?: number
   /**
    * Runtime configuration accessible via `useRuntimeConfig()`.
@@ -296,8 +324,22 @@ export interface CerAppConfig {
    * ```
    *
    * You can also run the built-in adapters independently with `cer-app adapt --platform <name>`.
-   */
+  */
   adapter?: 'vercel' | 'netlify' | 'cloudflare' | ((root: string) => Promise<void>)
+  /**
+   * Additional standalone Vite plugins to include alongside the built-in cerApp plugins.
+   * UI libraries that also resolve components or add global entry imports should
+   * use `integrations` instead.
+   *
+   * @example
+   * ```ts
+   * import inspect from 'vite-plugin-inspect'
+   * export default defineConfig({
+   *   plugins: [inspect()],
+   * })
+   * ```
+   */
+  plugins?: import('vite').Plugin[]
   /**
    * Authentication configuration.
    * Enables OAuth login flows via `useAuth()` and auto-generates

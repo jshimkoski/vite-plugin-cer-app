@@ -48,11 +48,11 @@ When called outside a component context (e.g. in a `loader` or server middleware
 useFetch<T>(url: string | (() => string), options?)
 ```
 
-The `url` argument can be a static string or a factory function that returns a string. Pass a factory when the URL depends on reactive state — the request will re-issue whenever the function returns a different value.
+The `url` argument can be a static string or a factory function that returns a string. Pass a factory when the URL depends on current state; it is re-evaluated on mount and whenever `refresh()` issues another request.
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `key` | `string` | URL string | Unique cache key for this request. On the server, requests with the same key within one SSR pass are de-duplicated. On the client, matching server-fetched data is consumed once for hydration. |
+| `key` | `string` | Request signature | Unique cache key for this request. Plain GET requests use the URL; requests with a method, body, or headers use a compact fingerprint so distinct mutations cannot share a response and sensitive request values are not copied into hydration keys. On the server, requests with the same key within one SSR pass are de-duplicated. On the client, matching server-fetched data is consumed once for hydration. |
 | `lazy` | `boolean` | `false` | Skip the server fetch; only fetch on the client. In component context, also skips the auto-fetch on mount — call `refresh()` manually. |
 | `server` | `boolean` | `true` | Equivalent to `lazy: true`. Set `server: false` to skip SSR. |
 | `default` | `() => T` | `() => null` | Factory that returns the initial value before the fetch completes. |
@@ -156,7 +156,7 @@ const { data: name } = useFetch<string>('/api/me', {
 
 ## Server-side de-duplication
 
-On the server, multiple `useFetch` calls with the same `key` within a single SSR request are de-duplicated — only the first network request fires. Results are stored in a per-request cache keyed by `key` (which defaults to the full URL including query params).
+On the server, multiple `useFetch` calls with the same `key` within a single SSR request are de-duplicated — including calls made concurrently. Results are stored in a per-request cache keyed by `key`. By default, plain GET requests use the full URL including query parameters; requests with a method, body, or headers use a deterministic fingerprint of those values. This prevents two different POST bodies sent to the same URL from sharing an unrelated response without exposing the body or authorization headers in the serialized hydration key.
 
 ```ts
 export const loader = async () => {

@@ -1,4 +1,6 @@
-import './commands'
+import { registerCommands } from './commands'
+
+registerCommands()
 
 // Fail tests on uncaught exceptions only if they're from the app (not network errors)
 Cypress.on('uncaught:exception', (err) => {

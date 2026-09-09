@@ -149,6 +149,35 @@ dist/
 
 ---
 
+### `cer-app check`
+
+Runs reusable production-quality gates against a completed build. These checks
+exit non-zero on failure, making them suitable for `npm run validate` and CI.
+
+```sh
+cer-app check links
+cer-app check performance --expected-pages 201
+cer-app check lighthouse --url http://127.0.0.1:4173 --runs 3
+```
+
+| Subcommand | Purpose |
+|---|---|
+| `links` | Crawls generated HTML and verifies internal routes and fragments. |
+| `performance` | Enforces HTML, entry-JavaScript, and total initial-JavaScript gzip budgets. |
+| `lighthouse` | Requires median 100 scores for performance, accessibility, best practices, and SEO. |
+
+`links` and `performance` inspect `dist/` by default and accept `--root` and
+`--output`. `performance` also accepts `--page`, `--max-html`,
+`--max-initial-js`, `--max-entry-js`, and `--expected-pages`.
+
+`lighthouse` requires a locally installed `lighthouse` package and a running
+preview server. It accepts multiple URLs, retries transient browser-launch
+failures, and uses three runs per URL by default; pass `--desktop` to use the
+desktop preset. It honors `CHROME_PATH`, detects common Chrome, Chromium,
+Edge, and Brave installations, and also accepts an explicit `--chrome-path`.
+
+---
+
 ### `cer-app adapt`
 
 Adapts the production build for a deployment platform.
@@ -246,6 +275,9 @@ Scaffolds a new project from a template.
 | `[project-name]` | Name of the project (also used as the output directory) |
 | `--mode <mode>` | Rendering mode: `spa`, `ssr`, or `ssg` (skips interactive prompt) |
 | `--dir <dir>` | Output directory (defaults to `project-name`) |
+| `--material` | Configure CER Material with tree-shaken components, theme CSS, and subset symbols |
+| `--content` | Add a loader-backed Markdown content route and starter document |
+| `--tests` | Add a Cypress smoke suite and validation script |
 
 **Examples:**
 
@@ -253,7 +285,7 @@ Scaffolds a new project from a template.
 npx --package @jasonshimmy/vite-plugin-cer-app create-cer-app                          # interactive prompts
 npx --package @jasonshimmy/vite-plugin-cer-app create-cer-app my-app                   # prompts for mode
 npx --package @jasonshimmy/vite-plugin-cer-app create-cer-app my-app --mode ssr        # no prompts
-npx --package @jasonshimmy/vite-plugin-cer-app create-cer-app my-blog --mode ssg --dir ./sites/blog
+npx --package @jasonshimmy/vite-plugin-cer-app create-cer-app my-blog --mode ssg --dir ./sites/blog --material --content --tests
 ```
 
 **Scaffolded files (all modes):**

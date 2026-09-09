@@ -21,12 +21,23 @@
 
 export {}
 
-const mode = Cypress.env('mode') as 'spa' | 'ssr' | 'ssg'
+const mode = Cypress.expose('mode') as 'spa' | 'ssr' | 'ssg'
 
-// Helper: find inside the layout-default shadow DOM (post-hydration).
-const layout = () => cy.get('cer-layout-view').shadow().find('layout-default').shadow()
-// Helper: find inside the page-use-state-test shadow DOM (post-hydration).
-const statePage = () => cy.get('cer-layout-view').shadow().find('page-use-state-test').shadow()
+// Retained DSD upgrades these server-rendered hosts in place.
+const layout = () =>
+  cy
+    .get('layout-default')
+    .should(($host) => {
+      expect($host).to.have.attr('data-cer-hydrated')
+    })
+    .shadow()
+const statePage = () =>
+  cy
+    .get('page-use-state-test')
+    .should(($host) => {
+      expect($host).to.have.attr('data-cer-hydrated')
+    })
+    .shadow()
 
 describe('useState() — default title in layout', () => {
   it('shows the default "Kitchen Sink" title on the home page', () => {
@@ -83,7 +94,7 @@ describe('useState() — title resets to default when navigating away', () => {
     cy.get('[data-cy=nav-home]').first().click({ force: true })
     cy.url().should('eq', Cypress.config('baseUrl') + '/')
 
-    // The layout default kicks in for the home page
+    // The destination route restores the shared title during client navigation.
     layout().find('[data-cy=layout-page-title]').should('contain', 'Kitchen Sink')
   })
 })

@@ -150,6 +150,20 @@ describe('useFetch() — component context path', () => {
     expect(result.data.value).toBe(2)
   })
 
+  it('re-evaluates a URL factory when refresh() runs', async () => {
+    const mockFn = mockFetchWith({ ok: true, json: async () => ({ ok: true }) })
+    vi.stubGlobal('fetch', mockFn)
+    let id = 1
+
+    const result = useFetch(() => `/api/items/${id}`) as UseFetchReactiveReturn
+    await triggerConnected()
+    id = 2
+    await result.refresh()
+
+    expect(mockFn).toHaveBeenNthCalledWith(1, '/api/items/1', expect.any(Object))
+    expect(mockFn).toHaveBeenNthCalledWith(2, '/api/items/2', expect.any(Object))
+  })
+
   it('applies transform option', async () => {
     vi.stubGlobal('fetch', mockFetchWith({ ok: true, json: async () => [1, 2, 3] }))
 

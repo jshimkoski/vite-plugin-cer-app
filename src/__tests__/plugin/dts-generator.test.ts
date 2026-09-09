@@ -11,7 +11,17 @@ vi.mock('node:fs', async (importOriginal) => {
   }
 })
 vi.mock('../../plugin/scanner.js', () => ({ scanDirectory: vi.fn().mockResolvedValue([]) }))
-vi.mock('../../plugin/generated-dir.js', () => ({ GENERATED_DIR_NAME: '.cer' }))
+vi.mock('../../plugin/generated-dir.js', async () => {
+  const { existsSync, readFileSync, writeFileSync } = await import('node:fs')
+  return {
+    GENERATED_DIR_NAME: '.cer',
+    writeFileIfChanged(path: string, content: string) {
+      if (existsSync(path) && readFileSync(path, 'utf-8') === content) return false
+      writeFileSync(path, content, 'utf-8')
+      return true
+    },
+  }
+})
 
 import { existsSync, writeFileSync, readFileSync } from 'node:fs'
 import { scanDirectory } from '../../plugin/scanner.js'
@@ -68,11 +78,40 @@ describe('writeTsconfigPaths', () => {
     expect(json).toHaveProperty('compilerOptions.paths')
   })
 
+  it('provides modern browser-oriented compiler defaults', () => {
+    writeTsconfigPaths(ROOT, `${ROOT}/app`)
+    const content = vi.mocked(writeFileSync).mock.calls[0][1] as string
+    const json = JSON.parse(content) as {
+      compilerOptions: { target?: string; moduleResolution?: string; lib?: string[]; skipLibCheck?: boolean }
+    }
+    expect(json.compilerOptions.target).toBe('ES2022')
+    expect(json.compilerOptions.moduleResolution).toBe('Bundler')
+    expect(json.compilerOptions.lib).toEqual(['ES2022', 'DOM', 'DOM.Iterable'])
+    expect(json.compilerOptions.skipLibCheck).toBe(true)
+  })
+
+  it('preserves linked package paths so peer types resolve from the app', () => {
+    writeTsconfigPaths(ROOT, `${ROOT}/app`)
+    const content = vi.mocked(writeFileSync).mock.calls[0][1] as string
+    const json = JSON.parse(content) as {
+      compilerOptions: { preserveSymlinks?: boolean }
+    }
+    expect(json.compilerOptions.preserveSymlinks).toBe(true)
+  })
+
   it('includes project source directories in include array', () => {
     writeTsconfigPaths(ROOT, `${ROOT}/app`)
     const content = vi.mocked(writeFileSync).mock.calls[0][1] as string
     const json = JSON.parse(content) as { include?: string[] }
     expect(Array.isArray(json.include)).toBe(true)
+  })
+
+  it('excludes generated implementation files from consumer type checking', () => {
+    writeTsconfigPaths(ROOT, `${ROOT}/app`)
+    const content = vi.mocked(writeFileSync).mock.calls[0][1] as string
+    const json = JSON.parse(content) as { include: string[] }
+    expect(json.include).not.toContain('./**/*.ts')
+    expect(json.include).toContain('./**/*.d.ts')
   })
 })
 
@@ -284,6 +323,13 @@ describe('generateVirtualModuleDts', () => {
     expect(dts).toContain("declare module 'virtual:cer-plugins'")
   })
 
+  it('types user composables without relative re-export declarations in an ambient module', async () => {
+    const exports = new Map([['useFoo', `${ROOT}/app/composables/foo.ts`]])
+    const dts = await generateVirtualModuleDts(ROOT, COMPOSABLES_DIR, exports)
+    expect(dts).toContain("export const useFoo: typeof import('../app/composables/foo')['useFoo']")
+    expect(dts).not.toContain("export { useFoo } from '../app/composables/foo'")
+  })
+
   it('declares virtual:cer-loading module with hasLoading and loadingTag', async () => {
     const dts = await generateVirtualModuleDts(ROOT, COMPOSABLES_DIR)
     expect(dts).toContain("declare module 'virtual:cer-loading'")
@@ -336,6 +382,13 @@ describe('generateVirtualModuleDts', () => {
 })
 
 describe('writeAutoImportDts', () => {
+  it('declares the public useHost runtime hook', async () => {
+    await writeAutoImportDts(ROOT, COMPOSABLES_DIR)
+    const declaration = vi.mocked(writeFileSync).mock.calls
+      .find(([path]) => String(path).endsWith('auto-imports.d.ts'))?.[1]
+    expect(String(declaration)).toContain("const useHost: typeof import('@jasonshimmy/custom-elements-runtime')['useHost']")
+  })
+
   it('writes auto-imports.d.ts to .cer/', async () => {
     await writeAutoImportDts(ROOT, COMPOSABLES_DIR)
     const paths = vi.mocked(writeFileSync).mock.calls.map(([p]) => String(p))
@@ -352,6 +405,21 @@ describe('writeAutoImportDts', () => {
     await writeAutoImportDts(ROOT, COMPOSABLES_DIR)
     expect(writeFileSync).toHaveBeenCalledTimes(2)
   })
+
+  it('does not rewrite declaration files whose content is unchanged', async () => {
+    vi.mocked(existsSync).mockReturnValue(false)
+    await writeAutoImportDts(ROOT, COMPOSABLES_DIR)
+    const contents = new Map(
+      vi.mocked(writeFileSync).mock.calls.map(([path, content]) => [String(path), String(content)]),
+    )
+    vi.mocked(writeFileSync).mockClear()
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(readFileSync).mockImplementation((path) => contents.get(String(path)) ?? '')
+
+    await writeAutoImportDts(ROOT, COMPOSABLES_DIR)
+
+    expect(writeFileSync).not.toHaveBeenCalled()
+  })
 })
 
 // ─── Content layer globals ────────────────────────────────────────────────────
@@ -365,6 +433,20 @@ describe('generateAutoImportDts — content layer globals', () => {
   it('declares useContentSearch as a global', async () => {
     const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
     expect(dts).toContain('useContentSearch')
+  })
+
+  it.each([
+    'defineContentPageLoader',
+    'normalizeContentPath',
+    'useContentBreadcrumbs',
+    'useContentHeadings',
+    'useContentSeo',
+    'useActiveHeadings',
+  ])('declares %s as a framework global', async (helper) => {
+    const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain(
+      `const ${helper}: typeof import('@jasonshimmy/vite-plugin-cer-app/composables')['${helper}']`,
+    )
   })
 
   it('declares ContentItem type in global scope', async () => {
@@ -385,6 +467,13 @@ describe('generateAutoImportDts — content layer globals', () => {
   it('declares ContentSearchResult type in global scope', async () => {
     const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
     expect(dts).toContain('type ContentSearchResult')
+  })
+
+  it('declares the reusable content-page types in global scope', async () => {
+    const dts = await generateAutoImportDts(ROOT, COMPOSABLES_DIR)
+    expect(dts).toContain("type ContentPageData = import('@jasonshimmy/vite-plugin-cer-app').ContentPageData")
+    expect(dts).toContain("type ContentBreadcrumb = import('@jasonshimmy/vite-plugin-cer-app').ContentBreadcrumb")
+    expect(dts).toContain("type ActiveHeadingsOptions = import('@jasonshimmy/vite-plugin-cer-app').ActiveHeadingsOptions")
   })
 
   it('declares __CER_APP_CONFIG__ global var', async () => {

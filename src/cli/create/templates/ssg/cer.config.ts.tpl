@@ -5,6 +5,8 @@ export default defineConfig({
   ssg: {
     routes: 'auto',
     concurrency: 4,
+    // Inline only small stylesheets to avoid render blocking without bloating HTML.
+    inlineStylesheets: 20 * 1024,
   },
   autoImports: { components: true, composables: true, directives: true, runtime: true },
 })

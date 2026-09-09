@@ -80,6 +80,33 @@ export function generateRobotsTxt(siteUrl: string | null): string {
 }
 
 // ---------------------------------------------------------------------------
+// sitemap.xml generation
+// ---------------------------------------------------------------------------
+
+/**
+ * Generates the content of a `sitemap.xml` file in Sitemap Protocol 0.9
+ * format. Includes every successfully-rendered path with the build date as
+ * `<lastmod>`. `lastmod` should be an ISO-8601 date string (YYYY-MM-DD).
+ */
+export function generateSitemapXml(
+  siteUrl: string,
+  paths: string[],
+  lastmod: string,
+): string {
+  const urls = paths.map((p) => {
+    const loc = escapeXml(siteUrl + (p === '/' ? '' : p))
+    return `  <url>\n    <loc>${loc}</loc>\n    <lastmod>${lastmod}</lastmod>\n  </url>`
+  })
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ...urls,
+    '</urlset>',
+    '',
+  ].join('\n')
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -93,4 +120,8 @@ function insertBeforeHead(html: string, tag: string): string {
 
 function escapeAttr(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+}
+
+function escapeXml(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }

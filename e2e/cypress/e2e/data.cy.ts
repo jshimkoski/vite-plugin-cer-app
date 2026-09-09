@@ -5,7 +5,14 @@
  * client-side fetch in SPA mode. Item IDs come from route params (all modes).
  */
 
-const mode = Cypress.env('mode') as 'spa' | 'ssr' | 'ssg'
+const mode = Cypress.expose('mode') as 'spa' | 'ssr' | 'ssg'
+const hydratedPage = (tag: string) =>
+  cy
+    .get(tag)
+    .should(($host) => {
+      expect($host).to.have.attr('data-cer-hydrated')
+    })
+    .shadow()
 
 describe('Blog list — data loader', () => {
   // In SSR/SSG the loader runs server-side; data is embedded in HTML.
@@ -76,9 +83,9 @@ describe('Blog detail — dynamic route with loader', () => {
 
   it('back link navigates to /blog', () => {
     cy.visit('/blog/first-post')
-    cy.get('[data-cy=post-back]').first().click({ force: true })
+    hydratedPage('page-blog-slug').find('[data-cy=post-back]').click()
     cy.url().should('include', '/blog')
-    cy.get('[data-cy=blog-heading]').should('contain', 'Blog')
+    hydratedPage('page-blog').find('[data-cy=blog-heading]').should('contain', 'Blog')
   })
 })
 

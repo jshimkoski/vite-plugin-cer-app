@@ -102,6 +102,24 @@ describe('generateAppEntryTemplate', () => {
     expect(out).toContain('virtual:cer-routes')
     expect(out).toContain('export { router }')
   })
+
+  it('injects framework integration imports before application modules', () => {
+    const out = generateAppEntryTemplate([
+      'material-symbols/outlined.css',
+      '@jasonshimmy/cer-material/theme.css',
+    ])
+
+    expect(out).toContain("import 'material-symbols/outlined.css'")
+    expect(out).toContain("import '@jasonshimmy/cer-material/theme.css'")
+    expect(out.indexOf('material-symbols/outlined.css')).toBeLessThan(
+      out.indexOf('virtual:cer-layouts'),
+    )
+  })
+
+  it('deduplicates integration imports', () => {
+    const out = generateAppEntryTemplate(['theme.css', 'theme.css'])
+    expect(out.match(/import 'theme\.css'/g)).toHaveLength(1)
+  })
 })
 
 describe('generateJitInitModule', () => {

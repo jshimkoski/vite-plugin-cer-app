@@ -6,7 +6,7 @@
  * render: 'static' — serve pre-rendered HTML from disk; fall back to SSR.
  */
 
-const mode = Cypress.env('mode') as 'spa' | 'ssr' | 'ssg'
+const mode = Cypress.expose('mode') as 'spa' | 'ssr' | 'ssg'
 
 // ─── render: 'server' ─────────────────────────────────────────────────────────
 

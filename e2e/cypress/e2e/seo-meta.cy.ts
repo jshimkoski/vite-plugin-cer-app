@@ -6,7 +6,7 @@
  * In all modes: tags must be present after client hydration.
  */
 
-const mode = Cypress.env('mode') as 'spa' | 'ssr' | 'ssg'
+const mode = Cypress.expose('mode') as 'spa' | 'ssr' | 'ssg'
 
 describe('useSeoMeta() — title and description', () => {
   it('sets document title', () => {

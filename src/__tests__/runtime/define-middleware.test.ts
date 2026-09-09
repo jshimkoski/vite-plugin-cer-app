@@ -10,19 +10,19 @@ describe('defineMiddleware', () => {
 
   it('the returned function returns true to allow navigation', async () => {
     const mw = defineMiddleware(async () => true)
-    const result = await mw({} as never, null)
+    const result = await mw({} as never, null, async () => {})
     expect(result).toBe(true)
   })
 
   it('the returned function returns false to block navigation', async () => {
     const mw = defineMiddleware(async () => false)
-    const result = await mw({} as never, null)
+    const result = await mw({} as never, null, async () => {})
     expect(result).toBe(false)
   })
 
   it('the returned function returns a string to redirect', async () => {
     const mw = defineMiddleware(async () => '/login')
-    const result = await mw({} as never, null)
+    const result = await mw({} as never, null, async () => {})
     expect(result).toBe('/login')
   })
 

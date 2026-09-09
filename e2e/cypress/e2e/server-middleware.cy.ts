@@ -10,7 +10,7 @@
  * run in SPA or SSG static-file serving modes, so tests are gated accordingly.
  */
 
-const mode = Cypress.env('mode') as 'spa' | 'ssr' | 'ssg'
+const mode = Cypress.expose('mode') as 'spa' | 'ssr' | 'ssg'
 
 // Server middleware only runs when there is a live server processing requests.
 // In dev mode the Vite middleware chain applies it; in SSR preview it is called

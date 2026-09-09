@@ -13,7 +13,7 @@
  * 9. Hydration does not duplicate or destroy the pre-rendered shadow content
  */
 
-const mode = Cypress.env('mode') as 'spa' | 'ssr' | 'ssg'
+const mode = Cypress.expose('mode') as 'spa' | 'ssr' | 'ssg'
 
 // All pre-renderable routes
 const ALL_ROUTES = [

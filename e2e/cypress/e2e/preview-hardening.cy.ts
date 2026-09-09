@@ -8,7 +8,7 @@
  * Dev mode uses the Vite dev server which does not set these headers.
  */
 
-const mode = Cypress.env('mode') as 'spa' | 'ssr' | 'ssg' | 'dev'
+const mode = Cypress.expose('mode') as 'spa' | 'ssr' | 'ssg' | 'dev'
 
 // Security headers and Cache-Control are only set by the production preview server.
 // Skip these tests in dev mode (Vite dev server does not set them).

@@ -11,6 +11,87 @@
  * - useHead() support via beginHeadCollection / endHeadCollection
  * - DSD polyfill injected at end of <body> after client-template merge
  */
+export function serializeForInlineScript(value: unknown): string {
+  const serialized = JSON.stringify(value)
+  if (serialized === undefined) return 'null'
+  return serialized
+    .replace(/&/g, '\\u0026')
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029')
+}
+
+/**
+ * Collect DSD tag names that are safe to define incrementally. A tag is only
+ * deferrable when every rendered instance explicitly carries a hydration
+ * strategy; one eager instance makes the shared custom-element definition
+ * part of the interactive shell and excludes that tag from the manifest.
+ */
+export function collectDsdHostTags(html: string): string[] {
+  const orderedTags: string[] = []
+  const seen = new Set<string>()
+  const deferred = new Set<string>()
+  const eager = new Set<string>()
+  const pattern = /<([a-z][a-z0-9._-]*-[a-z0-9._-]+)\b([^>]*)>\s*<template\b[^>]*\bshadowrootmode\s*=/gi
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(html)) !== null) {
+    const tag = match[1].toLowerCase()
+    if (!seen.has(tag)) {
+      seen.add(tag)
+      orderedTags.push(tag)
+    }
+    if (/\bdata-cer-hydrate\s*=\s*(["'])[^"']+\1/i.test(match[2])) {
+      deferred.add(tag)
+    } else {
+      eager.add(tag)
+    }
+  }
+  return orderedTags.filter((tag) => deferred.has(tag) && !eager.has(tag))
+}
+
+/**
+ * Converts Vite's external module entry into an eagerly fetched, post-paint
+ * bootstrap. Static SSR routes can paint their complete HTML before framework
+ * and island modules evaluate, while modulepreload keeps interaction latency
+ * low once the first frame has committed.
+ */
+export function deferEntryModulesForFirstPaint(
+  html: string,
+  dsdTags: string[] = [],
+): string {
+  return html.replace(
+    /<script\b([^>]*)>([\s\S]*?)<\/script>/gi,
+    (tag, attrs: string, body: string) => {
+      if (body.trim() !== '' || !/\btype\s*=\s*(["'])module\1/i.test(attrs)) return tag
+      const srcMatch = attrs.match(/\bsrc\s*=\s*(["'])([^"']+)\1/i)
+      if (!srcMatch) return tag
+
+      const src = srcMatch[2]
+      const escapedHref = src
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+      const serializedSrc = serializeForInlineScript(src)
+      const serializedDsdTags = serializeForInlineScript(dsdTags)
+      const start = `function(){if(typeof performance==='object'&&typeof performance.mark==='function')performance.mark('cer:entry-start');globalThis.__CER_STATIC_ENTRY__=true;globalThis.__CER_DSD_TAGS__=new Set(${serializedDsdTags});return import(${serializedSrc}).catch(function(error){console.error('[cer-app] Failed to start client entry:',error)})}`
+      return `<link rel="modulepreload" crossorigin href="${escapedHref}"><script data-cer-deferred-entry>(function(start){var observer=null,fallback=null,started=false,guarding=true,queued=[];function capture(event){if(!guarding||event.defaultPrevented)return;var path=typeof event.composedPath==='function'?event.composedPath():[];if(!path.some(function(node){return node&&typeof node.localName==='string'&&node.localName.indexOf('-')>0}))return;event.preventDefault();event.stopImmediatePropagation();queued.push({target:path[0]||event.target,event:event})}function replay(){guarding=false;document.removeEventListener('click',capture,true);queued.splice(0).forEach(function(item){var event=item.event,target=item.target,init={bubbles:true,composed:true,cancelable:true},clone;if(typeof KeyboardEvent==='function'&&event instanceof KeyboardEvent){clone=new KeyboardEvent(event.type,Object.assign(init,{key:event.key,code:event.code,ctrlKey:event.ctrlKey,metaKey:event.metaKey,shiftKey:event.shiftKey,altKey:event.altKey,repeat:event.repeat}))}else{clone=new MouseEvent(event.type,Object.assign(init,{button:event.button,buttons:event.buttons,clientX:event.clientX,clientY:event.clientY,ctrlKey:event.ctrlKey,metaKey:event.metaKey,shiftKey:event.shiftKey,altKey:event.altKey}))}if(target&&target.isConnected)target.dispatchEvent(clone)})}function ready(){var view=document.querySelector('cer-layout-view'),shell=view&&Array.prototype.find.call(view.children,function(element){return element.localName&&element.localName!=='script'});if(!shell||shell.hasAttribute('data-cer-hydrated')){replay();return}if(typeof MutationObserver!=='function'){setTimeout(replay,0);return}var readiness=new MutationObserver(function(){if(shell.hasAttribute('data-cer-hydrated')){readiness.disconnect();replay()}});readiness.observe(shell,{attributes:true,attributeFilter:['data-cer-hydrated']});setTimeout(function(){readiness.disconnect();replay()},1000)}function boot(){Promise.resolve(start()).then(ready,replay)}function run(){if(started)return;started=true;if(observer)observer.disconnect();if(fallback!==null)clearTimeout(fallback);setTimeout(boot,0)}function byFrame(){if(typeof requestAnimationFrame==='function'){requestAnimationFrame(function(){requestAnimationFrame(function(){requestAnimationFrame(run)})})}else{run()}}document.addEventListener('click',capture,true);if(typeof PerformanceObserver==='function'){try{observer=new PerformanceObserver(function(list){if(list.getEntriesByName('first-contentful-paint').length)run()});fallback=setTimeout(run,1000);observer.observe({type:'paint',buffered:true})}catch(error){byFrame()}}else{byFrame()}})(${start})</script>`
+    },
+  )
+}
+
+const inlineSerializerSource = serializeForInlineScript
+  .toString()
+  .replace('serializeForInlineScript', '_serializeForInlineScript')
+const dsdTagCollectorSource = collectDsdHostTags
+  .toString()
+  .replace('collectDsdHostTags', '_collectDsdHostTags')
+const deferredEntrySource = deferEntryModulesForFirstPaint
+  .toString()
+  .replace('deferEntryModulesForFirstPaint', '_deferEntryModulesForFirstPaint')
+  .replaceAll('serializeForInlineScript', '_serializeForInlineScript')
+
 export const ENTRY_SERVER_TEMPLATE = `// Server-side entry — AUTO-GENERATED by @jasonshimmy/vite-plugin-cer-app
 import { readFileSync, existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -25,11 +106,16 @@ import serverMiddleware from 'virtual:cer-server-middleware'
 import { runtimeConfig, _runtimePrivateDefaults, _authSessionKey, _hooks } from 'virtual:cer-app-config'
 import { registerBuiltinComponents, setDevMode } from '@jasonshimmy/custom-elements-runtime'
 import { registerEntityMap, renderToStreamWithJITCSSDSD, DSD_POLYFILL_SCRIPT } from '@jasonshimmy/custom-elements-runtime/ssr'
+import ssrConfig from 'virtual:cer-ssr-config'
 import entitiesJson from '@jasonshimmy/custom-elements-runtime/entities.json'
 import { initRouter } from '@jasonshimmy/custom-elements-runtime/router'
 import { beginHeadCollection, endHeadCollection, serializeHeadTags, initRuntimeConfig, resolvePrivateConfig, useSession } from '@jasonshimmy/vite-plugin-cer-app/composables'
 import { errorTag } from 'virtual:cer-error'
 import { createIsrHandler } from '@jasonshimmy/vite-plugin-cer-app/isr'
+
+${inlineSerializerSource}
+${dsdTagCollectorSource}
+${deferredEntrySource}
 
 const _cerProcess = (globalThis).process
 const _cerNodeEnv = _cerProcess?.env?.NODE_ENV ?? _cerProcess?.env?.MODE
@@ -177,7 +263,10 @@ if (!_clientTemplate) {
 
 // Merge the SSR rendered body with the Vite client shell so the final page
 // contains both pre-rendered DSD content and the client bundle scripts.
-function _mergeWithClientTemplate(ssrHtml, clientTemplate) {
+function _mergeWithClientTemplate(ssrHtml, clientTemplate, renderedPath, hydrationStrategy = 'load', dsdTags = []) {
+  if (hydrationStrategy === 'none') {
+    clientTemplate = _deferEntryModulesForFirstPaint(clientTemplate, dsdTags)
+  }
   const headTag = '<head>', headCloseTag = '</head>'
   const bodyTag = '<body>', bodyCloseTag = '</body>'
   const headStart = ssrHtml.indexOf(headTag)
@@ -211,7 +300,9 @@ function _mergeWithClientTemplate(ssrHtml, clientTemplate) {
   let merged = clientTemplate
   if (merged.includes('<cer-layout-view></cer-layout-view>')) {
     merged = merged.replace('<cer-layout-view></cer-layout-view>',
-      '<cer-layout-view>' + ssrBodyContent + '</cer-layout-view>')
+      '<cer-layout-view data-cer-route="' + encodeURIComponent(renderedPath) +
+      '" data-cer-route-hydrate="' + hydrationStrategy + '">' +
+      ssrBodyContent + '</cer-layout-view>')
   } else if (merged.includes('<div id="app"></div>')) {
     merged = merged.replace('<div id="app"></div>',
       '<div id="app">' + ssrBodyContent + '</div>')
@@ -239,6 +330,7 @@ const _prepareRequest = async (req) => {
   const router = initRouter({ routes, initialUrl: req.url ?? '/' })
   const current = router.getCurrent()
   const { route, params } = router.matchRoute(current.path)
+  const hydrationStrategy = route?.meta?.hydrate ?? 'load'
 
   // Store the current route info so useRoute() can read it synchronously
   // from any layout or component during this render pass.
@@ -271,7 +363,7 @@ const _prepareRequest = async (req) => {
         const notFoundVnode = notFoundErrorTag
           ? { tag: notFoundErrorTag, props: { attrs: { error: 'Not Found', status: '404' } }, children: [] }
           : { tag: 'div', props: {}, children: [] }
-        return { vnode: notFoundVnode, router, head: undefined, status: 404 }
+        return { vnode: notFoundVnode, router, head: undefined, status: 404, hydrationStrategy: 'load' }
       }
 
       // Run the loader before creating the page vnode so we can pass its
@@ -288,7 +380,12 @@ const _prepareRequest = async (req) => {
           // the async context *inside* this awaited function, not the outer
           // handler's continuation where renderToStreamWithJITCSSDSD runs.
           loaderData = data
-          head = \`<script>window.__CER_DATA__ = \${JSON.stringify(data)}</script>\`
+          // A hydrate:none subtree never executes client component logic (the
+          // runtime also suppresses all of its shadow descendants), so shipping
+          // a duplicate loader payload cannot be observed and only delays paint.
+          if (hydrationStrategy !== 'none') {
+            head = \`<script>window.__CER_DATA__ = \${_serializeForInlineScript(data)}</script>\`
+          }
           // Expose primitive loader values as element attributes so useProps()
           // can read them.  Complex objects are only accessible via usePageData().
           loaderAttrs = Object.fromEntries(
@@ -297,7 +394,17 @@ const _prepareRequest = async (req) => {
         }
       }
 
-      pageVnode = { tag: pageTag, props: { attrs: { ...params, ...loaderAttrs } }, children: [] }
+      pageVnode = {
+        tag: pageTag,
+        props: {
+          attrs: {
+            ...params,
+            ...loaderAttrs,
+            ...(hydrationStrategy === 'none' ? { 'data-cer-hydrate': 'none' } : {}),
+          },
+        },
+        children: [],
+      }
     } catch (err) {
       // Loader threw — render the error page server-side if app/error.ts exists.
       const status = (err && typeof err === 'object' && 'status' in err && typeof err.status === 'number')
@@ -315,7 +422,7 @@ const _prepareRequest = async (req) => {
       const errVnode = effectiveErrorTag
         ? { tag: effectiveErrorTag, props: { attrs: { error: message, status: String(status) } }, children: [] }
         : { tag: 'div', props: {}, children: [] }
-      return { vnode: errVnode, router, head: undefined, status }
+      return { vnode: errVnode, router, head: undefined, status, hydrationStrategy: 'load' }
     }
   }
 
@@ -335,7 +442,7 @@ const _prepareRequest = async (req) => {
   // catch-all page ([...all].ts) may successfully resolve real content paths
   // and should stay 200 unless its loader explicitly throws a 404.
   const isNotFoundRoute = route?.meta?._cerNotFound === true
-  return { vnode, router, head, status: isNotFoundRoute ? 404 : null, loaderData }
+  return { vnode, router, head, status: isNotFoundRoute ? 404 : null, loaderData, hydrationStrategy }
 }
 
 export const handler = async (req, res) => {
@@ -356,7 +463,7 @@ export const handler = async (req, res) => {
     try { _authUser = await useSession({ name: _authSessionKey }).get() } catch { /* no session secret */ }
   }
   await _cerAuthStore.run(_authUser, async () => {
-    const { vnode, router, head, status, loaderData } = await _prepareRequest(req)
+    const { vnode, router, head, status, loaderData, hydrationStrategy = 'load' } = await _prepareRequest(req)
     if (status != null) res.statusCode = status
 
     let _headCollectionOpen = false
@@ -382,7 +489,11 @@ export const handler = async (req, res) => {
       // scripts may not execute.
       // The first chunk from the stream is the full synchronous render. Subsequent
       // chunks are async component swap scripts streamed as they resolve.
-      const stream = renderToStreamWithJITCSSDSD(vnode, { dsdPolyfill: false, router })
+      const stream = renderToStreamWithJITCSSDSD(vnode, {
+        dsdPolyfill: false,
+        router,
+        jit: ssrConfig?.jit,
+      })
 
       // Collect head tags synchronously — all useHead() calls have already fired
       // inside the stream constructor's start() before it returned.
@@ -393,16 +504,19 @@ export const handler = async (req, res) => {
 
       // Read the first (synchronous) chunk — rejects if the sync render failed.
       const { value: firstChunk = '' } = await reader.read()
+      const _dsdTags = hydrationStrategy === 'none'
+        ? _collectDsdHostTags(firstChunk)
+        : []
 
       // Serialise useFetch() results collected during loader execution.
       const _fetchObj = Object.fromEntries(_fetchMap)
       const _fetchScript = Object.keys(_fetchObj).length > 0
-        ? \`<script>window.__CER_FETCH_DATA__ = \${JSON.stringify(_fetchObj)}</script>\`
+        ? \`<script>window.__CER_FETCH_DATA__ = \${_serializeForInlineScript(_fetchObj)}</script>\`
         : ''
 
       // Serialise the auth user for client-side hydration via useAuth().
       const _authScript = _authUser
-        ? \`<script>window.__CER_AUTH_USER__ = \${JSON.stringify(_authUser)}</script>\`
+        ? \`<script>window.__CER_AUTH_USER__ = \${_serializeForInlineScript(_authUser)}</script>\`
         : ''
 
       // Serialise useState() values for client-side hydration.
@@ -415,7 +529,7 @@ export const handler = async (req, res) => {
       if (_stateMap && _stateMap.size > 0) {
         const _stateObj = {}
         for (const [k, v] of _stateMap) { _stateObj[k] = v.value }
-        _stateScript = \`<script>window.__CER_STATE_INIT__ = \${JSON.stringify(_stateObj)}</script>\`
+        _stateScript = \`<script>window.__CER_STATE_INIT__ = \${_serializeForInlineScript(_stateObj)}</script>\`
       }
 
       // Merge loader data script + useHead() tags + fetch/auth/state hydration scripts.
@@ -432,7 +546,7 @@ export const handler = async (req, res) => {
       // (/@vite/client, HMR) are included in every SSR response.
       const _resolvedClientTemplate = (globalThis).__CER_CLIENT_TEMPLATE__ ?? _clientTemplate
       const merged = _resolvedClientTemplate
-        ? _mergeWithClientTemplate(ssrHtml, _resolvedClientTemplate)
+        ? _mergeWithClientTemplate(ssrHtml, _resolvedClientTemplate, _requestPath, hydrationStrategy, _dsdTags)
         : ssrHtml
 
       // Split at </body> so async swap scripts and the DSD polyfill can be streamed

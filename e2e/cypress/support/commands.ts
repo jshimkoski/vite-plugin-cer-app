@@ -3,6 +3,12 @@
  */
 
 /**
+ * Register the kitchen-sink commands explicitly. The package declares only CSS
+ * files as side effects, so a side-effect-only support import may be removed by
+ * Cypress's production bundler.
+ */
+export function registerCommands(): void {
+/**
  * Assert that the raw HTML for a route has correct Declarative Shadow DOM structure:
  * - Contains <template shadowrootmode="open"> elements (value must be "open")
  * - Each shadow template has embedded <style> (JIT CSS not stripped to <head>)
@@ -34,10 +40,14 @@ Cypress.Commands.add('assertDSDStructure', (path: string) => {
       )
     })
 
-    // The <head> must NOT contain raw unnamed <style> blocks (only id'd global ones are OK)
+    // The <head> must NOT contain raw unnamed <style> blocks. Global SSR styles
+    // use an id; deliberately inlined SSG application CSS carries a source marker.
     const headMatch = html.match(/<head>([\s\S]*?)<\/head>/)
     if (headMatch) {
-      const bareStyles = headMatch[1].match(/<style(?!\s+id)[^>]*>/g) ?? []
+      const styleTags = headMatch[1].match(/<style\b[^>]*>/g) ?? []
+      const bareStyles = styleTags.filter(
+        (tag) => !/\s(?:id|data-cer-inline-source)=/.test(tag),
+      )
       expect(
         bareStyles.length,
         `${path}: <head> must not contain un-named <style> blocks`,
@@ -50,7 +60,7 @@ Cypress.Commands.add('assertDSDStructure', (path: string) => {
     )
 
     // cer-layout-view must have pre-rendered content (not an empty tag)
-    const layoutViewMatch = html.match(/<cer-layout-view>([\s\S]*?)<\/cer-layout-view>/)
+    const layoutViewMatch = html.match(/<cer-layout-view\b[^>]*>([\s\S]*?)<\/cer-layout-view>/)
     if (layoutViewMatch) {
       expect(
         layoutViewMatch[1].trim(),
@@ -107,6 +117,7 @@ Cypress.Commands.add('assertShadowRootLive', (selector: string) => {
 Cypress.Commands.add('getShadow', (selector: string) => {
   return cy.get(selector, { includeShadowDom: true })
 })
+}
 
 declare global {
   namespace Cypress {

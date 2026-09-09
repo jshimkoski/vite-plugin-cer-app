@@ -6,7 +6,7 @@
  * Nested-layout tests run in all modes.
  */
 
-const mode = Cypress.env('mode') as 'spa' | 'ssr' | 'ssg'
+const mode = Cypress.expose('mode') as 'spa' | 'ssr' | 'ssg'
 
 // ─── ISR (preview server only) ────────────────────────────────────────────────
 

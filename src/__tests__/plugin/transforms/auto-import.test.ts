@@ -125,6 +125,15 @@ describe('autoImportTransform — runtime import injection', () => {
     expect(result).toContain(`from ${RUNTIME_PKG}`)
   })
 
+  it('injects the public useHost hook only when referenced', () => {
+    const result = autoImportTransform(
+      'const host = useHost()',
+      '/project/app/components/focus-ring.ts',
+      opts,
+    )!
+    expect(result).toContain(`import { useHost } from ${RUNTIME_PKG}`)
+  })
+
   it('prepends import at the very top of the file', () => {
     const original = "component('x', () => html``)"
     const result = autoImportTransform(original, '/project/app/pages/test.ts', opts)!
@@ -359,6 +368,19 @@ describe('autoImportTransform — framework composable injection', () => {
     const result = autoImportTransform(code, '/project/app/components/site-search.ts', opts)!
     expect(result).toContain('useContentSearch')
     expect(result).toContain(`from ${FRAMEWORK_PKG}`)
+  })
+
+  it.each([
+    'defineContentPageLoader',
+    'normalizeContentPath',
+    'useContentBreadcrumbs',
+    'useContentHeadings',
+    'useContentSeo',
+    'useActiveHeadings',
+  ])('injects the content page helper %s when used', (helper) => {
+    const code = `const result = ${helper}()`
+    const result = autoImportTransform(code, '/project/app/pages/[...all].ts', opts)!
+    expect(result).toContain(`import { ${helper} } from ${FRAMEWORK_PKG}`)
   })
 })
 

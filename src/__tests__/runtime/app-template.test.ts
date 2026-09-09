@@ -14,14 +14,27 @@ describe('APP_ENTRY_TEMPLATE — meta.hydrate', () => {
     expect(APP_ENTRY_TEMPLATE).toContain(`?? 'load'`)
   })
 
-  it('skips hydration entirely for strategy "none"', () => {
+  it('keeps the static page unhydrated while activating nested islands after paint', () => {
     expect(APP_ENTRY_TEMPLATE).toContain(`_hydrateStrategy === 'none'`)
-    // Should delete __CER_DATA__ but NOT call _replace
+    // Preserve SSR loader state in case the router preloads/upgrades the page
+    // module; the next real navigation is responsible for clearing it.
     const noneBlock = APP_ENTRY_TEMPLATE.slice(
       APP_ENTRY_TEMPLATE.indexOf(`_hydrateStrategy === 'none'`),
+      APP_ENTRY_TEMPLATE.indexOf('} else {', APP_ENTRY_TEMPLATE.indexOf(`_hydrateStrategy === 'none'`)),
     )
-    // The delete must appear before _doHydrate is defined (i.e. in the none branch)
-    expect(APP_ENTRY_TEMPLATE).toContain(`delete (globalThis).__CER_DATA__`)
+    expect(noneBlock).not.toContain(`delete (globalThis).__CER_DATA__`)
+    expect(noneBlock).toContain('_initMatch?.route?.load')
+    expect(noneBlock).toContain('requestAnimationFrame')
+    expect(noneBlock).not.toContain('_activateClientRouteRendering')
+  })
+
+  it('does not keep a hydrate-none tree served as fallback for a different URL', () => {
+    expect(APP_ENTRY_TEMPLATE).toContain(
+      "_hydrateStrategy === 'none' && _canKeepStaticEntry",
+    )
+    expect(APP_ENTRY_TEMPLATE).toContain(
+      '_hasInitialLoaderData && _serverTreeMatchesEntry',
+    )
   })
 
   it('defers hydration with requestIdleCallback for strategy "idle"', () => {
@@ -79,6 +92,12 @@ describe('APP_ENTRY_TEMPLATE — meta.hydrate', () => {
     expect(doHydrateBlock).toContain('window.location.pathname')
   })
 
+  it('_doHydrate cannot overwrite a navigation requested before the URL commits', () => {
+    expect(APP_ENTRY_TEMPLATE).toContain('let _navigationIntent = 0')
+    expect(APP_ENTRY_TEMPLATE).toContain('const _hydrationIntent = _navigationIntent')
+    expect(APP_ENTRY_TEMPLATE).toContain('_navigationIntent === _hydrationIntent')
+  })
+
   it('guards direct page render with _currentPagePath === current.value.path', () => {
     expect(APP_ENTRY_TEMPLATE).toContain('_currentPagePath')
     expect(APP_ENTRY_TEMPLATE).toContain('_currentPagePath === current.value.path')
@@ -91,13 +110,69 @@ describe('APP_ENTRY_TEMPLATE — meta.hydrate', () => {
     expect(APP_ENTRY_TEMPLATE).toContain('return')
   })
 
-  it('keeps the SSR slot during the initRouter startup microtask navigation (before page chunk loads)', () => {
-    // initRouter() queues queueMicrotask(() => navigate(...)) to run guards on
-    // the entry URL. That microtask fires during await route.load() — before
-    // _currentPageTag is set. Without this guard, _cerHydrating would be set to
-    // false prematurely, dropping the SSR slot and showing an empty router-view.
-    expect(APP_ENTRY_TEMPLATE).toContain(
+  it('keeps the upgraded SSR tree as the initial live application when the route stays put', () => {
+    const doHydrateStart = APP_ENTRY_TEMPLATE.indexOf('const _doHydrate')
+    const doHydrateEnd = APP_ENTRY_TEMPLATE.indexOf(
+      "if (_hydrateStrategy === 'idle')",
+      doHydrateStart,
+    )
+    const doHydrateBlock = APP_ENTRY_TEMPLATE.slice(doHydrateStart, doHydrateEnd)
+
+    expect(doHydrateBlock).toContain('_hasInitialServerTree')
+    expect(APP_ENTRY_TEMPLATE).not.toContain(
       'if (_cerHydrating.value && _currentPageTag !== null) _cerHydrating.value = false',
+    )
+  })
+
+  it('switches an empty SPA shell to client rendering after initial route setup', () => {
+    expect(APP_ENTRY_TEMPLATE).toContain('const _hasInitialServerTree =')
+    expect(APP_ENTRY_TEMPLATE).toContain('!_hasInitialServerTree')
+    expect(APP_ENTRY_TEMPLATE).toContain('_activateClientRouteRendering()')
+  })
+
+  it('replaces a static-host fallback tree rendered for a different route', () => {
+    expect(APP_ENTRY_TEMPLATE).toContain("getAttribute('data-cer-route')")
+    expect(APP_ENTRY_TEMPLATE).toContain('decodeURIComponent(_serverTreePath)')
+    expect(APP_ENTRY_TEMPLATE).toContain('!_serverTreeMatchesEntry')
+  })
+
+  it('loads and renders the middleware redirect destination during initial hydration', () => {
+    expect(APP_ENTRY_TEMPLATE).toContain('_resolvedInitialPath !== _requestedInitialPath')
+    expect(APP_ENTRY_TEMPLATE).toContain('await _loadPageForPath(_resolvedInitialPath)')
+  })
+
+  it('does not let hydration fallback loading supersede an in-flight navigation loader', () => {
+    expect(APP_ENTRY_TEMPLATE).toContain(
+      '_navigationIntent === _hydrationIntent &&\n          _currentPagePath !== _resolvedInitialPath',
+    )
+  })
+
+  it('releases stale SSR content when a redirect completes during the initial chunk load', () => {
+    expect(APP_ENTRY_TEMPLATE).toContain('const _urlLeftInitialEntry = _currentPath !== _initPath')
+    expect(APP_ENTRY_TEMPLATE).toContain('_urlLeftInitialEntry ||')
+
+    const stabilityGuard = APP_ENTRY_TEMPLATE.indexOf('if (_currentPath === _initPath)')
+    const staleTreeCheck = APP_ENTRY_TEMPLATE.indexOf('const _urlLeftInitialEntry', stabilityGuard)
+    const activate = APP_ENTRY_TEMPLATE.indexOf('_activateClientRouteRendering()', staleTreeCheck)
+    expect(staleTreeCheck).toBeGreaterThan(stabilityGuard)
+    expect(activate).toBeGreaterThan(staleTreeCheck)
+  })
+
+  it('switches to client rendering and releases the SSR tree on real navigation', () => {
+    expect(APP_ENTRY_TEMPLATE).toContain('function _activateClientRouteRendering()')
+    expect(APP_ENTRY_TEMPLATE).toContain('_cerHydrating.value = false')
+    expect(APP_ENTRY_TEMPLATE).toContain('host.replaceChildren()')
+
+    const pushStart = APP_ENTRY_TEMPLATE.indexOf('router.push = async')
+    const pushEnd = APP_ENTRY_TEMPLATE.indexOf('\n}', pushStart)
+    expect(APP_ENTRY_TEMPLATE.slice(pushStart, pushEnd)).toContain(
+      '_activateClientRouteRendering()',
+    )
+
+    const replaceStart = APP_ENTRY_TEMPLATE.indexOf('router.replace = async')
+    const replaceEnd = APP_ENTRY_TEMPLATE.indexOf('\n}', replaceStart)
+    expect(APP_ENTRY_TEMPLATE.slice(replaceStart, replaceEnd)).toContain(
+      '_activateClientRouteRendering()',
     )
   })
 
@@ -116,15 +191,46 @@ describe('APP_ENTRY_TEMPLATE — meta.hydrate', () => {
   })
 })
 
+describe('APP_ENTRY_TEMPLATE — progressive link navigation', () => {
+  it('passes the resolved router configuration to the runtime router', () => {
+    expect(APP_ENTRY_TEMPLATE).toContain("import { runtimeConfig, appConfig } from 'virtual:cer-app-config'")
+    expect(APP_ENTRY_TEMPLATE).toContain('initRouter({ ...appConfig.router, routes })')
+  })
+
+  it('intercepts unhandled internal shadow-DOM anchors before islands hydrate', () => {
+    expect(APP_ENTRY_TEMPLATE).toContain("document.addEventListener('click'")
+    expect(APP_ENTRY_TEMPLATE).toContain('event.composedPath()')
+    expect(APP_ENTRY_TEMPLATE).toContain('event.defaultPrevented')
+    expect(APP_ENTRY_TEMPLATE).toContain("anchor.getAttribute('target')")
+    expect(APP_ENTRY_TEMPLATE).toContain('void router.push(')
+  })
+
+  it('routes same-page fragments through the runtime scroll implementation', () => {
+    const listenerStart = APP_ENTRY_TEMPLATE.indexOf("document.addEventListener('click'")
+    const listenerEnd = APP_ENTRY_TEMPLATE.indexOf('// ─── Plugins', listenerStart)
+    const listener = APP_ENTRY_TEMPLATE.slice(listenerStart, listenerEnd)
+
+    expect(listener).toContain('event.preventDefault()')
+    expect(listener).toContain('void _push(url.pathname + url.search + url.hash)')
+    expect(listener).not.toContain('Preserve native fragment navigation')
+  })
+})
+
 // ─── Loader sequence ──────────────────────────────────────────────────────────
 
 describe('APP_ENTRY_TEMPLATE — loader sequence', () => {
+  it('uses latest-request-wins page loading so stale imports cannot replace a newer route', () => {
+    expect(APP_ENTRY_TEMPLATE).toContain('let _pageLoadVersion = 0')
+    expect(APP_ENTRY_TEMPLATE).toContain('const loadVersion = ++_pageLoadVersion')
+    expect(APP_ENTRY_TEMPLATE).toContain('if (loadVersion !== _pageLoadVersion) return')
+  })
+
   it('_loadPageForPath calls mod.loader with { params, query }', () => {
     expect(APP_ENTRY_TEMPLATE).toContain('mod.loader({ params, query })')
   })
 
   it('_loadPageForPath sets globalThis.__CER_DATA__ from loader result', () => {
-    expect(APP_ENTRY_TEMPLATE).toContain('(globalThis).__CER_DATA__ = data')
+    expect(APP_ENTRY_TEMPLATE).toContain('(globalThis).__CER_DATA__ = loaderData')
   })
 
   it('_loadPageForPath derives primitive attrs from reused loader data too', () => {
@@ -140,6 +246,13 @@ describe('APP_ENTRY_TEMPLATE — loader sequence', () => {
     // The direct-render path passes _currentPageAttrs to the page element attrs
     // so useProps() in the page component can read loader-returned primitives.
     expect(APP_ENTRY_TEMPLATE).toContain('attrs: _currentPageAttrs')
+  })
+
+  it('keys each published page load so reused catch-all tags receive fresh loader state', () => {
+    expect(APP_ENTRY_TEMPLATE).toContain('_currentPageKey = loadVersion')
+    expect(APP_ENTRY_TEMPLATE).toContain(
+      '{ tag: _currentPageTag, key: _currentPageKey, props: { attrs: _currentPageAttrs }, children: [] }',
+    )
   })
 
   it('router.push deletes __CER_DATA__ before loading the new page', () => {

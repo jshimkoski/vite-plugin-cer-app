@@ -4,10 +4,12 @@ export default defineConfig({
   test: {
     environment: 'node',
     environmentOptions: {
-      happyDom: {
+      happyDOM: {
         // Prevent happy-dom from attempting to fetch external script files
         settings: {
           disableJavaScriptFileLoading: true,
+          disableCSSFileLoading: true,
+          handleDisabledFileLoadingAsSuccess: true,
           disableJavaScriptEvaluation: true,
           disableComputedStyleRendering: true,
         },

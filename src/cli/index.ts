@@ -5,6 +5,7 @@ import { buildCommand } from './commands/build.js'
 import { previewCommand } from './commands/preview.js'
 import { generateCommand } from './commands/generate.js'
 import { adaptCommand } from './commands/adapt.js'
+import { checkCommand } from './commands/check.js'
 
 const program = new Command()
 
@@ -18,5 +19,6 @@ program.addCommand(buildCommand())
 program.addCommand(previewCommand())
 program.addCommand(generateCommand())
 program.addCommand(adaptCommand())
+program.addCommand(checkCommand())
 
 await program.parseAsync(process.argv)
