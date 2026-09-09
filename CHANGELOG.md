@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.25.0] - 2026-09-09
+
+- feat: enhance link relation handling in Markdown and update sitemap generation logic (38559cd)
+
 ## [v0.24.0] - 2026-09-09
 
 - feat: improve content search and fetch composables (0806d44)
