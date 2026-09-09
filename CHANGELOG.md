@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.24.0] - 2026-09-09
+
+- feat: improve content search and fetch composables (0806d44)
+
 ## [v0.23.2] - 2026-04-25
 
 - fix: add siteUrl configuration for canonical links and robots.txt generation (05c53ca)
