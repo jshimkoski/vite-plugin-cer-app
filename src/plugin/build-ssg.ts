@@ -622,12 +622,11 @@ export async function buildSSG(
   }
 
   // Step 8: Write sitemap.xml when siteUrl is set and no public/sitemap.xml exists.
-  // Uses the successfully-rendered paths only (errors are excluded) and today's
-  // date as <lastmod> for all URLs since per-page modification dates aren't tracked.
+  // Uses successfully-rendered paths only (errors are excluded). Do not emit a
+  // fabricated build-date <lastmod>; it is only useful when tied to page changes.
   const publicSitemap = join(config.root, 'public', 'sitemap.xml')
   if (config.siteUrl && !existsSync(publicSitemap)) {
-    const lastmod = new Date().toISOString().slice(0, 10)
-    const sitemapContent = generateSitemapXml(config.siteUrl, generatedPaths, lastmod)
+    const sitemapContent = generateSitemapXml(config.siteUrl, generatedPaths)
     await writeFile(join(distDir, 'sitemap.xml'), sitemapContent, 'utf-8')
     console.log('[cer-app] Generated sitemap.xml')
   }

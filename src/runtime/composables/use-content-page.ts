@@ -201,12 +201,14 @@ export function useContentSeo(options: ContentSeoOptions): void {
   })
   if (!options.doc) return
 
-  const breadcrumbItems = (options.breadcrumbs ?? []).map((crumb, index) => ({
-    '@type': 'ListItem',
-    position: index + 1,
-    name: crumb.label,
-    item: `${origin}${crumb.path === '/' ? '' : crumb.path}`,
-  }))
+  const breadcrumbItems = (options.breadcrumbs ?? [])
+    .filter((crumb) => crumb.hasPage)
+    .map((crumb, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      name: crumb.label,
+      item: `${origin}${crumb.path === '/' ? '' : crumb.path}`,
+    }))
   useHead({
     script: [{
       type: 'application/ld+json',

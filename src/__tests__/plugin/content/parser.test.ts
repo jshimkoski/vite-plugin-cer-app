@@ -119,6 +119,16 @@ ${'A'.repeat(200)}
 A paragraph here.
 `)
 
+  writeFileSync(join(contentDir, 'links.md'), `# Links
+
+[Affiliate product](https://amzn.to/example "Product")
+
+[Documentation](https://example.com/docs)
+`)
+
+  writeFileSync(join(contentDir, 'heading-link.md'), `# [Affiliate heading](https://amzn.to/heading)
+`)
+
   writeFileSync(join(contentDir, 'javascript-frontmatter.md'), `---js
 ({ title: 'Executable metadata' })
 ---
@@ -234,6 +244,41 @@ describe('parseContentFile — Markdown', () => {
     expect(item.body).toContain('Rest of the body')
     // The <!-- more --> marker itself must not appear in the rendered body HTML
     expect(item.body).not.toContain('<!-- more -->')
+  })
+
+  it('leaves Markdown links unchanged when no link relation policy is configured', () => {
+    const item = parseContentFile(makeFile(join(contentDir, 'links.md'), 'md'), contentDir)
+    expect(item.body).toContain('<a href="https://amzn.to/example" title="Product">')
+    expect(item.body).not.toContain(' rel=')
+  })
+
+  it('selectively adds a normalized relation to rendered Markdown links', () => {
+    const item = parseContentFile(
+      makeFile(join(contentDir, 'links.md'), 'md'),
+      contentDir,
+      {
+        linkRel: ({ href, title, text }) => {
+          expect(title).toBe(href.includes('amzn.to') ? 'Product' : null)
+          expect(text).toBe(href.includes('amzn.to') ? 'Affiliate product' : 'Documentation')
+          return href.startsWith('https://amzn.to/') ? 'sponsored  noopener sponsored' : undefined
+        },
+      },
+    )
+    expect(item.body).toContain(
+      '<a rel="sponsored noopener" href="https://amzn.to/example" title="Product">',
+    )
+    expect(item.body).toContain('<a href="https://example.com/docs">Documentation</a>')
+  })
+
+  it('applies the link relation policy to links inside headings', () => {
+    const item = parseContentFile(
+      makeFile(join(contentDir, 'heading-link.md'), 'md'),
+      contentDir,
+      { linkRel: ({ href }) => href.includes('amzn.to') ? 'sponsored' : undefined },
+    )
+    expect(item.body).toContain(
+      '<h1 id="affiliate-heading"><a rel="sponsored" href="https://amzn.to/heading">',
+    )
   })
 })
 

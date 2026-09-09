@@ -278,9 +278,10 @@ describe('runNetlifyAdapter — SSG mode', () => {
     expect(existsSync(join(root, '.netlify/publish/ssg-manifest.json'))).toBe(false)
   })
 
-  it('netlify.toml has SPA fallback redirect', async () => {
+  it('netlify.toml serves the shell with a 404 status for unmatched SSG paths', async () => {
     await runNetlifyAdapter(root)
     const toml = readText(root, 'netlify.toml')
     expect(toml).toContain('to = "/index.html"')
+    expect(toml).toContain('status = 404')
   })
 })

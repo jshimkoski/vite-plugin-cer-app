@@ -37,7 +37,8 @@ describe('render: server — always SSR', () => {
       // The route was skipped during SSG. The static preview falls back to
       // dist/index.html (SPA shell) rather than a pre-rendered page, so the
       // server-rendered heading is absent from the raw HTML response.
-      cy.request('/render-server-test').then((response) => {
+      cy.request({ url: '/render-server-test', failOnStatusCode: false }).then((response) => {
+        expect(response.status).to.equal(404)
         expect(response.body).not.to.include('render-server-heading')
       })
     })
@@ -48,7 +49,7 @@ describe('render: server — always SSR', () => {
 
 describe('render: spa — client-only', () => {
   it('renders the page heading after JS boots', () => {
-    cy.visit('/render-spa-test')
+    cy.visit('/render-spa-test', { failOnStatusCode: mode !== 'ssg' })
     cy.get('[data-cy=render-spa-heading]').should('contain', 'Render SPA Test')
   })
 
@@ -62,7 +63,8 @@ describe('render: spa — client-only', () => {
 
   if (mode === 'ssg') {
     it('route with render:spa is not pre-rendered — not found in ssg dist', () => {
-      cy.request('/render-spa-test').then((response) => {
+      cy.request({ url: '/render-spa-test', failOnStatusCode: false }).then((response) => {
+        expect(response.status).to.equal(404)
         expect(response.body).not.to.include('render-spa-heading')
       })
     })

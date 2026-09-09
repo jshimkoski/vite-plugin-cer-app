@@ -92,6 +92,16 @@ describe('preview server — Cache-Control', () => {
   })
 })
 
+describe('preview server — SSG not-found status', () => {
+  it('serves the app shell with a 404 status for unmatched SSG paths', () => {
+    expect(src).toContain("existsSync(join(distDir, 'ssg-manifest.json')) ? 404 : 200")
+    const fnStart = src.indexOf('function serveStaticFile(')
+    const fnEnd = src.indexOf('\nfunction ', fnStart + 1)
+    const body = src.slice(fnStart, fnEnd > -1 ? fnEnd : undefined)
+    expect(body).toContain('res.statusCode = fallbackStatus')
+  })
+})
+
 // ─── Graceful shutdown ────────────────────────────────────────────────────────
 
 describe('preview server — graceful shutdown', () => {

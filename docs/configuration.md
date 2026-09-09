@@ -335,7 +335,7 @@ When set, the SSG build automatically applies the following to every generated H
 |---|---|
 | **Canonical link** | Injects `<link rel="canonical" href="${siteUrl}${path}">` before `</head>` on every page, unless a canonical is already present |
 | **robots.txt** | Writes `dist/robots.txt` with `Allow: /` and a `Sitemap:` directive pointing to `${siteUrl}/sitemap.xml` — skipped when `public/robots.txt` already exists |
-| **sitemap.xml** | Writes `dist/sitemap.xml` containing one `<url>` entry per successfully-rendered page, using today's build date as `<lastmod>` — skipped when `public/sitemap.xml` already exists |
+| **sitemap.xml** | Writes `dist/sitemap.xml` containing one `<url>` entry per successfully-rendered page; `<lastmod>` is omitted unless the project supplies a custom sitemap with trustworthy modification dates — skipped when `public/sitemap.xml` already exists |
 
 `siteUrl` is also available at runtime via `useRuntimeConfig().public.siteUrl`. User-supplied `runtimeConfig.public.siteUrl` takes precedence over the shorthand.
 
@@ -408,6 +408,9 @@ export default defineConfig({
   content: {
     dir: 'content',  // default
     drafts: false,   // default
+    linkRel: ({ href }) => href.startsWith('https://amzn.to/')
+      ? 'sponsored'
+      : undefined,
   },
 })
 ```
@@ -425,6 +428,15 @@ Content directory relative to the project root. The default resolves to `{root}/
 **Default:** `false`
 
 When `false`, files with `draft: true` in their frontmatter are excluded from the content store and search index in production builds.
+
+### `content.linkRel`
+
+**Type:** `string | ((link: { href, title, text }) => string | undefined)`
+**Default:** `undefined`
+
+Adds a `rel` attribute to links rendered from Markdown. A string applies to
+every Markdown link; a callback can qualify selected links such as affiliate
+URLs. Whitespace-separated relation tokens are normalized and deduplicated.
 
 See [content.md](./content.md) for full documentation.
 

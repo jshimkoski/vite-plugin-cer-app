@@ -154,6 +154,7 @@ function serveStaticFile(
   req: IncomingMessage,
   res: ServerResponse,
   distDir: string,
+  fallbackStatus = 200,
 ): boolean {
   const urlPath = (req.url ?? '/').split('?')[0]
 
@@ -175,6 +176,7 @@ function serveStaticFile(
     } else if (existsSync(join(distDir, 'index.html'))) {
       // SPA fallback: serve root index.html
       filePath = join(distDir, 'index.html')
+      res.statusCode = fallbackStatus
     } else {
       return false
     }
@@ -503,7 +505,8 @@ export function previewCommand(): Command {
               return
             }
           }
-          const served = serveStaticFile(req, res, distDir)
+          const fallbackStatus = existsSync(join(distDir, 'ssg-manifest.json')) ? 404 : 200
+          const served = serveStaticFile(req, res, distDir, fallbackStatus)
           if (!served) {
             res.statusCode = 404
             res.end('Not Found')

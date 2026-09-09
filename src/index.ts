@@ -17,7 +17,15 @@ export type { UseFetchOptions, UseFetchReturn, UseFetchResult, UseFetchReactiveR
 export type { ResolvedCerConfig } from './plugin/dev-server.js'
 
 // Content layer types
-export type { ContentItem, ContentMeta, ContentHeading, ContentSearchResult, CerContentConfig } from './types/content.js'
+export type {
+  ContentItem,
+  ContentMeta,
+  ContentHeading,
+  ContentSearchResult,
+  ContentLinkContext,
+  ContentLinkRel,
+  CerContentConfig,
+} from './types/content.js'
 export type {
   ContentBreadcrumb,
   ContentBreadcrumbOptions,

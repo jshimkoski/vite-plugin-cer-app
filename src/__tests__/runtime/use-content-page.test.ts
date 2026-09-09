@@ -115,6 +115,26 @@ describe('content-page helpers', () => {
     expect(html).toContain('BreadcrumbList')
   })
 
+  it('omits non-page ancestors from breadcrumb structured data', () => {
+    const breadcrumbs = useContentBreadcrumbs(
+      '/guides/getting-started',
+      docs[2],
+      ['/'],
+    )
+    beginHeadCollection()
+    useContentSeo({
+      doc: docs[2],
+      path: '/guides/getting-started',
+      siteUrl: 'https://example.test',
+      breadcrumbs,
+    })
+    const html = serializeHeadTags(endHeadCollection())
+
+    expect(html).toContain('"item":"https://example.test"')
+    expect(html).not.toContain('"item":"https://example.test/guides"')
+    expect(html).toContain('"item":"https://example.test/guides/getting-started"')
+  })
+
   it('restores indexable robots metadata after a not-found render', () => {
     beginHeadCollection()
     useContentSeo({

@@ -32,6 +32,7 @@ export function resolveContentDir(root: string, contentConfig?: CerContentConfig
 export async function loadContentStore(
   contentDir: string,
   isDraft: boolean,
+  contentConfig?: CerContentConfig,
 ): Promise<ContentItem[]> {
   if (!existsSync(contentDir)) return []
 
@@ -40,7 +41,7 @@ export async function loadContentStore(
   const results = await Promise.all(
     files.map(async (file) => {
       try {
-        const item = await parseContentFileAsync(file, contentDir)
+        const item = await parseContentFileAsync(file, contentDir, contentConfig)
         // Skip drafts unless the user explicitly opted in via drafts: true
         if (!isDraft && item.draft === true) return null
         return item
@@ -175,7 +176,7 @@ export function cerContent(
     },
 
     async buildStart() {
-      const items = await loadContentStore(_resolvedContentDir, includeDrafts)
+      const items = await loadContentStore(_resolvedContentDir, includeDrafts, contentConfig)
       const g = globalThis as Record<string, unknown>
       g[CONTENT_STORE_KEY] = items
     },
@@ -188,19 +189,19 @@ export function cerContent(
 
       server.watcher.on('add', async (file: string) => {
         if (!file.startsWith(_resolvedContentDir)) return
-        await refreshStore(_resolvedContentDir, includeDrafts)
+        await refreshStore(_resolvedContentDir, includeDrafts, contentConfig)
         server.ws.send({ type: 'full-reload' })
       })
 
       server.watcher.on('change', async (file: string) => {
         if (!file.startsWith(_resolvedContentDir)) return
-        await refreshStore(_resolvedContentDir, includeDrafts)
+        await refreshStore(_resolvedContentDir, includeDrafts, contentConfig)
         server.ws.send({ type: 'full-reload' })
       })
 
       server.watcher.on('unlink', async (file: string) => {
         if (!file.startsWith(_resolvedContentDir)) return
-        await refreshStore(_resolvedContentDir, includeDrafts)
+        await refreshStore(_resolvedContentDir, includeDrafts, contentConfig)
         server.ws.send({ type: 'full-reload' })
       })
     },
@@ -223,8 +224,12 @@ export function cerContent(
   return plugin
 }
 
-async function refreshStore(contentDir: string, includeDrafts: boolean): Promise<void> {
-  const items = await loadContentStore(contentDir, includeDrafts)
+async function refreshStore(
+  contentDir: string,
+  includeDrafts: boolean,
+  contentConfig?: CerContentConfig,
+): Promise<void> {
+  const items = await loadContentStore(contentDir, includeDrafts, contentConfig)
   const g = globalThis as Record<string, unknown>
   g[CONTENT_STORE_KEY] = items
   // Invalidate the dev middleware caches so the next request rebuilds manifest

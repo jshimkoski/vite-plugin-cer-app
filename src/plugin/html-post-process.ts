@@ -85,17 +85,19 @@ export function generateRobotsTxt(siteUrl: string | null): string {
 
 /**
  * Generates the content of a `sitemap.xml` file in Sitemap Protocol 0.9
- * format. Includes every successfully-rendered path with the build date as
- * `<lastmod>`. `lastmod` should be an ISO-8601 date string (YYYY-MM-DD).
+ * format. Includes every successfully-rendered path. A caller may provide a
+ * trustworthy per-set `lastmod` date, but the framework omits it by default
+ * rather than treating the build date as a content modification date.
  */
 export function generateSitemapXml(
   siteUrl: string,
   paths: string[],
-  lastmod: string,
+  lastmod?: string,
 ): string {
   const urls = paths.map((p) => {
     const loc = escapeXml(siteUrl + (p === '/' ? '' : p))
-    return `  <url>\n    <loc>${loc}</loc>\n    <lastmod>${lastmod}</lastmod>\n  </url>`
+    const modified = lastmod ? `\n    <lastmod>${lastmod}</lastmod>` : ''
+    return `  <url>\n    <loc>${loc}</loc>${modified}\n  </url>`
   })
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',

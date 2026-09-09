@@ -51,7 +51,22 @@ export interface ContentSearchResult {
   description?: string
 }
 
-/** Content layer configuration. Controls the directory and draft behaviour. */
+/** Metadata supplied when resolving a relation for a rendered Markdown link. */
+export interface ContentLinkContext {
+  href: string
+  title: string | null
+  text: string
+}
+
+/**
+ * Relation applied to rendered Markdown links. A callback can selectively
+ * qualify links (for example, affiliate URLs) while leaving other links alone.
+ */
+export type ContentLinkRel =
+  | string
+  | ((link: ContentLinkContext) => string | null | undefined | false)
+
+/** Content layer configuration. Controls parsing, directory, and draft behaviour. */
 export interface CerContentConfig {
   /**
    * Content directory relative to the project root. Defaults to `'content'`,
@@ -63,4 +78,10 @@ export interface CerContentConfig {
    * production builds. Defaults to `false`.
    */
   drafts?: boolean
+  /**
+   * Adds a `rel` attribute to links rendered from Markdown. Provide a string to
+   * apply the same relation to every link, or a callback to qualify links
+   * selectively. Empty callback results leave the link unchanged.
+   */
+  linkRel?: ContentLinkRel
 }

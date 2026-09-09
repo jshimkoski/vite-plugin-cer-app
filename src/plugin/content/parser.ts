@@ -1,8 +1,13 @@
-import { marked, type Token } from 'marked'
+import { marked, type Renderer, type Token } from 'marked'
 import { parse as parseYaml } from 'yaml'
 import { readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import type { ContentHeading, ContentItem, ContentMeta } from '../../types/content.js'
+import type {
+  CerContentConfig,
+  ContentHeading,
+  ContentItem,
+  ContentMeta,
+} from '../../types/content.js'
 import type { ContentFile } from './scanner.js'
 import { fileToContentPath } from './path-utils.js'
 import { relative } from 'pathe'
@@ -104,16 +109,52 @@ function extractFallbacks(tokens: Token[]): { title?: string; description?: stri
   return { title, description }
 }
 
-// ─── Custom renderer: add id to heading tags ─────────────────────────────────
+// ─── Custom renderer: heading ids and configurable link relations ────────────
 
-const renderer = new marked.Renderer()
+function escapeAttribute(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
 
-renderer.heading = function ({ tokens, depth }) {
-  const text = tokens.map((t) => ('text' in t ? (t.text as string) : '')).join('')
-  const id = slugify(text)
-  const level = depth as ContentHeading['depth']
-  const innerHtml = marked.parseInline(tokens.map((t) => ('raw' in t ? t.raw : '')).join(''))
-  return `<h${level} id="${id}">${innerHtml}</h${level}>\n`
+function normalizeRel(value: string | null | undefined | false): string | undefined {
+  if (!value) return undefined
+  const tokens = [...new Set(value.trim().split(/\s+/).filter(Boolean))]
+  return tokens.length > 0 ? tokens.join(' ') : undefined
+}
+
+function createRenderer(contentConfig?: CerContentConfig): Renderer {
+  const renderer = new marked.Renderer()
+
+  renderer.heading = function ({ tokens, depth }) {
+    const text = tokens.map((t) => ('text' in t ? (t.text as string) : '')).join('')
+    const id = slugify(text)
+    const level = depth as ContentHeading['depth']
+    const innerHtml = this.parser.parseInline(tokens)
+    return `<h${level} id="${id}">${innerHtml}</h${level}>\n`
+  }
+
+  const linkRel = contentConfig?.linkRel
+  if (linkRel) {
+    const renderDefaultLink = renderer.link
+    renderer.link = function (token) {
+      const rendered = renderDefaultLink.call(this, token)
+      const configuredRel = typeof linkRel === 'function'
+        ? linkRel({
+            href: token.href,
+            title: token.title ?? null,
+            text: inlineToPlainText(token.tokens ?? []),
+          })
+        : linkRel
+      const rel = normalizeRel(configuredRel)
+      if (!rel) return rendered
+      return rendered.replace(/^<a\b/, `<a rel="${escapeAttribute(rel)}"`)
+    }
+  }
+
+  return renderer
 }
 
 // ─── Parser ───────────────────────────────────────────────────────────────────
@@ -193,6 +234,7 @@ function parseContentFileFromRaw(
   file: ContentFile,
   contentDir: string,
   raw: string,
+  contentConfig?: CerContentConfig,
 ): ContentItem {
   const _path = fileToContentPath(file.filePath, contentDir)
   const _file = relative(contentDir, file.filePath)
@@ -237,6 +279,7 @@ function parseContentFileFromRaw(
   const lexer = new marked.Lexer()
   const tokens = lexer.lex(bodySource)
   const toc = extractHeadings(tokens)
+  const renderer = createRenderer(contentConfig)
 
   // Render full body with custom renderer (adds id= to headings)
   const body = marked.parser(tokens, { renderer }) as string
@@ -293,9 +336,10 @@ function parseContentFileFromRaw(
 export function parseContentFile(
   file: ContentFile,
   contentDir: string,
+  contentConfig?: CerContentConfig,
 ): ContentItem {
   const raw = readFileSync(file.filePath, 'utf-8')
-  return parseContentFileFromRaw(file, contentDir, raw)
+  return parseContentFileFromRaw(file, contentDir, raw, contentConfig)
 }
 
 /**
@@ -305,9 +349,10 @@ export function parseContentFile(
 export async function parseContentFileAsync(
   file: ContentFile,
   contentDir: string,
+  contentConfig?: CerContentConfig,
 ): Promise<ContentItem> {
   const raw = await readFile(file.filePath, 'utf-8')
-  return parseContentFileFromRaw(file, contentDir, raw)
+  return parseContentFileFromRaw(file, contentDir, raw, contentConfig)
 }
 
 /**

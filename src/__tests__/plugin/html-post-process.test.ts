@@ -156,6 +156,11 @@ describe('generateSitemapXml', () => {
     expect(lastmodMatches).toHaveLength(2)
   })
 
+  it('omits lastmod when no trustworthy modification date is supplied', () => {
+    const xml = generateSitemapXml('https://example.com', ['/a', '/b'])
+    expect(xml).not.toContain('<lastmod>')
+  })
+
   it('emits one <url> block per path', () => {
     const paths = ['/', '/about', '/blog', '/contact']
     const xml = generateSitemapXml('https://example.com', paths, '2026-01-01')

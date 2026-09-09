@@ -28,8 +28,8 @@ describe('sitemap.xml', { testIsolation: false }, () => {
       .should('contain', '<loc>https://example.com</loc>')
   })
 
-  it('contains <lastmod> entries in YYYY-MM-DD format', () => {
-    cy.request('/sitemap.xml').its('body').should('match', /<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/)
+  it('does not fabricate build-date <lastmod> entries', () => {
+    cy.request('/sitemap.xml').its('body').should('not.contain', '<lastmod>')
   })
 
   it('contains multiple <url> entries', () => {
