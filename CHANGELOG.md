@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.26.0] - 2026-09-10
+
+- feat: enhance browser Back/Forward navigation handling and page data management (8fdaa7c)
+
 ## [v0.25.0] - 2026-09-09
 
 - feat: enhance link relation handling in Markdown and update sitemap generation logic (38559cd)
