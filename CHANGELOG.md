@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.27.0] - 2026-09-10
+
+- feat: add support for path-specific labels in useContentBreadcrumbs (e237ddf)
+
 ## [v0.26.0] - 2026-09-10
 
 - feat: enhance browser Back/Forward navigation handling and page data management (8fdaa7c)
