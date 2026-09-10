@@ -214,6 +214,29 @@ describe('APP_ENTRY_TEMPLATE — progressive link navigation', () => {
     expect(listener).toContain('void _push(url.pathname + url.search + url.hash)')
     expect(listener).not.toContain('Preserve native fragment navigation')
   })
+
+  it('prepares page modules and loader data for browser Back/Forward navigation', () => {
+    const listenerStart = APP_ENTRY_TEMPLATE.indexOf("window.addEventListener('popstate'")
+    const listenerEnd = APP_ENTRY_TEMPLATE.indexOf('// Make ordinary internal links', listenerStart)
+    const listener = APP_ENTRY_TEMPLATE.slice(listenerStart, listenerEnd)
+
+    expect(listenerStart).toBeGreaterThanOrEqual(0)
+    expect(listener).toContain('window.location.pathname + window.location.search + window.location.hash')
+    expect(listener).toContain('_activateClientRouteRendering()')
+    expect(listener).toContain('delete (globalThis).__CER_DATA__')
+    expect(listener).toContain('await _loadPageForPath(path)')
+    expect(listener).toContain('isNavigating.value = false')
+  })
+
+  it('does not reload page data for fragment-only history traversal', () => {
+    expect(APP_ENTRY_TEMPLATE).toContain('let _currentPageLocation =')
+    expect(APP_ENTRY_TEMPLATE).toContain('_currentPageLocation = url.pathname + url.search')
+
+    const listenerStart = APP_ENTRY_TEMPLATE.indexOf("window.addEventListener('popstate'")
+    const listenerEnd = APP_ENTRY_TEMPLATE.indexOf('// Make ordinary internal links', listenerStart)
+    const listener = APP_ENTRY_TEMPLATE.slice(listenerStart, listenerEnd)
+    expect(listener).toContain('if (pageLocation === _currentPageLocation) return')
+  })
 })
 
 // ─── Loader sequence ──────────────────────────────────────────────────────────

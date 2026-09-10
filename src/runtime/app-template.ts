@@ -77,6 +77,12 @@ let _currentPageKey = null
 // redirects (e.g. middleware returning '/login') so cer-layout-view falls
 // back to <router-view> when the current route differs from what was pre-loaded.
 let _currentPagePath = null
+// The pathname + query whose page data is currently loaded. Browser history
+// traversals that change only the fragment must stay on the runtime router's
+// lightweight scroll path instead of needlessly re-running the page loader.
+let _currentPageLocation = typeof window !== 'undefined'
+  ? window.location.pathname + window.location.search
+  : null
 // Route chunks and loaders may resolve out of order during rapid navigation or
 // initial hydration. Only the newest request is allowed to publish page state.
 let _pageLoadVersion = 0
@@ -104,6 +110,7 @@ async function _loadPageForPath(path, options = {}) {
       _currentPageAttrs = {}
       _currentPageKey = null
       _currentPagePath = url.pathname
+      _currentPageLocation = url.pathname + url.search
       return
     }
     const mod = await route.load()
@@ -140,6 +147,7 @@ async function _loadPageForPath(path, options = {}) {
     }
     _currentPageTag = mod.default ?? null
     _currentPagePath = url.pathname
+    _currentPageLocation = url.pathname + url.search
     _currentPageAttrs = loaderAttrs
     _currentPageKey = loadVersion
   } catch {
@@ -206,6 +214,40 @@ router.replace = async (path) => {
     if (navigationIntent === _navigationIntent) isNavigating.value = false
   }
 }
+
+// The runtime router owns the History API and commits route state on popstate.
+// push/replace above can prepare the destination before that commit because the
+// app initiated those navigations. Browser Back/Forward bypass those methods,
+// so mirror their page-module/data preparation here. The runtime registered its
+// popstate listener during initRouter(); its async guard pipeline and this async
+// page load can safely proceed together, while isNavigating guarantees a final
+// render after the page load publishes its non-reactive tag/attrs bookkeeping.
+window.addEventListener('popstate', () => {
+  const path = window.location.pathname + window.location.search + window.location.hash
+  const pageLocation = window.location.pathname + window.location.search
+
+  // Fragment-only traversal needs no new component or loader data. The runtime
+  // still receives the event and synchronizes the route fragment/scroll state.
+  if (pageLocation === _currentPageLocation) return
+
+  const navigationIntent = ++_navigationIntent
+  isNavigating.value = true
+  _activateClientRouteRendering()
+  currentError.value = null
+
+  void (async () => {
+    try {
+      delete (globalThis).__CER_DATA__
+      await _loadPageForPath(path)
+    } catch (err) {
+      if (navigationIntent === _navigationIntent) {
+        currentError.value = err instanceof Error ? err.message : String(err)
+      }
+    } finally {
+      if (navigationIntent === _navigationIntent) isNavigating.value = false
+    }
+  })()
+})
 
 // Make ordinary internal links participate in client-side routing even when
 // their owning custom element has not hydrated yet. The listener runs in the
