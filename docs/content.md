@@ -469,6 +469,45 @@ Important behavior notes:
 
 ---
 
+## `useContentBreadcrumbs()`
+
+**Auto-imported** in pages, layouts, and components.
+
+Builds breadcrumb data from a normalized content path. The final crumb uses the
+current document title; ancestor labels are generated from their path segments.
+Use path-specific `labels` for spelling that cannot be inferred from a URL,
+including acronyms, initialisms, and product names:
+
+```ts
+const props = useProps({ all: '' })
+const data = usePageData<ContentPageData>()
+const path = normalizeContentPath(props.all)
+
+const breadcrumbs = useContentBreadcrumbs(
+  path,
+  data?.doc ?? null,
+  data?.existingPaths ?? ['/'],
+  {
+    labels: {
+      '/products/analogdaw': 'AnalogDAW',
+      '/reference/web-api': 'Web API',
+    },
+  },
+)
+```
+
+Label keys are normalized absolute paths, so leading or trailing slashes are
+optional. Matching by complete path also lets two identically named segments
+have different labels in different parts of the content tree. Explicit labels
+take precedence over the current document title and automatic formatting.
+Unlisted paths retain their normal labels.
+
+Other options are `rootLabel`, `rootIcon`, and `formatLabel`. Use `formatLabel`
+when every automatically generated segment needs custom formatting; use
+`labels` for targeted exceptions.
+
+---
+
 ## `useContentSearch()`
 
 **Auto-imported** in pages, layouts, and components.

@@ -21,6 +21,8 @@ export interface ContentBreadcrumb {
 export interface ContentBreadcrumbOptions {
   rootLabel?: string
   rootIcon?: string
+  /** Labels keyed by normalized breadcrumb path, for acronyms and product names. */
+  labels?: Readonly<Record<string, string>>
   formatLabel?: (segment: string) => string
 }
 
@@ -96,6 +98,12 @@ export function useContentBreadcrumbs(
   const normalized = normalizeContentPath(path)
   const segments = normalized.split('/').filter(Boolean)
   const formatLabel = options.formatLabel ?? defaultFormatLabel
+  const labels = new Map(
+    Object.entries(options.labels ?? {}).map(([labelPath, label]) => [
+      normalizeContentPath(labelPath),
+      label,
+    ]),
+  )
   const pagePaths = new Set(existingPaths)
   const crumbs: Array<{ label: string; path: string; icon: string }> = [{
     label: options.rootLabel ?? 'Home',
@@ -107,9 +115,11 @@ export function useContentBreadcrumbs(
   segments.forEach((segment, index) => {
     current += `/${segment}`
     crumbs.push({
-      label: index === segments.length - 1 && doc?.title
-        ? doc.title
-        : formatLabel(segment),
+      label: labels.get(current) ?? (
+        index === segments.length - 1 && doc?.title
+          ? doc.title
+          : formatLabel(segment)
+      ),
       path: current,
       icon: '',
     })

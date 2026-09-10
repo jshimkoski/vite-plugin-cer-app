@@ -83,6 +83,20 @@ describe('content-page helpers', () => {
     ])
   })
 
+  it('supports path-specific labels without changing automatic labels elsewhere', () => {
+    expect(useContentBreadcrumbs(
+      '/products/analogdaw/recording-audio',
+      { ...docs[2], title: '6 · Recording Audio' },
+      ['/', '/products', '/products/analogdaw'],
+      { labels: { 'products/analogdaw/': 'AnalogDAW' } },
+    )).toEqual([
+      expect.objectContaining({ label: 'Home', path: '/' }),
+      expect.objectContaining({ label: 'Products', path: '/products' }),
+      expect.objectContaining({ label: 'AnalogDAW', path: '/products/analogdaw' }),
+      expect.objectContaining({ label: '6 · Recording Audio', path: '/products/analogdaw/recording-audio' }),
+    ])
+  })
+
   it('selects configured heading depths without mutating the document', () => {
     expect(useContentHeadings(docs[2])).toEqual([
       { depth: 2, id: 'install', text: 'Install' },
