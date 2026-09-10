@@ -1,6 +1,11 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+
+## Unreleased
+
+- fix: retain prerendered `hydrate: 'none'` content until client navigation data is ready, preventing transient not-found flashes when no loading component is defined
+
 ## [v0.27.0] - 2026-09-10
 
 - feat: add support for path-specific labels in useContentBreadcrumbs (e237ddf)
@@ -248,5 +253,4 @@ All notable changes to this project will be documented in this file.
 - fix: add nvmrc (7065201)
 - feat: add publishing capability (812152b)
 - initial commit (43a8365)
-
 

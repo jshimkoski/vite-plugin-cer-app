@@ -180,8 +180,13 @@ let _navigationIntent = 0
 router.push = async (path) => {
   const navigationIntent = ++_navigationIntent
   isNavigating.value = true
-  _activateClientRouteRendering()
   currentError.value = null
+  // A loading component is an explicit request to replace the current tree
+  // while the destination is prepared. Without one, retain an initial
+  // SSR/SSG tree until both the loader and router commit are complete. This
+  // prevents loader-backed catch-all pages from rendering their not-found
+  // state during the temporary gap where __CER_DATA__ is intentionally empty.
+  if (hasLoading && loadingTag) _activateClientRouteRendering()
   try {
     // Clear stale loader data from the previous route before loading the new one.
     // If the new route has no loader, __CER_DATA__ stays undefined so usePageData()
@@ -193,15 +198,18 @@ router.push = async (path) => {
   } catch (err) {
     currentError.value = err instanceof Error ? err.message : String(err)
   } finally {
-    if (navigationIntent === _navigationIntent) isNavigating.value = false
+    if (navigationIntent === _navigationIntent) {
+      _activateClientRouteRendering()
+      isNavigating.value = false
+    }
   }
 }
 
 router.replace = async (path) => {
   const navigationIntent = ++_navigationIntent
   isNavigating.value = true
-  _activateClientRouteRendering()
   currentError.value = null
+  if (hasLoading && loadingTag) _activateClientRouteRendering()
   try {
     // Clear stale loader data from the previous route before loading the new one.
     delete (globalThis).__CER_DATA__
@@ -211,7 +219,10 @@ router.replace = async (path) => {
   } catch (err) {
     currentError.value = err instanceof Error ? err.message : String(err)
   } finally {
-    if (navigationIntent === _navigationIntent) isNavigating.value = false
+    if (navigationIntent === _navigationIntent) {
+      _activateClientRouteRendering()
+      isNavigating.value = false
+    }
   }
 }
 
@@ -232,8 +243,8 @@ window.addEventListener('popstate', () => {
 
   const navigationIntent = ++_navigationIntent
   isNavigating.value = true
-  _activateClientRouteRendering()
   currentError.value = null
+  if (hasLoading && loadingTag) _activateClientRouteRendering()
 
   void (async () => {
     try {
@@ -244,7 +255,10 @@ window.addEventListener('popstate', () => {
         currentError.value = err instanceof Error ? err.message : String(err)
       }
     } finally {
-      if (navigationIntent === _navigationIntent) isNavigating.value = false
+      if (navigationIntent === _navigationIntent) {
+        _activateClientRouteRendering()
+        isNavigating.value = false
+      }
     }
   })()
 })

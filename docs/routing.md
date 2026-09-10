@@ -240,7 +240,7 @@ export const meta = {
 }
 ```
 
-**`'none'` and `usePageData`:** When `hydrate: 'none'` is set, the page component never activates and `usePageData()` loader data is not consumed. Avoid using `loader` on pages with `hydrate: 'none'` — the serialized `window.__CER_DATA__` will be present in the HTML but never read or cleaned up by the client.
+**`'none'` and `usePageData`:** A `hydrate: 'none'` page can use a loader during SSR or SSG; the loader data is consumed while rendering the static HTML but is not serialized to the browser because that page component does not activate. On the first client-side navigation, the framework keeps this static tree visible until the destination loader and route are ready. If `app/loading.ts` exists, its explicit loading UI replaces the static tree instead.
 
 **SPA mode:** `meta.hydrate` has no effect in SPA mode — there is no SSR output to preserve, so the component always activates immediately.
 
@@ -467,7 +467,7 @@ component('page-loading', () => {
 - Once the chunk resolves and the page is ready to render, `page-loading` is replaced automatically.
 - `page-loading` is never included in SSR or SSG output — it only appears during client-side navigation.
 
-If `app/loading.ts` does not exist, navigation proceeds without any intermediate state (the previous page stays visible until the new one is ready).
+If `app/loading.ts` does not exist, navigation proceeds without any intermediate state: the previous page—including an initial `hydrate: 'none'` SSR/SSG tree—stays visible until the destination loader and route are ready. Loader-backed catch-all pages therefore do not briefly render a not-found state while their data is still in flight.
 
 ---
 

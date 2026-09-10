@@ -158,22 +158,42 @@ describe('APP_ENTRY_TEMPLATE — meta.hydrate', () => {
     expect(activate).toBeGreaterThan(staleTreeCheck)
   })
 
-  it('switches to client rendering and releases the SSR tree on real navigation', () => {
+  it('switches to client rendering and releases the SSR tree when navigation finishes', () => {
     expect(APP_ENTRY_TEMPLATE).toContain('function _activateClientRouteRendering()')
     expect(APP_ENTRY_TEMPLATE).toContain('_cerHydrating.value = false')
     expect(APP_ENTRY_TEMPLATE).toContain('host.replaceChildren()')
 
     const pushStart = APP_ENTRY_TEMPLATE.indexOf('router.push = async')
     const pushEnd = APP_ENTRY_TEMPLATE.indexOf('\n}', pushStart)
-    expect(APP_ENTRY_TEMPLATE.slice(pushStart, pushEnd)).toContain(
-      '_activateClientRouteRendering()',
-    )
+    const pushBlock = APP_ENTRY_TEMPLATE.slice(pushStart, pushEnd)
+    const pushLoad = pushBlock.indexOf('await _loadPageForPath(path)')
+    const pushCommit = pushBlock.indexOf('await _push(path)')
+    const pushFinalActivation = pushBlock.lastIndexOf('_activateClientRouteRendering()')
+    expect(pushFinalActivation).toBeGreaterThan(pushLoad)
+    expect(pushFinalActivation).toBeGreaterThan(pushCommit)
 
     const replaceStart = APP_ENTRY_TEMPLATE.indexOf('router.replace = async')
     const replaceEnd = APP_ENTRY_TEMPLATE.indexOf('\n}', replaceStart)
-    expect(APP_ENTRY_TEMPLATE.slice(replaceStart, replaceEnd)).toContain(
-      '_activateClientRouteRendering()',
-    )
+    const replaceBlock = APP_ENTRY_TEMPLATE.slice(replaceStart, replaceEnd)
+    const replaceLoad = replaceBlock.indexOf('await _loadPageForPath(path)')
+    const replaceCommit = replaceBlock.indexOf('await _replace(path)')
+    const replaceFinalActivation = replaceBlock.lastIndexOf('_activateClientRouteRendering()')
+    expect(replaceFinalActivation).toBeGreaterThan(replaceLoad)
+    expect(replaceFinalActivation).toBeGreaterThan(replaceCommit)
+  })
+
+  it('only releases an initial static tree early when a loading component exists', () => {
+    for (const method of ['push', 'replace']) {
+      const start = APP_ENTRY_TEMPLATE.indexOf(`router.${method} = async`)
+      const end = APP_ENTRY_TEMPLATE.indexOf('\n}', start)
+      const block = APP_ENTRY_TEMPLATE.slice(start, end)
+      const earlyActivation = block.indexOf('if (hasLoading && loadingTag) _activateClientRouteRendering()')
+      const load = block.indexOf('await _loadPageForPath(path)')
+
+      expect(earlyActivation).toBeGreaterThanOrEqual(0)
+      expect(earlyActivation).toBeLessThan(load)
+      expect(block.slice(0, load).match(/_activateClientRouteRendering\(\)/g)).toHaveLength(1)
+    }
   })
 
   it('exposes router globally as __cerRouter', () => {
@@ -222,10 +242,14 @@ describe('APP_ENTRY_TEMPLATE — progressive link navigation', () => {
 
     expect(listenerStart).toBeGreaterThanOrEqual(0)
     expect(listener).toContain('window.location.pathname + window.location.search + window.location.hash')
-    expect(listener).toContain('_activateClientRouteRendering()')
+    expect(listener).toContain('if (hasLoading && loadingTag) _activateClientRouteRendering()')
     expect(listener).toContain('delete (globalThis).__CER_DATA__')
     expect(listener).toContain('await _loadPageForPath(path)')
     expect(listener).toContain('isNavigating.value = false')
+
+    const load = listener.indexOf('await _loadPageForPath(path)')
+    const finalActivation = listener.lastIndexOf('_activateClientRouteRendering()')
+    expect(finalActivation).toBeGreaterThan(load)
   })
 
   it('does not reload page data for fragment-only history traversal', () => {
