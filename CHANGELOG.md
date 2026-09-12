@@ -1,6 +1,11 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.27.3] - 2026-09-12
+
+- fix: Add runtime dependency update script and tests (88e34a9)
+- fix: Automate runtime release synchronization (5dbe82a)
+
 ## [v0.27.2] - 2026-09-12
 
 - fix: update dependencies and publishing workflow (2049eb6)
