@@ -12,9 +12,5 @@ export default defineConfig({
     viewportHeight: 720,
     // Give the server time to start
     pageLoadTimeout: 15000,
-    // Mode is public test configuration passed through --expose. Keeping the
-    // deprecated browser-readable Cypress.env() API disabled prevents tests
-    // from accidentally exposing secrets and future-proofs Cypress 16.
-    allowCypressEnv: false,
   },
 })

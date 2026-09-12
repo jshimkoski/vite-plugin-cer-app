@@ -243,11 +243,13 @@ describe('useCookie — client (document.cookie)', () => {
   })
 
   it('removes a cookie on remove()', () => {
-    document.cookie = 'removeme=yes'
-    useCookie('removeme').remove()
     const cookie = useCookie('removeme')
+    cookie.set('yes')
+    expect(useCookie('removeme').value).toBe('yes')
+    cookie.remove()
     // After removal the cookie value should be empty or undefined
-    expect(cookie.value === undefined || cookie.value === '').toBe(true)
+    const removed = useCookie('removeme').value
+    expect(removed === undefined || removed === '').toBe(true)
   })
 
   it('percent-encodes values with special characters', () => {

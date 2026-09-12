@@ -148,8 +148,8 @@ async function addMaterialPreset(targetDir: string): Promise<void> {
   const pkg = JSON.parse(await readFile(packagePath, 'utf-8')) as {
     dependencies: Record<string, string>
   }
-  pkg.dependencies['@jasonshimmy/cer-material'] = '^0.7.2'
-  pkg.dependencies['material-symbols'] = '^0.46.0'
+  pkg.dependencies['@jasonshimmy/cer-material'] = '^0.9.2'
+  pkg.dependencies['material-symbols'] = '^0.47.2'
   await writeFile(packagePath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf-8')
 
   const configPath = join(targetDir, 'cer.config.ts')
