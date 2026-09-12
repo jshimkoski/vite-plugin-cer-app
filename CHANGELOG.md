@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.27.2] - 2026-09-12
+
+- fix: update dependencies and publishing workflow (2049eb6)
+
 ## [v0.27.1] - 2026-09-10
 
 - fix: improve hydration handling for loading components and SSR trees (6d8b59e)
