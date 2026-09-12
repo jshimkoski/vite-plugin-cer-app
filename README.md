@@ -256,6 +256,20 @@ See [docs/content.md](docs/content.md) for the full content-layer API and exampl
 
 ---
 
+## Runtime release maintenance
+
+After publishing a new `@jasonshimmy/custom-elements-runtime` release, synchronize the plugin with the npm `latest` tag:
+
+```sh
+npm run update:runtime
+```
+
+The command updates the plugin's peer and development dependency ranges, the installed runtime record in `package-lock.json`, and every `package.json.tpl` used by `create-cer-app`. Template manifests are discovered recursively, so newly added SPA, SSR, SSG, or future build-mode templates are included automatically. The update aborts before writing if any required reference is missing, registry metadata is incomplete, or the published runtime declares dependencies. Run `npm install` or `npm ci` afterward when the local `node_modules` tree also needs to be refreshed; CI already does this from the updated lockfile.
+
+For a read-only CI/release check, use `npm run check:runtime`. It exits non-zero and lists stale files when an update is required. If npm's `latest` tag has not propagated yet, a known published version can be selected explicitly with `npm run update:runtime -- --version 3.9.2`.
+
+---
+
 ## License
 
 MIT

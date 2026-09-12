@@ -28,6 +28,9 @@ describe('createProject', () => {
       expect(generated.devDependencies['@jasonshimmy/vite-plugin-cer-app']).toBe(
         `^${packageJson.version}`,
       )
+      expect(generated.dependencies['@jasonshimmy/custom-elements-runtime']).toBe(
+        packageJson.devDependencies['@jasonshimmy/custom-elements-runtime'],
+      )
       expect(generated.scripts.typecheck).toBe('tsc --noEmit')
       expect(generated.scripts.validate).toContain('npm run typecheck')
       expect(JSON.stringify(generated)).not.toContain('{{')

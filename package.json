@@ -66,6 +66,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "check:runtime": "node scripts/update-runtime.mjs --check",
+    "update:runtime": "node scripts/update-runtime.mjs",
     "e2e:clean": "node e2e/scripts/clean.mjs",
     "e2e:build:spa": "npm run e2e:clean && node dist/cli/index.js build --mode spa --root e2e/kitchen-sink",
     "e2e:build:ssr": "npm run e2e:clean && node dist/cli/index.js build --mode ssr --root e2e/kitchen-sink",
@@ -88,7 +90,7 @@
     "cypress:open": "cypress open"
   },
   "peerDependencies": {
-    "@jasonshimmy/custom-elements-runtime": ">=3.9.1",
+    "@jasonshimmy/custom-elements-runtime": ">=3.10.0",
     "vite": ">=5.0.0"
   },
   "dependencies": {
@@ -101,7 +103,7 @@
     "yaml": "^2.9.1"
   },
   "devDependencies": {
-    "@jasonshimmy/custom-elements-runtime": "^3.9.1",
+    "@jasonshimmy/custom-elements-runtime": "^3.10.0",
     "@types/node": "^24.13.4",
     "@vitest/coverage-v8": "^5.0.0",
     "cypress": "^16.0.0",

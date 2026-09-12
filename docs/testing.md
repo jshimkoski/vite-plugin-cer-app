@@ -18,6 +18,32 @@ All examples below assume the plugin is built and either globally installed or l
 
 ---
 
+## Runtime release synchronization
+
+After publishing `@jasonshimmy/custom-elements-runtime`, update every tracked runtime reference with:
+
+```sh
+npm run update:runtime
+```
+
+The command reads npm's `latest` tag, validates that the release remains dependency-free, and synchronizes `package.json`, `package-lock.json`, and every recursively discovered `src/cli/create/templates/**/package.json.tpl`. It does not run lifecycle scripts or modify `node_modules`; use `npm install` or `npm ci` before testing against the newly installed runtime.
+
+Use the read-only form in release checks:
+
+```sh
+npm run check:runtime
+```
+
+It exits with status 1 and lists stale files when an update is required. During npm tag propagation, select a known published version explicitly:
+
+```sh
+npm run update:runtime -- --version 3.9.2
+```
+
+Malformed registry metadata, a missing dependency declaration, an absent template set, or any runtime dependency/peer/optional-dependency causes the command to stop before file writes.
+
+---
+
 ## 1. Scaffold and verify all three modes
 
 ### Create one app per mode

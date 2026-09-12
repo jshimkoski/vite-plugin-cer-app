@@ -11,7 +11,7 @@
     "validate": "npm run typecheck && npm run build && cer-app check links && cer-app check performance"
   },
   "dependencies": {
-    "@jasonshimmy/custom-elements-runtime": "^3.9.1"
+    "@jasonshimmy/custom-elements-runtime": "^3.10.0"
   },
   "devDependencies": {
     "@jasonshimmy/vite-plugin-cer-app": "^{{pluginVersion}}",

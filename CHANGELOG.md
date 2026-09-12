@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 ## Unreleased
 
 - fix: retain prerendered `hydrate: 'none'` content until client navigation data is ready, preventing transient not-found flashes when no loading component is defined
+- chore: add dependency-free runtime release check/update scripts that synchronize plugin metadata, lockfile data, and all create-app templates
 
 ## [v0.27.0] - 2026-09-10
 
@@ -261,4 +262,3 @@ All notable changes to this project will be documented in this file.
 - fix: add nvmrc (7065201)
 - feat: add publishing capability (812152b)
 - initial commit (43a8365)
-
