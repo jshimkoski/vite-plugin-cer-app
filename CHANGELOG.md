@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.28.0] - 2026-09-13
+
+- feat: Update runtime and prune extended color variables (364d21d)
+
 ## [v0.27.3] - 2026-09-12
 
 - fix: Add runtime dependency update script and tests (88e34a9)
