@@ -7,6 +7,7 @@ const runtimeVariablesId =
 describe('pruneRuntimeExtendedColorVariables', () => {
   const css = `:root {
     --cer-color-primary-500: #3b82f6;
+    --cer-color-mauve-500: oklch(54.2% 0.034 322.5);
     --cer-color-slate-500: #64748b;
     --cer-color-blue-500: #3b82f6;
     --cer-color-rose-950: #4c0519;
@@ -21,6 +22,7 @@ describe('pruneRuntimeExtendedColorVariables', () => {
     )
 
     expect(result).not.toContain('--cer-color-slate-500:')
+    expect(result).not.toContain('--cer-color-mauve-500:')
     expect(result).not.toContain('--cer-color-blue-500:')
     expect(result).not.toContain('--cer-color-rose-950:')
     expect(result).toContain('--cer-color-primary-500:')

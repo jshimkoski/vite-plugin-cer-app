@@ -1,4 +1,8 @@
 const EXTENDED_COLOR_FAMILIES = [
+  'mauve',
+  'olive',
+  'mist',
+  'taupe',
   'slate',
   'gray',
   'zinc',
