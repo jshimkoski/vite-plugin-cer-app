@@ -42,10 +42,20 @@ export function pruneRuntimeExtendedColorVariables(
   id: string,
   extendedColors: boolean | string[],
 ): string {
+  const isRuntimeStylesheet = /\/(?:style|variables)\.css(?:\?|$)/.test(id)
+  const isRuntimePackagePath = id.includes('@jasonshimmy/custom-elements-runtime')
+  // Vite resolves symlinked file: dependencies to their real filesystem path,
+  // so a local runtime checkout no longer contains the npm package name.
+  // Match that case by the runtime's stable core-token signature.
+  const hasRuntimeTokenSignature =
+    code.includes('--cer-color-primary-500:') &&
+    code.includes('--cer-color-neutral-500:') &&
+    code.includes('--cer-outline-style:')
+
   if (
     extendedColors === true ||
-    !id.includes('@jasonshimmy/custom-elements-runtime') ||
-    !/\/(?:style|variables)\.css(?:\?|$)/.test(id)
+    !isRuntimeStylesheet ||
+    (!isRuntimePackagePath && !hasRuntimeTokenSignature)
   ) {
     return code
   }

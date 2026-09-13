@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## Unreleased
+
+- fix: Prune unused runtime color variables when packages are linked from local filesystem checkouts.
+
 ## [v0.28.0] - 2026-09-13
 
 - feat: Update runtime and prune extended color variables (364d21d)

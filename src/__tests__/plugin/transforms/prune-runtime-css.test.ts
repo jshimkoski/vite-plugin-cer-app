@@ -6,6 +6,8 @@ const runtimeVariablesId =
 
 describe('pruneRuntimeExtendedColorVariables', () => {
   const css = `:root {
+    --cer-outline-style: solid;
+    --cer-color-neutral-500: #71717b;
     --cer-color-primary-500: #3b82f6;
     --cer-color-mauve-500: oklch(54.2% 0.034 322.5);
     --cer-color-slate-500: #64748b;
@@ -33,6 +35,17 @@ describe('pruneRuntimeExtendedColorVariables', () => {
     const result = pruneRuntimeExtendedColorVariables(
       css,
       runtimeVariablesId.replace('variables.css', 'style.css'),
+      false,
+    )
+
+    expect(result).not.toContain('--cer-color-blue-500:')
+    expect(result).toContain('--cer-color-primary-500:')
+  })
+
+  it('optimizes a runtime linked from a local filesystem checkout', () => {
+    const result = pruneRuntimeExtendedColorVariables(
+      css,
+      '/workspace/custom-elements/dist/variables.css',
       false,
     )
 
@@ -76,5 +89,12 @@ describe('pruneRuntimeExtendedColorVariables', () => {
     expect(
       pruneRuntimeExtendedColorVariables(css, '/project/app.css', false),
     ).toBe(css)
+    expect(
+      pruneRuntimeExtendedColorVariables(
+        '--cer-color-primary-500:red;--cer-color-blue-500:blue;',
+        '/project/theme/variables.css',
+        false,
+      ),
+    ).toBe('--cer-color-primary-500:red;--cer-color-blue-500:blue;')
   })
 })
