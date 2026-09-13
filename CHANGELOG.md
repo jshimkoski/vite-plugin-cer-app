@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.28.1] - 2026-09-13
+
+- fix: Optimize pruning for linked runtime checkouts (577a80b)
+
 ## Unreleased
 
 - fix: Prune unused runtime color variables when packages are linked from local filesystem checkouts.
