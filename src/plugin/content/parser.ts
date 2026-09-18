@@ -128,6 +128,15 @@ function normalizeRel(value: string | null | undefined | false): string | undefi
 function createRenderer(contentConfig?: CerContentConfig): Renderer {
   const renderer = new marked.Renderer()
 
+  const renderDefaultParagraph = renderer.paragraph
+  renderer.paragraph = function (token) {
+    const innerHtml = this.parser.parseInline(token.tokens)
+    if (/^\s*<([a-z][\w.-]*-[\w.-]+)\b[\s\S]*<\/\1>\s*$/i.test(innerHtml)) {
+      return `${innerHtml}\n`
+    }
+    return renderDefaultParagraph.call(this, token)
+  }
+
   renderer.heading = function ({ tokens, depth }) {
     const text = tokens.map((t) => ('text' in t ? (t.text as string) : '')).join('')
     const id = slugify(text)

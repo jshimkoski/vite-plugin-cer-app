@@ -129,6 +129,15 @@ A paragraph here.
   writeFileSync(join(contentDir, 'heading-link.md'), `# [Affiliate heading](https://amzn.to/heading)
 `)
 
+  writeFileSync(join(contentDir, 'custom-elements.md'), `# Custom Elements
+
+<modeler-section></modeler-section>
+
+<document-list path="/items"><div>Fallback</div></document-list>
+
+Before <inline-widget></inline-widget> after.
+`)
+
   writeFileSync(join(contentDir, 'javascript-frontmatter.md'), `---js
 ({ title: 'Executable metadata' })
 ---
@@ -278,6 +287,31 @@ describe('parseContentFile — Markdown', () => {
     )
     expect(item.body).toContain(
       '<h1 id="affiliate-heading"><a rel="sponsored" href="https://amzn.to/heading">',
+    )
+  })
+
+  it('renders standalone custom elements outside paragraph wrappers', () => {
+    const item = parseContentFile(
+      makeFile(join(contentDir, 'custom-elements.md'), 'md'),
+      contentDir,
+    )
+
+    expect(item.body).toContain('<modeler-section></modeler-section>')
+    expect(item.body).not.toContain('<p><modeler-section>')
+    expect(item.body).toContain(
+      '<document-list path="/items"><div>Fallback</div></document-list>',
+    )
+    expect(item.body).not.toContain('<p><document-list')
+  })
+
+  it('keeps custom elements embedded in prose inside paragraph wrappers', () => {
+    const item = parseContentFile(
+      makeFile(join(contentDir, 'custom-elements.md'), 'md'),
+      contentDir,
+    )
+
+    expect(item.body).toContain(
+      '<p>Before <inline-widget></inline-widget> after.</p>',
     )
   })
 })
