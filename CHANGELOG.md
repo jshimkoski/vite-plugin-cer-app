@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.28.2] - 2026-09-18
+
+- fix: Render standalone custom elements outside paragraphs (3ceb11a)
+
 ## [v0.28.1] - 2026-09-13
 
 - fix: Optimize pruning for linked runtime checkouts (577a80b)
