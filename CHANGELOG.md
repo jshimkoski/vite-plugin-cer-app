@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.28.3] - 2026-10-04
+
+- fix: update dependencies and remove vulnerable glob chain (c0a7c53)
+
 ## [v0.28.2] - 2026-09-18
 
 - fix: Render standalone custom elements outside paragraphs (3ceb11a)
