@@ -10,7 +10,7 @@
     "validate": "npm run typecheck && npm run build"
   },
   "dependencies": {
-    "@jasonshimmy/custom-elements-runtime": "^3.11.1"
+    "@jasonshimmy/custom-elements-runtime": "^3.11.2"
   },
   "devDependencies": {
     "@jasonshimmy/vite-plugin-cer-app": "^{{pluginVersion}}",

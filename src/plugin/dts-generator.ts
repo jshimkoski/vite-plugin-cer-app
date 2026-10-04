@@ -128,7 +128,7 @@ export async function scanComposableExports(composablesDir: string): Promise<Map
   const result = new Map<string, string>()
   if (!existsSync(composablesDir)) return result
 
-  const files = await scanDirectory('**/*.ts', composablesDir)
+  const files = await scanDirectory(composablesDir)
   const exportPattern = /export\s+(?:async\s+)?(?:function|const|let|var|class)\s+(\w+)/g
 
   for (const file of files) {

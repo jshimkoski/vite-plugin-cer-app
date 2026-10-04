@@ -1,18 +1,12 @@
-import fg from 'fast-glob'
+import { scanFiles } from './file-scanner.js'
 import type { FSWatcher } from 'vite'
 
 /**
- * Scans a directory for files matching the given glob pattern.
+ * Scans a directory recursively for TypeScript source files.
  * Returns absolute file paths sorted alphabetically.
  */
-export async function scanDirectory(pattern: string, cwd: string): Promise<string[]> {
-  const files = await fg(pattern, {
-    cwd,
-    absolute: true,
-    onlyFiles: true,
-    ignore: ['**/node_modules/**', '**/.git/**'],
-  })
-  return files.sort()
+export async function scanDirectory(cwd: string): Promise<string[]> {
+  return scanFiles(cwd, ['.ts'])
 }
 
 /**

@@ -12,7 +12,7 @@ async function buildComponentManifest(componentsDir: string): Promise<Map<string
   const manifest = new Map<string, string>()
   if (!existsSync(componentsDir)) return manifest
 
-  const files = await scanDirectory('**/*.ts', componentsDir)
+  const files = await scanDirectory(componentsDir)
   for (const file of files) {
     try {
       const source = readFileSync(file, 'utf-8')

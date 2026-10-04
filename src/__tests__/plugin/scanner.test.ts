@@ -120,14 +120,14 @@ describe('scanDirectory', () => {
   })
 
   it('returns empty array for an empty directory', async () => {
-    const files = await scanDirectory('**/*.ts', tmpDir)
+    const files = await scanDirectory(tmpDir)
     expect(files).toEqual([])
   })
 
   it('returns sorted absolute file paths', async () => {
     writeFileSync(join(tmpDir, 'b.ts'), '')
     writeFileSync(join(tmpDir, 'a.ts'), '')
-    const files = await scanDirectory('**/*.ts', tmpDir)
+    const files = await scanDirectory(tmpDir)
     expect(files).toHaveLength(2)
     expect(files[0]).toMatch(/a\.ts$/)
     expect(files[1]).toMatch(/b\.ts$/)
@@ -135,7 +135,7 @@ describe('scanDirectory', () => {
 
   it('returns absolute paths', async () => {
     writeFileSync(join(tmpDir, 'page.ts'), '')
-    const files = await scanDirectory('**/*.ts', tmpDir)
+    const files = await scanDirectory(tmpDir)
     expect(files[0]).toMatch(/^\//)
     expect(files[0]).toContain('page.ts')
   })
@@ -143,7 +143,7 @@ describe('scanDirectory', () => {
   it('scans nested directories recursively', async () => {
     mkdirSync(join(tmpDir, 'blog'))
     writeFileSync(join(tmpDir, 'blog/post.ts'), '')
-    const files = await scanDirectory('**/*.ts', tmpDir)
+    const files = await scanDirectory(tmpDir)
     expect(files).toHaveLength(1)
     expect(files[0]).toContain('blog/post.ts')
   })
@@ -152,7 +152,7 @@ describe('scanDirectory', () => {
     mkdirSync(join(tmpDir, 'node_modules/foo'), { recursive: true })
     writeFileSync(join(tmpDir, 'node_modules/foo/bar.ts'), '')
     writeFileSync(join(tmpDir, 'page.ts'), '')
-    const files = await scanDirectory('**/*.ts', tmpDir)
+    const files = await scanDirectory(tmpDir)
     expect(files).toHaveLength(1)
     expect(files[0]).not.toContain('node_modules')
   })
@@ -162,14 +162,14 @@ describe('scanDirectory', () => {
     writeFileSync(join(tmpDir, '.git/HEAD'), '')
     writeFileSync(join(tmpDir, 'page.ts'), '')
     // .git/HEAD won't match **/*.ts, but confirm the main file is found
-    const files = await scanDirectory('**/*.ts', tmpDir)
+    const files = await scanDirectory(tmpDir)
     expect(files).toHaveLength(1)
   })
 
   it('only returns files (not directories)', async () => {
     mkdirSync(join(tmpDir, 'subdir'))
     writeFileSync(join(tmpDir, 'file.ts'), '')
-    const files = await scanDirectory('**/*.ts', tmpDir)
+    const files = await scanDirectory(tmpDir)
     expect(files).toHaveLength(1)
   })
 
@@ -178,7 +178,7 @@ describe('scanDirectory', () => {
     writeFileSync(join(tmpDir, 'pages/z.ts'), '')
     writeFileSync(join(tmpDir, 'pages/a.ts'), '')
     writeFileSync(join(tmpDir, 'index.ts'), '')
-    const files = await scanDirectory('**/*.ts', tmpDir)
+    const files = await scanDirectory(tmpDir)
     expect(files).toHaveLength(3)
     // Sorted: index.ts comes before pages/a.ts alphabetically
     expect(files[0]).toMatch(/index\.ts$/)

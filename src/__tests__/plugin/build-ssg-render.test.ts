@@ -42,7 +42,7 @@ vi.mock('../../plugin/build-ssr.js', () => ({
     )
   }),
 }))
-vi.mock('fast-glob', () => ({ default: vi.fn().mockResolvedValue([]) }))
+vi.mock('../../plugin/file-scanner.js', () => ({ scanFiles: vi.fn().mockResolvedValue([]) }))
 // Intentionally NOT mocking node:fs or node:fs/promises so real writes work.
 
 import type { ResolvedCerConfig } from '../../plugin/dev-server.js'

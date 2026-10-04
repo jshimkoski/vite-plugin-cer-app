@@ -13,7 +13,7 @@ import type { ResolvedCerConfig } from './dev-server.js'
 import type { ContentItem } from '../types/content.js'
 import { buildSSR } from './build-ssr.js'
 import { buildRouteEntry } from './path-utils.js'
-import fg from 'fast-glob'
+import { scanFiles } from './file-scanner.js'
 
 interface SsgManifest {
   generatedAt: string
@@ -270,11 +270,7 @@ async function collectSsgPaths(
 
   if (!existsSync(config.pagesDir)) return paths
 
-  const files = await fg('**/*.ts', {
-    cwd: config.pagesDir,
-    absolute: true,
-    onlyFiles: true,
-  })
+  const files = await scanFiles(config.pagesDir, ['.ts'], [])
 
   const staticFiles: string[] = []
   const dynamicFiles: Array<{

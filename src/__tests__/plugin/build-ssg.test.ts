@@ -13,7 +13,7 @@ vi.mock('node:fs/promises', () => ({
   cp: vi.fn().mockResolvedValue(undefined),
   rm: vi.fn().mockResolvedValue(undefined),
 }))
-vi.mock('fast-glob', () => ({ default: vi.fn().mockResolvedValue([]) }))
+vi.mock('../../plugin/file-scanner.js', () => ({ scanFiles: vi.fn().mockResolvedValue([]) }))
 vi.mock('vite', () => ({
   build: vi.fn().mockResolvedValue(undefined),
   createServer: vi.fn(),
@@ -23,7 +23,7 @@ vi.mock('../../plugin/path-utils.js', () => ({ buildRouteEntry: vi.fn() }))
 
 import { existsSync } from 'node:fs'
 import { writeFile, mkdir, readFile, cp, readdir, rm } from 'node:fs/promises'
-import fg from 'fast-glob'
+import { scanFiles } from '../../plugin/file-scanner.js'
 import { createServer } from 'vite'
 import { buildSSR } from '../../plugin/build-ssr.js'
 import { buildRouteEntry } from '../../plugin/path-utils.js'
@@ -47,10 +47,10 @@ beforeEach(() => {
   vi.mocked(writeFile).mockClear()
   vi.mocked(mkdir).mockClear()
   vi.mocked(rm).mockClear()
-  vi.mocked(fg).mockClear()
+  vi.mocked(scanFiles).mockClear()
   vi.mocked(readFile).mockClear()
   vi.mocked(existsSync).mockReturnValue(false)
-  vi.mocked(fg).mockResolvedValue([])
+  vi.mocked(scanFiles).mockResolvedValue([])
   vi.mocked(readFile).mockResolvedValue('')
   vi.mocked(buildRouteEntry).mockReset()
 })
@@ -193,20 +193,20 @@ describe('buildSSG — path collection', () => {
       ssg: { routes: ['/a', '/b'], concurrency: 1 },
     } as Partial<ResolvedCerConfig>)
     await buildSSG(config)
-    // fast-glob should NOT have been called — routes are explicit
-    expect(fg).not.toHaveBeenCalled()
+    // File scanning should NOT have been called — routes are explicit
+    expect(scanFiles).not.toHaveBeenCalled()
   })
 
-  it('calls fg when pagesDir exists and no explicit routes', async () => {
+  it('calls scanFiles when pagesDir exists and no explicit routes', async () => {
     vi.mocked(existsSync).mockReturnValue(true)
     await buildSSG(makeConfig())
-    // fg is called once for page discovery
-    expect(fg).toHaveBeenCalledTimes(1)
+    // scanFiles is called once for page discovery
+    expect(scanFiles).toHaveBeenCalledTimes(1)
   })
 
   it('skips Vite dev server when all discovered pages are static', async () => {
     vi.mocked(existsSync).mockReturnValue(true)
-    vi.mocked(fg).mockResolvedValue([
+    vi.mocked(scanFiles).mockResolvedValue([
       '/project/app/pages/index.ts',
       '/project/app/pages/about.ts',
     ])
@@ -221,7 +221,7 @@ describe('buildSSG — path collection', () => {
 
   it('spawns Vite dev server for dynamic pages', async () => {
     vi.mocked(existsSync).mockReturnValue(true)
-    vi.mocked(fg).mockResolvedValue(['/project/app/pages/[slug].ts'])
+    vi.mocked(scanFiles).mockResolvedValue(['/project/app/pages/[slug].ts'])
     vi.mocked(buildRouteEntry).mockReturnValueOnce({
       routePath: '/:slug',
       isDynamic: true,
@@ -242,7 +242,7 @@ describe('buildSSG — path collection', () => {
 
   it('closes Vite dev server even when ssrLoadModule throws', async () => {
     vi.mocked(existsSync).mockReturnValue(true)
-    vi.mocked(fg).mockResolvedValue(['/project/app/pages/[slug].ts'])
+    vi.mocked(scanFiles).mockResolvedValue(['/project/app/pages/[slug].ts'])
     vi.mocked(buildRouteEntry).mockReturnValueOnce({
       routePath: '/:slug',
       isDynamic: true,
@@ -262,7 +262,7 @@ describe('buildSSG — path collection', () => {
 
   it('expands dynamic ssg.paths into concrete URL paths', async () => {
     vi.mocked(existsSync).mockReturnValue(true)
-    vi.mocked(fg).mockResolvedValue(['/project/app/pages/[id].ts'])
+    vi.mocked(scanFiles).mockResolvedValue(['/project/app/pages/[id].ts'])
     vi.mocked(buildRouteEntry).mockReturnValueOnce({
       routePath: '/:id',
       isDynamic: true,
@@ -292,7 +292,7 @@ describe('buildSSG — path collection', () => {
 
   it('skips catch-all pages without explicit paths or content queries when auto-discovering paths', async () => {
     vi.mocked(existsSync).mockReturnValue(true)
-    vi.mocked(fg).mockResolvedValue(['/project/app/pages/[...all].ts'])
+    vi.mocked(scanFiles).mockResolvedValue(['/project/app/pages/[...all].ts'])
     vi.mocked(readFile).mockResolvedValue('')
     vi.mocked(buildRouteEntry).mockReturnValueOnce({
       routePath: '/:all*',
@@ -318,7 +318,7 @@ describe('buildSSG — path collection', () => {
 
   it('auto-expands content-backed catch-all pages from the content store', async () => {
     vi.mocked(existsSync).mockReturnValue(true)
-    vi.mocked(fg).mockResolvedValue(['/project/app/pages/[...all].ts'])
+    vi.mocked(scanFiles).mockResolvedValue(['/project/app/pages/[...all].ts'])
     vi.mocked(readFile).mockResolvedValue('export const loader = async () => queryContent().find()')
     vi.mocked(buildRouteEntry).mockReturnValueOnce({
       routePath: '/:all*',
@@ -350,7 +350,7 @@ describe('buildSSG — path collection', () => {
 
   it('auto-expands catch-all pages using the reusable content page loader', async () => {
     vi.mocked(existsSync).mockReturnValue(true)
-    vi.mocked(fg).mockResolvedValue(['/project/app/pages/[...all].ts'])
+    vi.mocked(scanFiles).mockResolvedValue(['/project/app/pages/[...all].ts'])
     vi.mocked(readFile).mockResolvedValue('export const loader = defineContentPageLoader()')
     vi.mocked(buildRouteEntry).mockReturnValueOnce({
       routePath: '/:all*',
@@ -380,7 +380,7 @@ describe('buildSSG — path collection', () => {
 
   it('filters auto-expanded content paths by nested catch-all prefix', async () => {
     vi.mocked(existsSync).mockReturnValue(true)
-    vi.mocked(fg).mockResolvedValue(['/project/app/pages/docs/[...all].ts'])
+    vi.mocked(scanFiles).mockResolvedValue(['/project/app/pages/docs/[...all].ts'])
     vi.mocked(readFile).mockResolvedValue('queryContent()')
     vi.mocked(buildRouteEntry).mockReturnValueOnce({
       routePath: '/docs/:all*',
@@ -413,7 +413,7 @@ describe('buildSSG — path collection', () => {
 
   it('expands catch-all ssg.paths into concrete URL paths', async () => {
     vi.mocked(existsSync).mockReturnValue(true)
-    vi.mocked(fg).mockResolvedValue(['/project/app/pages/[...all].ts'])
+    vi.mocked(scanFiles).mockResolvedValue(['/project/app/pages/[...all].ts'])
     vi.mocked(readFile).mockResolvedValue('')
     vi.mocked(buildRouteEntry).mockReturnValueOnce({
       routePath: '/:all*',
@@ -452,7 +452,7 @@ describe('buildSSG — path collection', () => {
 
   it('deduplicates collected paths', async () => {
     vi.mocked(existsSync).mockReturnValue(true)
-    vi.mocked(fg).mockResolvedValue([
+    vi.mocked(scanFiles).mockResolvedValue([
       '/project/app/pages/index.ts',
       '/project/app/pages/home.ts',
     ])
@@ -476,7 +476,7 @@ describe('buildSSG — path collection', () => {
 describe('buildSSG — render strategy skip (static pages)', () => {
   it('skips static page with render: server', async () => {
     vi.mocked(existsSync).mockReturnValue(true)
-    vi.mocked(fg).mockResolvedValue(['/project/app/pages/dashboard.ts'])
+    vi.mocked(scanFiles).mockResolvedValue(['/project/app/pages/dashboard.ts'])
     vi.mocked(readFile).mockResolvedValue("export const meta = { render: 'server' }")
     vi.mocked(buildRouteEntry).mockReturnValueOnce({
       routePath: '/dashboard',
@@ -493,7 +493,7 @@ describe('buildSSG — render strategy skip (static pages)', () => {
 
   it('skips static page with render: spa', async () => {
     vi.mocked(existsSync).mockReturnValue(true)
-    vi.mocked(fg).mockResolvedValue(['/project/app/pages/profile.ts'])
+    vi.mocked(scanFiles).mockResolvedValue(['/project/app/pages/profile.ts'])
     vi.mocked(readFile).mockResolvedValue("export const meta = { render: 'spa' }")
     vi.mocked(buildRouteEntry).mockReturnValueOnce({
       routePath: '/profile',
@@ -509,7 +509,7 @@ describe('buildSSG — render strategy skip (static pages)', () => {
 
   it('does not skip static page with render: static', async () => {
     vi.mocked(existsSync).mockReturnValue(true)
-    vi.mocked(fg).mockResolvedValue(['/project/app/pages/legal.ts'])
+    vi.mocked(scanFiles).mockResolvedValue(['/project/app/pages/legal.ts'])
     vi.mocked(readFile).mockResolvedValue("export const meta = { render: 'static' }")
     vi.mocked(buildRouteEntry).mockReturnValueOnce({
       routePath: '/legal',
@@ -524,7 +524,7 @@ describe('buildSSG — render strategy skip (static pages)', () => {
 
   it('does not skip static page with no render meta', async () => {
     vi.mocked(existsSync).mockReturnValue(true)
-    vi.mocked(fg).mockResolvedValue(['/project/app/pages/about.ts'])
+    vi.mocked(scanFiles).mockResolvedValue(['/project/app/pages/about.ts'])
     vi.mocked(readFile).mockResolvedValue("component('page-about', () => html`<h1>About</h1>`)")
     vi.mocked(buildRouteEntry).mockReturnValueOnce({
       routePath: '/about',
@@ -541,7 +541,7 @@ describe('buildSSG — render strategy skip (static pages)', () => {
 describe('buildSSG — render strategy skip (dynamic pages)', () => {
   it('skips dynamic page with render: server from ssrLoadModule', async () => {
     vi.mocked(existsSync).mockReturnValue(true)
-    vi.mocked(fg).mockResolvedValue(['/project/app/pages/[slug].ts'])
+    vi.mocked(scanFiles).mockResolvedValue(['/project/app/pages/[slug].ts'])
     vi.mocked(readFile).mockResolvedValue('')
     vi.mocked(buildRouteEntry).mockReturnValueOnce({
       routePath: '/:slug',
@@ -568,7 +568,7 @@ describe('buildSSG — render strategy skip (dynamic pages)', () => {
 
   it('skips dynamic page with render: spa from ssrLoadModule', async () => {
     vi.mocked(existsSync).mockReturnValue(true)
-    vi.mocked(fg).mockResolvedValue(['/project/app/pages/[id].ts'])
+    vi.mocked(scanFiles).mockResolvedValue(['/project/app/pages/[id].ts'])
     vi.mocked(readFile).mockResolvedValue('')
     vi.mocked(buildRouteEntry).mockReturnValueOnce({
       routePath: '/:id',

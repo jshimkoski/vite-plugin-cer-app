@@ -1,4 +1,4 @@
-import fg from 'fast-glob'
+import { scanFiles } from '../file-scanner.js'
 
 export interface ContentFile {
   /** Absolute file path */
@@ -12,12 +12,7 @@ export interface ContentFile {
  * Returns absolute file paths sorted alphabetically.
  */
 export async function scanContentFiles(contentDir: string): Promise<ContentFile[]> {
-  const files = await fg('**/*.{md,json}', {
-    cwd: contentDir,
-    absolute: true,
-    onlyFiles: true,
-    ignore: ['**/node_modules/**', '**/.git/**'],
-  })
+  const files = await scanFiles(contentDir, ['.md', '.json'])
 
   return files.sort().map((filePath) => ({
     filePath,
