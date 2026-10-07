@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v0.29.0] - 2026-10-07
+
+- feat: add comprehensive tests for navigation behavior, content rendering, request dispatcher, and route matching (6d0fb7a)
+
 ## [v0.28.3] - 2026-10-04
 
 - fix: update dependencies and remove vulnerable glob chain (c0a7c53)
