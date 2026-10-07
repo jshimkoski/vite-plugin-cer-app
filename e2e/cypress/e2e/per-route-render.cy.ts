@@ -34,12 +34,12 @@ describe('render: server — always SSR', () => {
 
   if (mode === 'ssg') {
     it('route with render:server is not pre-rendered — not found in ssg dist', () => {
-      // The route was skipped during SSG. The static preview falls back to
-      // dist/index.html (SPA shell) rather than a pre-rendered page, so the
-      // server-rendered heading is absent from the raw HTML response.
+      // The hybrid fixture retains SSR fallback, while the route stays out of SSG output.
+      cy.readFile('e2e/kitchen-sink/dist/ssg-manifest.json').its('paths').should('not.include', '/render-server-test')
+      cy.request({ url: '/ssg-manifest.json', failOnStatusCode: false }).its('status').should('equal', 404)
       cy.request({ url: '/render-server-test', failOnStatusCode: false }).then((response) => {
-        expect(response.status).to.equal(404)
-        expect(response.body).not.to.include('render-server-heading')
+        expect(response.status).to.equal(200)
+        expect(response.body).to.include('render-server-heading')
       })
     })
   }
@@ -63,8 +63,9 @@ describe('render: spa — client-only', () => {
 
   if (mode === 'ssg') {
     it('route with render:spa is not pre-rendered — not found in ssg dist', () => {
+      cy.readFile('e2e/kitchen-sink/dist/ssg-manifest.json').its('paths').should('not.include', '/render-spa-test')
       cy.request({ url: '/render-spa-test', failOnStatusCode: false }).then((response) => {
-        expect(response.status).to.equal(404)
+        expect(response.status).to.equal(200)
         expect(response.body).not.to.include('render-spa-heading')
       })
     })

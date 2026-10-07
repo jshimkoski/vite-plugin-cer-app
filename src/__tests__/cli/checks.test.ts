@@ -48,6 +48,17 @@ describe('checkBuiltLinks', () => {
 })
 
 describe('checkPerformanceBudgets', () => {
+  it('accounts for inline boot imports and transitive static imports without preloads', async () => {
+    const { dist } = await fixture()
+    await writeFile(join(dist, 'index.html'), '<script data-cer-deferred-entry>import("/assets/index-boot.js")</script>')
+    await writeFile(join(dist, 'assets/index-boot.js'), 'import { x } from "./shared.js"; console.log(x); import("./later.js")')
+    await writeFile(join(dist, 'assets/shared.js'), 'export const x = 1')
+    await writeFile(join(dist, 'assets/later.js'), 'console.log("on interaction")')
+    const report = await checkPerformanceBudgets({ outputDir: dist })
+    expect(report.preloadedJsGzipBytes).toBe(0)
+    expect(report.startupAssets).toEqual(['assets/index-boot.js', 'assets/shared.js'])
+    expect(report.initialJsGzipBytes).toBeGreaterThan(report.entryJsGzipBytes)
+  })
   it('measures HTML and linked initial JavaScript with configurable budgets', async () => {
     const { dist } = await fixture()
     await writeFile(
@@ -81,7 +92,7 @@ describe('checkPerformanceBudgets', () => {
       maxInitialJsGzipBytes: 10,
       maxEntryJsGzipBytes: 10,
     })
-    expect(report.failures.join('\n')).toContain('homepage')
+    expect(report.failures.join('\n')).toContain('/ is')
     expect(report.failures.join('\n')).toContain('initial JavaScript')
     expect(report.failures.join('\n')).toContain('browser-external')
   })

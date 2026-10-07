@@ -70,9 +70,9 @@ export interface PageMeta {
    *
    * - `'server'` — always render server-side, never pre-render. In SSG mode
    *   the route is skipped during the static build.
-   * - `'static'` — always serve pre-rendered static HTML. In the SSR preview
-   *   server the pre-rendered file is served from disk; falls back to SSR if
-   *   not found.
+   * - `'static'` — eligible for SSG. The shared dispatcher serves known generated
+   *   documents unless ISR is configured; other documents follow the build's
+   *   fallback policy. An SSR-only build still renders this route on request.
    * - `'spa'`    — client-only. In SSR mode the server returns the SPA shell
    *   (index.html) without rendering. In SSG mode the route is skipped.
    *
@@ -83,24 +83,28 @@ export interface PageMeta {
 
 /**
  * Context object passed to a page's `loader` function.
- * Available on the server only — the loader runs before the page component renders.
+ * Runs before the page renders during SSR/SSG, and in the browser during
+ * SPA startup and client navigation. Keep page loaders browser-safe.
  */
 export interface PageLoaderContext<P extends Record<string, string> = Record<string, string>> {
   params: P
   query: Record<string, string>
   /** Present during SSR/SSG server render. Absent (`undefined`) during client-side navigation. */
   req?: IncomingMessage
+  /** Browser navigation cancellation. Pass to fetch(); absent during server rendering. */
+  signal?: AbortSignal
 }
 
 /**
- * Server-side data loader for a page. Export as `export const loader` (or `export async function loader`)
+ * Universal data loader for a page. Export as `export const loader` (or `export async function loader`)
  * from any page file. The returned object is:
  * - Made available via `usePageData()` inside the page component.
  * - Primitive values are also forwarded as element attributes so `useProps()` works.
- * - Serialized into `window.__CER_DATA__` for client-side hydration.
+ * - Serialized into `window.__CER_DATA__` for hydrating pages (omitted for hydrate: 'none').
  *
  * Throwing an error (with an optional `.status` property) renders the page's error component
- * and sets the HTTP response status code.
+ * and sets the HTTP response status code during server rendering; browser
+ * navigation uses the error boundary without changing a completed HTTP response.
  *
  * @example
  * ```ts

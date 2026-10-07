@@ -40,6 +40,8 @@ export interface ContentSeoOptions {
   breadcrumbs?: ContentBreadcrumb[]
   /** Path depth at which Open Graph pages become articles. Defaults to 2. */
   articleDepth?: number
+  /** Indexable document policy; missing documents always remain noindex. */
+  robots?: string
   notFoundTitle?: string
 }
 
@@ -207,7 +209,7 @@ export function useContentSeo(options: ContentSeoOptions): void {
   // explicit indexable value lets the head deduper and live DOM update replace
   // a stale noindex rather than leaving a valid page blocked from crawlers.
   useHead({
-    meta: [{ name: 'robots', content: options.doc ? 'index, follow' : 'noindex' }],
+    meta: [{ name: 'robots', content: options.doc ? options.robots ?? 'index, follow' : 'noindex' }],
   })
   if (!options.doc) return
 

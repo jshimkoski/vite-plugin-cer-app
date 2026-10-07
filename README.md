@@ -273,3 +273,5 @@ For a read-only CI/release check, use `npm run check:runtime`. It exits non-zero
 ## License
 
 MIT
+
+See [production content, islands and quality checks](docs/production-content.md) for complete Markdown SSR, selective content imports, Vite preview, static CSS and release gates.

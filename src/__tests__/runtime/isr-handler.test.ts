@@ -18,6 +18,7 @@ function mockRes(): MockRes {
     get statusCode() { return status },
     set statusCode(v: number) { status = v },
     setHeader: vi.fn((k: string, v: string) => { headers[k.toLowerCase()] = v }),
+    getHeader: (k: string) => headers[k.toLowerCase()],
     write: vi.fn(),
     end: vi.fn((b?: string) => { if (b) body = b }),
     header: (k: string) => headers[k.toLowerCase()],
@@ -271,7 +272,7 @@ describe('createIsrHandler — stale-while-revalidate', () => {
 // ─── Query string handling ─────────────────────────────────────────────────────
 
 describe('createIsrHandler — query string handling', () => {
-  it('strips query string when looking up the cache key', async () => {
+  it('bypasses caching for requests with query strings', async () => {
     const routes = [{ path: '/page', meta: { ssg: { revalidate: 60 } } }]
     const handler = vi.fn((_: IncomingMessage, res: ServerResponse) => { res.end('<html>content</html>') })
     const wrapped = createIsrHandler(routes, handler)
@@ -280,8 +281,8 @@ describe('createIsrHandler — query string handling', () => {
     // Second request with a different query string — should still be a cache HIT
     const res2 = mockRes()
     await wrapped(mockReq('/page?baz=qux'), res2)
-    expect(res2.header('x-cache')).toBe('HIT')
-    expect(handler).toHaveBeenCalledTimes(1) // only one render; second served from cache
+    expect(res2.header('x-cache')).toBeUndefined()
+    expect(handler).toHaveBeenCalledTimes(2) // only one render; second served from cache
   })
 
   it('serves the cached HTML regardless of query string variation', async () => {
@@ -294,7 +295,7 @@ describe('createIsrHandler — query string handling', () => {
     expect(res2.body()).toBe('<html>cached</html>')
   })
 
-  it('passes the stripped URL (no query string) to the handler during cache render', async () => {
+  it('preserves query strings when invoking the uncached handler', async () => {
     // _renderForCache always uses the path-only URL for the fake request so the
     // handler renders the canonical path, not a query-string-specific variant.
     const routes = [{ path: '/page', meta: { ssg: { revalidate: 60 } } }]
@@ -305,14 +306,14 @@ describe('createIsrHandler — query string handling', () => {
     })
     const wrapped = createIsrHandler(routes, handler)
     await wrapped(mockReq('/page?source=test'), mockRes())
-    expect(capturedUrl).toBe('/page')
+    expect(capturedUrl).toBe('/page?source=test')
   })
 })
 
 // ─── render mode compatibility ────────────────────────────────────────────────
 
 describe('createIsrHandler — render mode compatibility', () => {
-  it('caches a route with meta.render: server when revalidate is set', async () => {
+  it('bypasses caching for a route with meta.render: server when revalidate is set', async () => {
     // ISR applies to any route with meta.ssg.revalidate regardless of meta.render.
     // render: 'server' controls SSG build-time behavior; ISR is a runtime cache layer.
     const routes = [{ path: '/dashboard', meta: { render: 'server', ssg: { revalidate: 60 } } }]
@@ -321,8 +322,8 @@ describe('createIsrHandler — render mode compatibility', () => {
     await wrapped(mockReq('/dashboard'), mockRes()) // prime
     const res2 = mockRes()
     await wrapped(mockReq('/dashboard'), res2)
-    expect(res2.header('x-cache')).toBe('HIT')
-    expect(handler).toHaveBeenCalledTimes(1)
+    expect(res2.header('x-cache')).toBeUndefined()
+    expect(handler).toHaveBeenCalledTimes(2)
   })
 
   it('does not cache a route with meta.render: server when revalidate is absent', async () => {
@@ -334,5 +335,64 @@ describe('createIsrHandler — render mode compatibility', () => {
     await wrapped(mockReq('/dashboard'), res2)
     expect(res2.header('x-cache')).toBeUndefined()
     expect(handler).toHaveBeenCalledTimes(2) // no cache — handler called each time
+  })
+})
+
+describe('ISR privacy and cold request coalescing', () => {
+  const routes = [{ path: '/page', meta: { ssg: { revalidate: 60 } } }]
+  it('bypasses an existing public cache when middleware marks the response private', async () => {
+    const render = vi.fn((_req: IncomingMessage, res: ServerResponse) => res.end('Document'))
+    const handler = createIsrHandler(routes, render)
+    await handler(mockReq(), mockRes())
+    const privateRes = mockRes(); privateRes.setHeader('Set-Cookie', 'session=private')
+    await handler(mockReq(), privateRes)
+    expect(render).toHaveBeenCalledTimes(2); expect(privateRes.header('x-cache')).toBeUndefined()
+  })
+  it('preserves request headers and isolates concurrent language-dependent responses', async () => {
+    const handler = createIsrHandler(routes, async (req, res) => {
+      await new Promise((done) => setTimeout(done, 10))
+      res.setHeader('Vary', 'Accept-Language')
+      res.end(req.headers['accept-language'])
+    })
+    const english = mockReq(), french = mockReq()
+    english.headers['accept-language'] = 'en'; french.headers['accept-language'] = 'fr'
+    const first = mockRes(), second = mockRes()
+    await Promise.all([handler(english, first), handler(french, second)])
+    expect(first.body()).toBe('en'); expect(second.body()).toBe('fr')
+    expect(first.header('x-cache')).toBe('BYPASS')
+  })
+  it('preserves separate cookie headers on uncached responses', async () => {
+    const cookies = ['first=1; Path=/', 'second=2; Path=/']
+    const handler = createIsrHandler(routes, (_req, res) => { res.setHeader('Set-Cookie', cookies); res.end('ok') })
+    const res = mockRes()
+    await handler(mockReq(), res)
+    expect(res.setHeader).toHaveBeenCalledWith('set-cookie', cookies)
+  })
+  for (const headers of [{ 'set-cookie': 'session=secret' }, { 'cache-control': 'PRIVATE' }, { vary: 'Accept-Language' }]) {
+    it(`does not cache ${Object.keys(headers)[0]} responses`, async () => {
+      let renders = 0
+      const handler = createIsrHandler(routes, (_req, res) => {
+        renders++
+        for (const [key, value] of Object.entries(headers)) res.setHeader(key, value!)
+        res.end(String(renders))
+      })
+      const first = mockRes(), second = mockRes()
+      await handler(mockReq(), first); await handler(mockReq(), second)
+      expect(renders).toBe(2); expect(second.header('x-cache')).toBe('BYPASS')
+    })
+  }
+  it('coalesces concurrent anonymous cold renders', async () => {
+    const render = vi.fn(async (_req: IncomingMessage, res: ServerResponse) => { await new Promise((done) => setTimeout(done, 10)); res.end('Shared') })
+    const handler = createIsrHandler(routes, render)
+    const first = mockRes(), second = mockRes()
+    await Promise.all([handler(mockReq(), first), handler(mockReq(), second)])
+    expect(render).toHaveBeenCalledOnce(); expect(first.body()).toBe('Shared'); expect(second.body()).toBe('Shared')
+  })
+  it('preserves personalized requests without populating the anonymous cache', async () => {
+    const render = vi.fn((_req: IncomingMessage, res: ServerResponse) => res.end('Personal'))
+    const handler = createIsrHandler(routes, render), req = mockReq()
+    req.headers.cookie = 'session=secret'
+    await handler(req, mockRes()); await handler(req, mockRes())
+    expect(render).toHaveBeenCalledTimes(2)
   })
 })

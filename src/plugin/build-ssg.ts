@@ -1,6 +1,8 @@
+import { relative } from 'node:path'
+import { buildComponentManifest, collectMarkdownTags } from './virtual/content-components.js'
 import { writeFile, mkdir, readFile, cp, readdir, rm } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
-import { join, resolve } from 'pathe'
+import { join, resolve, basename } from 'pathe'
 import {
   injectFaviconLink,
   injectCanonicalLink,
@@ -17,6 +19,8 @@ import { scanFiles } from './file-scanner.js'
 
 interface SsgManifest {
   generatedAt: string
+  fallback?: boolean
+  hybrid?: boolean
   paths: string[]
   errors: Array<{ path: string; error: string }>
 }
@@ -280,6 +284,8 @@ async function collectSsgPaths(
   }> = []
 
   for (const file of files) {
+    const name = basename(file)
+    if (['_layout.ts', '_error.ts', '404.ts'].includes(name) || name.endsWith('.error.ts')) continue
     // Skip routes that declare render: 'server' or render: 'spa' — they are
     // either always-SSR or client-only and must not be pre-rendered.
     let src = ''
@@ -341,8 +347,9 @@ async function collectSsgPaths(
             const catchAllPaths = _collectCatchAllContentPaths(entry.routePath, contentStore ?? [])
             paths.push(...catchAllPaths)
           }
-        } catch {
-          console.warn(`[cer-app] Could not enumerate paths for ${file}`)
+        } catch (cause) {
+          if (config.ssg.failOnError !== false) throw new Error(`[cer-app] Could not enumerate paths for ${file}`, { cause })
+          console.warn(`[cer-app] Could not enumerate paths for ${file}`, cause)
         }
       }
     } finally {
@@ -419,22 +426,25 @@ async function renderPath(
       : null)
 
   if (typeof handlerFn !== 'function') {
-    console.warn(`[cer-app] No handler function found in server bundle for path: ${path}`)
-    return ''
+    throw new Error(`No handler function found in server bundle for path: ${path}`)
   }
 
   // Mock req/res for the Express-style handler.
   // The handler internally merges with dist/client/index.html, so we just
   // capture whatever it writes/ends with.
-  const mockReq = { url: path, headers: {} }
+  const mockReq = { url: path, method: 'GET', headers: {} }
   return new Promise<string>((resolve, reject) => {
     const chunks: string[] = []
     const mockRes = {
+      statusCode: 200,
       setHeader: () => {},
       write: (chunk: string) => { chunks.push(chunk) },
-      end: (body?: string) => resolve(chunks.join('') + (body ?? '')),
+      end: (body?: string) => {
+        if (mockRes.statusCode >= 400) reject(new Error(`SSG render ${path} returned HTTP ${mockRes.statusCode}`))
+        else resolve(chunks.join('') + (body ?? ''))
+      },
     }
-    ;(handlerFn as (req: unknown, res: unknown) => Promise<void>)(mockReq, mockRes).catch(reject)
+    Promise.resolve((handlerFn as (req: unknown, res: unknown) => unknown)(mockReq, mockRes)).catch(reject)
   })
 }
 
@@ -575,6 +585,10 @@ export async function buildSSG(
         if (paths.length <= 20) console.log(`[cer-app] Generating: ${path}`)
         const raw = await renderPath(path, serverBundlePath)
         let html = postProcessHtml(raw, path, config, faviconHref)
+        const entryPreload = config.ssg.entryPreload
+        if (entryPreload === false || (typeof entryPreload === 'function' && !entryPreload(path))) {
+          html = html.replace(/<link\b[^>]*\brel=["']modulepreload["'][^>]*>/gi, '')
+        }
         if (config.ssg.inlineStylesheets !== false) {
           html = await inlineStylesheetLinks(
             html,
@@ -622,14 +636,53 @@ export async function buildSSG(
   // fabricated build-date <lastmod>; it is only useful when tied to page changes.
   const publicSitemap = join(config.root, 'public', 'sitemap.xml')
   if (config.siteUrl && !existsSync(publicSitemap)) {
-    const sitemapContent = generateSitemapXml(config.siteUrl, generatedPaths)
+    const metadata = Object.fromEntries(await Promise.all(generatedPaths.map(async (path) => [path, await config.ssg.sitemap?.(path) ?? {}])))
+    const sitemapContent = generateSitemapXml(config.siteUrl, generatedPaths, undefined, metadata)
     await writeFile(join(distDir, 'sitemap.xml'), sitemapContent, 'utf-8')
     console.log('[cer-app] Generated sitemap.xml')
   }
 
+  // Retain the client dependency graph at the public root for reliable budget checks.
+  const clientManifest = join(distDir, 'client/.vite/manifest.json')
+  if (existsSync(clientManifest) && config.componentsDir && config.contentDir) {
+    await cp(clientManifest, join(distDir, 'cer-client-manifest.json'))
+    const graph = JSON.parse(await readFile(clientManifest, 'utf8')) as Record<string, { file: string; src?: string }>
+    const [components, documents] = await Promise.all([buildComponentManifest(config.componentsDir), collectMarkdownTags(config.contentDir)])
+    const startup: Record<string, string[]> = {}
+    const pageFiles = config.pagesDir && existsSync(config.pagesDir) ? await scanFiles(config.pagesDir, ['.ts']) : []
+    const pages = pageFiles.map((file) => buildRouteEntry(file, config.pagesDir))
+    const tags = [...new Set([...documents.values()].flatMap((tags) => [...tags]))]
+    for (const path of generatedPaths) {
+      const html = await readFile(join(distDir, path === '/' ? 'index.html' : path.slice(1) + '/index.html'), 'utf8')
+      const roots = new Set<string>()
+      // The static entry imports the matching page after paint. Those bytes
+      // still belong to startup, even though they have no preload hint.
+      for (const page of pages) {
+        if (!html.includes('<' + page.tagName)) continue
+        const entry = graph[relative(config.root, page.filePath).replace(/\\/g, '/')]
+        if (entry) roots.add(entry.file)
+      }
+      for (const tag of tags) {
+        if (!html.includes('<' + tag) || ['none', 'visible'].includes(config.contentComponents?.[tag] ?? 'load')) continue
+        const source = components.get(tag)
+        const resolved = config.integrations?.map((integration) => integration.componentResolver?.(tag)).find(Boolean)
+        const entry = source ? graph[relative(config.root, source).replace(/\\/g, '/')] :
+          resolved ? Object.values(graph).find((entry) => entry.src?.includes(resolved.replace('/components/', '/dist/components/') + '.js')) : undefined
+        if (entry) roots.add(entry.file)
+      }
+      startup[path] = [...roots]
+    }
+    await writeFile(join(distDir, 'cer-startup-manifest.json'), JSON.stringify(startup, null, 2))
+  }
+
   // Step 9: Write SSG manifest
+  const module = _serverMod as { apiRoutes?: unknown[]; serverMiddleware?: unknown[]; routes?: Array<{ meta?: { render?: string; ssg?: { revalidate?: number } } }> } | null
+  const hybrid = module?.apiRoutes?.length || module?.serverMiddleware?.length || module?.routes?.some((route) => route.meta?.render === 'server' || route.meta?.render === 'spa' || typeof route.meta?.ssg?.revalidate === 'number' && route.meta.ssg.revalidate >= 0)
+
   const manifest: SsgManifest = {
     generatedAt: new Date().toISOString(),
+    fallback: config.ssg.fallback === true,
+    hybrid: !!hybrid,
     paths: generatedPaths,
     errors,
   }
@@ -637,6 +690,21 @@ export async function buildSSG(
   const manifestPath = join(distDir, 'ssg-manifest.json')
   await mkdir(distDir, { recursive: true })
   await writeFile(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8')
+
+  // Generate provider registration from the same schema used by application markup.
+  if (config.ssg.netlifyForms?.length) {
+    const escape = (value: string) => value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
+    const forms = config.ssg.netlifyForms.map((form) => `<form name="${escape(form.name)}" method="post" data-netlify="true"${form.honeypot ? ` netlify-honeypot="${escape(form.honeypot)}"` : ''}><input name="form-name" value="${escape(form.name)}" type="hidden">${[...new Set([...form.fields, ...(form.honeypot ? [form.honeypot] : [])])].map((field) => `<input name="${escape(field)}">`).join('')}</form>`).join('')
+    const directory = join(distDir, 'form-dummy')
+    await mkdir(directory, { recursive: true })
+    await writeFile(join(directory, 'index.html'), `<!doctype html><html lang="en"><head><meta name="robots" content="noindex"><title>Form registration</title></head><body hidden>${forms}</body></html>`)
+  }
+
+  // Pure SSG output is self-contained; retain server/client for hybrid consumers.
+  if (config.ssg.keepServer !== true && !config.ssg.fallback && !hybrid && !existsSync(config.serverMiddlewareDir)) {
+    await rm(join(distDir, 'client'), { recursive: true, force: true })
+    await rm(join(distDir, 'server'), { recursive: true, force: true })
+  }
 
   console.log(`[cer-app] SSG build complete.`)
   console.log(`  Generated ${generatedPaths.length} page(s).`)

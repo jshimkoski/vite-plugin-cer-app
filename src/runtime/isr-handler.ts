@@ -9,108 +9,97 @@
  *   import { handler, routes } from './dist/server/server.js'
  *   app.use(createIsrHandler(routes, handler))
  *
- * Usage (Hono):
- *   import { createIsrHandler } from '@jasonshimmy/vite-plugin-cer-app/isr'
- *   import { handler, routes } from './dist/server/server.js'
- *   app.use('*', createIsrHandler(routes, handler))
+ * Web Request/Response frameworks require a transport bridge; this factory
+ * accepts Node.js IncomingMessage/ServerResponse objects.
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { Readable } from 'node:stream'
+import { EventEmitter } from 'node:events'
+import { matchRoutePattern as _matchPattern, findRevalidate as _findRevalidate } from './route-matching.js'
 
 /** A single cached SSR response stored by `createIsrHandler`. Includes the full rendered HTML, response headers, status code, and revalidation metadata. */
 export interface IsrCacheEntry {
   html: string
-  headers: Record<string, string>
+  headers: Record<string, string | string[]>
   statusCode: number
   builtAt: number
   revalidate: number
 }
 
-/** The SSR request handler signature produced by the server entry bundle (exported as `handler`). Compatible with Express, Hono, and any Node.js HTTP server. */
+/** The Node.js request handler signature produced by the server entry bundle. Web Request/Response frameworks require a bridge. */
 export type SsrHandlerFn = (req: IncomingMessage, res: ServerResponse) => unknown
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
-
-function _matchPattern(pattern: string, urlPath: string): boolean {
-  const norm = (s: string) => s.replace(/\/+$/, '') || '/'
-  if (norm(pattern) === norm(urlPath)) return true
-  const regexStr =
-    '^' +
-    norm(pattern)
-      .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
-      .replace(/:[^/]+\*/g, '.*')
-      .replace(/:[^/]+/g, '[^/]+') +
-    '$'
-  return new RegExp(regexStr).test(norm(urlPath))
-}
-
-function _findRevalidate(
-  routes: Array<{ path: string; meta?: Record<string, unknown> }>,
-  urlPath: string,
-): number | null {
-  for (const route of routes) {
-    if (_matchPattern(route.path, urlPath)) {
-      const ssg = route.meta?.ssg as Record<string, unknown> | undefined
-      if (typeof ssg?.revalidate === 'number') return ssg.revalidate
-      return null
-    }
-  }
-  return null
-}
 
 async function _renderForCache(
   urlPath: string,
   handler: SsrHandlerFn,
   revalidate: number,
+  request: IncomingMessage,
 ): Promise<IsrCacheEntry | null> {
   return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), 30_000)
+    timer.unref?.()
+    const finish = (entry: IsrCacheEntry | null) => { clearTimeout(timer); resolve(entry) }
     const chunks: Buffer[] = []
     const capturedHeaders: Record<string, string | string[]> = {}
     let capturedStatus = 200
 
-    const fakeRes = {
+    const events = new EventEmitter()
+    const fakeRes = Object.assign(events, {
+      headersSent: false,
+      writableEnded: false,
+      getHeader(name: string) { return capturedHeaders[name.toLowerCase()] },
+      getHeaders() { return { ...capturedHeaders } },
+      removeHeader(name: string) { delete capturedHeaders[name.toLowerCase()] },
+      writeHead(status: number, headers?: Record<string, string>) { capturedStatus = status; Object.assign(capturedHeaders, Object.fromEntries(Object.entries(headers ?? {}).map(([key, value]) => [key.toLowerCase(), value]))); this.headersSent = true; return this },
       get statusCode() { return capturedStatus },
       set statusCode(v: number) { capturedStatus = v },
       setHeader(name: string, value: string | string[]) {
         capturedHeaders[name.toLowerCase()] = value
       },
       write(chunk: string | Buffer) {
+        this.headersSent = true
         chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, 'utf-8'))
+        return true
       },
       end(body?: string | Buffer) {
+        if (this.writableEnded) return this
+        this.headersSent = true
+        this.writableEnded = true
         if (body !== undefined) {
           chunks.push(Buffer.isBuffer(body) ? body : Buffer.from(String(body), 'utf-8'))
         }
-        resolve({
+        finish({
           html: Buffer.concat(chunks).toString('utf-8'),
-          headers: Object.fromEntries(
-            Object.entries(capturedHeaders).map(([k, v]) => [k, Array.isArray(v) ? v.join(', ') : v]),
-          ),
+          headers: { ...capturedHeaders },
           statusCode: capturedStatus,
           builtAt: Date.now(),
           revalidate,
         })
+        events.emit('finish')
+        return this
       },
-    } as unknown as ServerResponse
+    }) as unknown as ServerResponse
 
-    const fakeReq = {
-      url: urlPath,
-      method: 'GET',
-      headers: { accept: 'text/html' },
-    } as IncomingMessage
+    const fakeReq = Object.assign(Readable.from([]), {
+      url: urlPath, method: 'GET', headers: { ...request.headers },
+      socket: request.socket, httpVersion: request.httpVersion,
+    }) as IncomingMessage
 
     try {
       const result = handler(fakeReq, fakeRes)
       if (result && typeof (result as Promise<void>).catch === 'function') {
-        ;(result as Promise<void>).catch(() => resolve(null))
+        ;(result as Promise<void>).catch(() => finish(null))
       }
     } catch {
-      resolve(null)
+      finish(null)
     }
   })
 }
 
-function _serveFromCache(entry: IsrCacheEntry, res: ServerResponse, status: 'HIT' | 'STALE'): void {
+function _serveFromCache(entry: IsrCacheEntry, res: ServerResponse, status: 'HIT' | 'STALE' | 'BYPASS'): void {
   res.statusCode = entry.statusCode
   for (const [name, value] of Object.entries(entry.headers)) {
     res.setHeader(name, value)
@@ -130,11 +119,23 @@ function _serveFromCache(entry: IsrCacheEntry, res: ServerResponse, status: 'HIT
  *
  * Routes without a `revalidate` value are passed through to the handler directly.
  */
+function isCacheable(entry: IsrCacheEntry): boolean {
+  return entry.statusCode === 200 && !entry.headers['set-cookie'] &&
+    !/private|no-store/i.test(String(entry.headers['cache-control'] ?? '')) &&
+    !String(entry.headers.vary ?? '').split(',').some((name) => name.trim() && name.trim().toLowerCase() !== 'accept-encoding')
+}
+
 export function createIsrHandler(
   routes: Array<{ path: string; meta?: Record<string, unknown> }>,
   handler: SsrHandlerFn,
 ): SsrHandlerFn {
   const cache = new Map<string, IsrCacheEntry>()
+  const cold = new Map<string, Promise<IsrCacheEntry | null>>()
+  const store = (path: string, entry: IsrCacheEntry) => {
+    if (!isCacheable(entry)) return
+    if (!cache.has(path) && cache.size >= 1000) cache.delete(cache.keys().next().value!)
+    cache.set(path, entry)
+  }
   // True lock: stores the in-flight revalidation Promise per URL path.
   // A path present in this map means a background render is already in progress.
   const _inFlight = new Map<string, Promise<void>>()
@@ -143,7 +144,13 @@ export function createIsrHandler(
     const urlPath = (req.url ?? '/').split('?')[0]
     const revalidate = _findRevalidate(routes, urlPath)
 
-    if (revalidate === null) {
+    const mode = routes.find((route) => _matchPattern(route.path, urlPath))?.meta?.render
+    const middlewarePrivate = res.getHeader?.('set-cookie') ||
+      /private|no-store/i.test(String(res.getHeader?.('cache-control') ?? '')) ||
+      String(res.getHeader?.('vary') ?? '').split(',').some((name) => name.trim() && name.trim().toLowerCase() !== 'accept-encoding')
+    // Only anonymous, canonical GET documents can share cached HTML.
+    if (revalidate === null || revalidate < 0 || mode === 'server' || middlewarePrivate ||
+        (req.method ?? 'GET') !== 'GET' || (req.url ?? '').includes('?') || req.headers.cookie || req.headers.authorization) {
       return handler(req, res)
     }
 
@@ -160,8 +167,8 @@ export function createIsrHandler(
       // revalidation is already in flight for this path.
       _serveFromCache(cached, res, 'STALE')
       if (!_inFlight.has(urlPath)) {
-        const promise = _renderForCache(urlPath, handler, revalidate).then((entry) => {
-          if (entry) cache.set(urlPath, entry)
+        const promise = _renderForCache(urlPath, handler, revalidate, req).then((entry) => {
+          if (entry) store(urlPath, entry)
         }).catch(() => {
           // Background render failed — next request will try again.
         }).finally(() => {
@@ -173,10 +180,14 @@ export function createIsrHandler(
     }
 
     // Cache miss — render, cache, then serve.
-    const entry = await _renderForCache(urlPath, handler, revalidate)
+    // Before rendering we cannot know whether the response varies by a header.
+    // Coalesce only identical requests so uncached responses remain isolated.
+    const coldKey = JSON.stringify([urlPath, Object.entries(req.headers).sort(([a], [b]) => a.localeCompare(b))])
+    if (!cold.has(coldKey)) cold.set(coldKey, _renderForCache(urlPath, handler, revalidate, req).finally(() => cold.delete(coldKey)))
+    const entry = await cold.get(coldKey)!
     if (entry) {
-      cache.set(urlPath, entry)
-      _serveFromCache(entry, res, 'HIT')
+      store(urlPath, entry)
+      _serveFromCache(entry, res, isCacheable(entry) ? 'HIT' : 'BYPASS')
     } else {
       await handler(req, res)
     }

@@ -43,8 +43,8 @@ function fetchManifest(): Promise<ContentMeta[]> {
 }
 
 // ─── Server-side production caches ───────────────────────────────────────────
-// In production SSR the Vite build process is not running, so __CER_CONTENT_STORE__
-// is absent.  We cache the manifest and per-document reads here to avoid repeated
+// Older/custom SSR bundles may omit the embedded __CER_CONTENT_STORE__ snapshot.
+// Cache fallback filesystem reads here to avoid repeated
 // disk I/O on every request — critical at 10k+ pages where manifest.json is ~2MB.
 
 let _ssrManifest: ContentMeta[] | null = null
@@ -58,9 +58,8 @@ const _ssrItemCache = new Map<string, ContentItem | null>()
  * Resolution strategy:
  * - **Server (dev + SSG build-time)**: reads from `globalThis.__CER_CONTENT_STORE__`
  *   populated by the `cerContent()` Vite plugin's `buildStart` hook.
- * - **Server (production SSR runtime)**: `__CER_CONTENT_STORE__` is absent (no
- *   Vite build process at runtime), so falls back to `node:fs` reads from
- *   `dist/_content/`.
+ * - **Server (production SSR runtime)**: uses the build-embedded snapshot.
+ *   Older/custom bundles can fall back to packaged content JSON files.
  * - **Client (SPA / browser navigation)**: lazy-fetches `/_content/manifest.json`
  *   once (cached) for listing; fetches `/_content/[path].json` per `.first()`.
  */

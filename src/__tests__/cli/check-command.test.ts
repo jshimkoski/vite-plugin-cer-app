@@ -6,6 +6,7 @@ describe('checkCommand', () => {
   it('exposes link, performance, and Lighthouse production gates', () => {
     expect(checkCommand().commands.map((command) => command.name())).toEqual([
       'links',
+      'seo',
       'performance',
       'lighthouse',
     ])

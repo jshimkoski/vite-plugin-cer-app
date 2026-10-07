@@ -1,165 +1,71 @@
-# Data Loading
+# Data loading
 
-Each page can export a `loader` function that runs on the server before the page renders. The data is serialized into the HTML response and rehydrated on the client without a second fetch.
-
----
-
-## Defining a loader
+A page's exported `loader` prepares data before that page renders. It runs on the server for SSR requests, at build time for generated SSG paths, and in the browser for SPA startup and subsequent navigation in all modes. SSR/SSG hydration reuses serialized data when available instead of repeating the initial loader.
 
 ```ts
-// app/pages/blog/[slug].ts
 import type { PageLoader } from '@jasonshimmy/vite-plugin-cer-app/types'
 
-component('page-blog-slug', () => {
-  const data = usePageData<{ title: string; body: string }>()
-
-  return html`
-    <article>
-      <h1>${data?.title ?? ''}</h1>
-      <div>${data?.body ?? ''}</div>
-    </article>
-  `
-})
-
-export const loader: PageLoader = async ({ params }) => {
-  const { data: post } = await useFetch(`https://api.example.com/posts/${params.slug}`)
-  return { title: post?.title, body: post?.body }
+export const loader: PageLoader<{ slug: string }, { title: string }> = async ({ params, signal }) => {
+  const response = await fetch(`https://api.example.com/posts/${encodeURIComponent(params.slug)}`, { signal })
+  if (!response.ok) throw Object.assign(new Error('Post unavailable'), { status: response.status })
+  const post = await response.json()
+  return { title: post.title }
 }
+
+component('page-post', () => {
+  const data = usePageData<{ title: string }>()
+  return html`<h1>${data?.title ?? ''}</h1>`
+})
+export default 'page-post'
 ```
 
-The object returned by `loader` is made available via `usePageData()` in the page component. Primitive values (strings, numbers, booleans) are also forwarded as HTML element attributes so `useProps()` can read them.
+The component helpers in this example are supplied by CER App's default auto-imports. Use explicit runtime/composable imports if auto-imports are disabled.
 
----
-
-## `PageLoader` signature
+## Loader context
 
 ```ts
-type PageLoader<
-  Params extends Record<string, string> = Record<string, string>,
-  Data = Record<string, unknown>,
-> = (ctx: PageLoaderContext<Params>) => Promise<Data> | Data
-
 interface PageLoaderContext<P extends Record<string, string>> {
-  params: P                     // URL path parameters
-  query: Record<string, string> // Parsed query string
-  req?: IncomingMessage         // Raw Node.js request (present during SSR/SSG server render; absent during client-side navigation)
+  params: P
+  query: Record<string, string>
+  req?: IncomingMessage
+  signal?: AbortSignal
 }
+
+type PageLoader<P extends Record<string, string>, D> =
+  (context: PageLoaderContext<P>) => D | Promise<D>
 ```
 
----
+`req` is present during server rendering and absent in the browser. `signal` is supplied for browser page loads and is aborted when a newer page load supersedes it. Pass it to `fetch()` to cancel network work; cancellation is cooperative. Imports themselves cannot be aborted, and version guards prevent obsolete results from replacing newer page data.
 
-## SSR data flow
+Loaders are part of the browser route graph: keep them browser-safe. Do not import database clients, filesystem code or secrets into a shared page loader. Put privileged work in server API routes and call those APIs from the loader. A pure static SPA/SSG deployment needs a separately available API for such requests. Conditional use of `req` does not by itself keep a server-only dependency out of the browser bundle.
 
-1. A request arrives for `/blog/hello-world`
-2. The router matches `app/pages/blog/[slug].ts`
-3. The server calls `loader({ params: { slug: 'hello-world' }, query, req })`
-4. The returned data is serialized as `window.__CER_DATA__` in a `<script>` tag in the HTML `<head>`:
-   ```html
-   <script>window.__CER_DATA__ = {"title":"Hello World","body":"..."}</script>
-   ```
-5. The server renders `<page-blog-slug>` directly into the layout using Declarative Shadow DOM
-6. The full HTML (pre-rendered content + client scripts) is sent to the browser
+## Server data and hydration
 
----
+The full loader result is accessible through `usePageData()`. Primitive return values are also forwarded to the page host as attributes for `useProps()`. Complex loader values should be read with `usePageData()`; `useProps()` can still receive complex values through explicit component property bindings.
 
-## Client hydration flow
+The server serializes hydration data safely into `globalThis.__CER_DATA__`. Initial SSR/SSG hydration retains that data for components that upgrade later. A subsequent real navigation clears the previous payload and publishes the new loader result only if that navigation is still current.
 
-1. Browser receives the full HTML — content is immediately visible via Declarative Shadow DOM before any JS runs
-2. Client JS boots; `usePageData()` reads `window.__CER_DATA__` and returns the hydrated values
-3. After the initial `router.replace()` in `.cer/app.ts` completes, `.cer/app.ts` clears the loader data from `globalThis` so subsequent client-side navigations trigger a fresh fetch instead of reusing stale server data
-4. Components that received SSR data skip their `useOnConnected` fetch — no duplicate request
+A page with `meta.hydrate: 'none'` can omit its full loader payload and keep its existing static tree. Explicit interactive descendants receive serialized island props where needed. Browser content imports also discover rendered custom-element hosts, allowing a static page to render a loader-selected document whose content path differs from the route path.
 
----
+## Client navigation
 
-## Client-side navigation and loaders
+For `router.push()`, `router.replace()` and browser Back/Forward that changes the page location, CER imports the destination page and runs its loader before publishing the new page data. Fragment-only history traversal does not rerun the loader. SPA startup also runs the loader in the browser; `useOnConnected()` fetching is an alternative for interaction-driven data, not a requirement of SPA mode.
 
-Loaders run on the client too — before every navigation. This means `useProps()` and `usePageData()` both work correctly for client-side route transitions, not just on initial SSR/SSG load.
+`app/loading.ts` supplies an optional loading boundary. Without one, CER keeps the initial server tree visible while preparing navigation. There is still a network/loading interval; a loader does not guarantee an instantaneous transition.
 
-When `router.push('/path')` is called:
-1. The route module is dynamically imported
-2. If the module exports a `loader`, it is called with `{ params, query }`
-3. Primitive return values (strings, numbers, booleans) are set as HTML attributes on the page element so `useProps()` can read them
-4. All return values are stored in `globalThis.__CER_DATA__` so `usePageData()` also returns them
-5. The page component renders with the correct data immediately — no loading flash or re-render
+## Errors and retry
+
+Server loader errors use the thrown numeric `.status` when present and otherwise return 500. CER renders a route-specific or global error component when configured. Without one, the response uses an error document rather than the requested page.
+
+Browser loader and route-import errors reach the client error boundary. With no custom boundary, CER shows the error message. A custom error component receives `error`; server rendering also supplies `status`. `globalThis.resetError()` clears the error and retries the most recently requested page, including its query and fragment.
+
+For deployment-related missing chunks, keep HTML revalidated and retain previous hashed assets where practical. Vite exposes [`vite:preloadError`](https://vite.dev/guide/build.html#load-error-handling) for an application-specific recovery policy. CER does not automatically reload the browser or discard unsaved form state.
+
+## SSG paths
+
+For a dynamic page, enumerate concrete paths:
 
 ```ts
-// app/pages/profile.ts
-component('page-profile', () => {
-  // Works on initial load AND client navigation
-  const props = useProps<{ username: string; bio: string }>({ username: '', bio: '' })
-
-  return html`
-    <h1>${props.username}</h1>
-    <p>${props.bio}</p>
-  `
-})
-
-export const loader = async ({ params }: { params: { id: string } }) => {
-  const { data: user } = await useFetch(`/api/users/${params.id}`)
-  return { username: user?.name, bio: user?.bio }
-}
-```
-
-> **Note:** Only primitive values (strings, numbers, booleans) are forwarded as element attributes. Complex objects (arrays, nested objects) should be accessed via `usePageData()` instead of `useProps()`.
-
----
-
-## Accessing loader data in components
-
-Use `usePageData()` to read loader data — it receives everything the loader returned (primitives and complex objects alike) and works in all modes: SSR, SSG, and client-side navigation.
-
-```ts
-component('page-user', () => {
-  const ssrData = usePageData<{ user: { id: string; name: string; email: string } }>()
-  const user = ref(ssrData?.user ?? { id: '', name: '', email: '' })
-
-  useOnConnected(async () => {
-    if (ssrData) return  // already hydrated
-    const { data } = await useFetch(`/api/users/${user.value.id}`)
-    if (data) user.value = data
-  })
-
-  return html`
-    <h1>Hello, ${user.value.name}</h1>
-    <p>${user.value.email}</p>
-  `
-})
-
-export const loader: PageLoader<{ id: string }> = async ({ params }) => {
-  const user = await fetchUser(params.id)
-  return { user }
-}
-```
-
-`useProps()` is an alternative for **primitive values only** (strings, numbers, booleans). It reads element HTML attributes rather than the loader payload directly, which means it also picks up attributes passed by parent components in the component tree — but it cannot receive arrays or objects.
-
-```ts
-component('page-profile', () => {
-  // Works for primitives only — use usePageData() if you need objects or arrays
-  const props = useProps<{ username: string; bio: string }>({ username: '', bio: '' })
-
-  return html`
-    <h1>${props.username}</h1>
-    <p>${props.bio}</p>
-  `
-})
-
-export const loader = async ({ params }: { params: { id: string } }) => {
-  const { data: user } = await useFetch(`/api/users/${params.id}`)
-  return { username: user?.name, bio: user?.bio }  // primitives only
-}
-```
-
-> **Rule of thumb:** reach for `usePageData()` first. Only prefer `useProps()` when you specifically need the element attribute binding model — for example, when the same component is also used as a child that receives attributes from a parent.
-
----
-
-## SSG and loaders
-
-In SSG mode, `loader` is called at build time for each generated path. The data is baked into the static HTML file and no server is required at runtime.
-
-```ts
-// app/pages/blog/[slug].ts
 export const meta = {
   ssg: {
     paths: async () => [
@@ -168,169 +74,10 @@ export const meta = {
     ],
   },
 }
-
-export const loader: PageLoader<{ slug: string }> = async ({ params }) => {
-  // Called once per path during `cer-app generate`
-  const post = await fetchPost(params.slug)
-  return { post }
-}
 ```
 
----
+The loader runs at build time for each generated path. Browser navigation still runs the browser-safe loader, so subsequent data can be fresher than the original document. Content-backed catch-all routes can use automatic enumeration; see [rendering modes](rendering-modes.md).
 
-## Dev server behavior
+## Development
 
-In `mode: 'ssr'` and `mode: 'ssg'`, the dev server runs the server entry module and calls your `loader` on every HTML request — matching production behaviour. Both `usePageData()` and `useProps()` receive real loader data during development.
-
-In `mode: 'spa'`, no loaders run in the dev server. `usePageData()` always returns `null` and `useProps()` returns its defaults. Use `useOnConnected` to fetch data client-side in SPA mode.
-
----
-
-## Error handling in loaders
-
-When a `loader` throws, the SSR error boundary intercepts it:
-
-- If `app/error.ts` exists, the server renders the `page-error` component instead of the normal page and returns the appropriate HTTP status.
-- If `app/error.ts` does not exist, the error is logged to the server console and a blank 500 response is returned.
-
-To send a specific HTTP status code from a loader, attach a `status` property to the thrown error:
-
-```ts
-export const loader: PageLoader<{ id: string }> = async ({ params }) => {
-  const item = await db.item.findById(params.id)
-  if (!item) {
-    const err = Object.assign(new Error('Not Found'), { status: 404 })
-    throw err
-  }
-  return { item }
-}
-```
-
-Unhandled errors without a `status` property default to HTTP 500.
-
----
-
-## Error boundary — `app/error.ts`
-
-Create `app/error.ts` to define a custom error page shown when navigation fails. The file must export a custom element named `page-error`:
-
-```ts
-// app/error.ts
-component('page-error', () => {
-  const props = useProps<{ error: string; status: string }>({
-    error: 'An unexpected error occurred.',
-    status: '500',
-  })
-
-  return html`
-    <div style="padding:2rem">
-      <h2 style="color:#c00">Error ${props.status}</h2>
-      <p>${props.error}</p>
-      <button @click="${() => (globalThis as any).resetError?.()}">
-        Try again
-      </button>
-    </div>
-  `
-})
-```
-
-### Props received by `page-error`
-
-| Prop | Type | Source |
-|------|------|--------|
-| `error` | `string` | Error message from the thrown value |
-| `status` | `string` | HTTP status code as a string (`"404"`, `"500"`, etc.) — **SSR only** |
-
-### `resetError()`
-
-The framework exposes `globalThis.resetError()` as a global function. Calling it clears the error state and re-navigates to the current path, giving the user a way to recover without a full page reload.
-
-```ts
-// Call from a button click handler inside page-error
-(globalThis as any).resetError?.()
-```
-
-### SSR vs. client-side behavior
-
-| Scenario | Behavior |
-|----------|----------|
-| **Loader throws during SSR** | Server renders `page-error` with `error` and `status` props; response uses the thrown status code |
-| **Navigation throws on the client** | `cer-layout-view` renders `page-error` with `error` prop only (no HTTP status in the browser) |
-| **No `app/error.ts` defined (SSR)** | Error is logged to the server console; blank 500 response |
-| **No `app/error.ts` defined (client)** | Raw error message rendered in a `<div>` |
-
-> **SPA mode:** There is no server-side error boundary in SPA mode. The `loader` function is never called server-side, so `page-error` is only rendered for client-side navigation errors. To handle loading failures in SPA, catch errors inside `useOnConnected` and render an error state manually.
-
----
-
-## Loader vs. client-side fetching
-
-Use `loader` for data that:
-- Must be present on initial render (SEO, no loading spinner)
-- Is fetched from a database or internal service not accessible from the browser
-- Benefits from server-side caching or authentication via cookies
-
-Use client-side fetching (`fetch` or composables) for:
-- Data loaded after user interaction
-- Paginated or infinite-scroll content
-- Real-time updates
-
----
-
-## TypeScript generics
-
-The `PageLoader` type accepts two generics:
-
-```ts
-// PageLoader<Params, Data>
-export const loader: PageLoader<
-  { id: string },               // URL params shape
-  { user: User; posts: Post[] } // Return data shape
-> = async ({ params }) => {
-  return { user: await fetchUser(params.id), posts: await fetchPosts(params.id) }
-}
-```
-
----
-
-## Multi-mode data loading (SPA fallback)
-
-When building a page that needs to work in **all three modes** — SSR/SSG (with a `loader`) and SPA (no server, no loader) — use the following pattern:
-
-1. In SSR/SSG, the server runs `loader` and injects the data via `window.__CER_DATA__`. `usePageData()` returns it immediately; `useOnConnected` sees `ssrData` and skips the client fetch.
-2. In SPA mode there is no server, so `ssrData` is `null`. The client tries the API first, then falls back to a direct module import.
-
-```ts
-// app/pages/blog/index.ts
-component('page-blog-index', () => {
-  const ssrData = usePageData<{ posts: Post[] }>()
-  const posts = ref<Post[]>(ssrData?.posts ?? [])
-
-  useOnConnected(async () => {
-    if (ssrData) return  // SSR/SSG: already hydrated, skip the fetch
-
-    // SPA: try the API server first
-    try {
-      const r = await fetch('/api/posts')
-      if (r.ok) {
-        posts.value = await r.json()
-        return
-      }
-    } catch { /* no API server in static preview */ }
-
-    // SPA static fallback: import data directly from source
-    const { posts: staticPosts } = await import('../data/posts')
-    posts.value = staticPosts
-  })
-
-  return html`<ul>${posts.value.map(p => html`<li>${p.title}</li>`)}</ul>`
-})
-
-// loader runs in SSR and SSG only
-export const loader = async () => {
-  const { data: posts } = await useFetch<Post[]>('/api/posts')
-  return { posts: posts ?? [] }
-}
-```
-
-The key rule: **always check `ssrData` before fetching on the client**. This prevents a redundant network request when the data was already serialized by the server.
+SSR and SSG development modes server-render HTML and run loaders on requests. SPA development serves a shell and runs loaders in the browser. Development SSR does not represent SSG's deployed build-time snapshot or guarantee hosting-platform cache behavior.

@@ -13,13 +13,13 @@ export function generateAppEntryTemplate(globalImports: readonly string[] = []):
 // Regenerated automatically on every dev server start and build.
 
 import '@jasonshimmy/custom-elements-runtime/css'
-${integrationImports}${integrationImports ? '\n' : ''}import 'virtual:cer-jit-css'
+${integrationImports}${integrationImports ? '\n' : ''}
 // virtual:cer-jit-init must run before virtual:cer-layouts and virtual:cer-plugins
 // so JIT CSS is enabled before those modules upgrade custom elements via
 // customElements.define(). Static imports execute depth-first in module order,
 // so placing this import here guarantees enableJITCSS() fires first.
 import 'virtual:cer-jit-init'
-import 'virtual:cer-content-components'
+import { loadContentComponents } from 'virtual:cer-content-components'
 import routes from 'virtual:cer-routes'
 import layouts from 'virtual:cer-layouts'
 import plugins from 'virtual:cer-plugins'
@@ -86,6 +86,8 @@ let _currentPageLocation = typeof window !== 'undefined'
 // Route chunks and loaders may resolve out of order during rapid navigation or
 // initial hydration. Only the newest request is allowed to publish page state.
 let _pageLoadVersion = 0
+let _pageLoadController
+let _retryPath
 
 function _toLoaderAttrs(data) {
   if (data === undefined || data === null || typeof data !== 'object') return {}
@@ -98,6 +100,10 @@ function _toLoaderAttrs(data) {
 // stores the results so cer-layout-view can pass them as element attributes.
 async function _loadPageForPath(path, options = {}) {
   const loadVersion = ++_pageLoadVersion
+  _pageLoadController?.abort()
+  const controller = new AbortController()
+  _pageLoadController = controller
+  _retryPath = path
   try {
     const url = new URL(path, 'http://x')
     const query = Object.fromEntries(url.searchParams)
@@ -121,7 +127,7 @@ async function _loadPageForPath(path, options = {}) {
     let hasFreshLoaderData = false
     if (typeof mod.loader === 'function' && runLoader) {
       try {
-        const data = await mod.loader({ params, query })
+        const data = await mod.loader({ params, query, signal: controller.signal })
         if (loadVersion !== _pageLoadVersion) return
         if (data !== undefined && data !== null) {
           loaderData = data
@@ -140,6 +146,8 @@ async function _loadPageForPath(path, options = {}) {
     // instead of re-running the loader on the client, then derive primitive attrs
     // from that payload so useProps() stays consistent with usePageData().
     if (loadVersion !== _pageLoadVersion) return
+    await loadContentComponents(path, false, loaderData)
+    if (loadVersion !== _pageLoadVersion) return
     loaderAttrs = { ...loaderAttrs, ..._toLoaderAttrs(loaderData) }
     if (hasFreshLoaderData) {
       // Publish loader data only after confirming this is still the newest route.
@@ -150,8 +158,9 @@ async function _loadPageForPath(path, options = {}) {
     _currentPageLocation = url.pathname + url.search
     _currentPageAttrs = loaderAttrs
     _currentPageKey = loadVersion
-  } catch {
+  } catch (err) {
     if (loadVersion !== _pageLoadVersion) return
+    currentError.value = err instanceof Error ? err.message : String(err)
     _currentPageTag = null
     _currentPageAttrs = {}
     _currentPageKey = null
@@ -166,7 +175,7 @@ const currentError = ref(null)
 
 const resetError = () => {
   currentError.value = null
-  void router.replace(router.getCurrent().path)
+  void router.replace(_retryPath ?? router.getCurrent().path)
 }
 ;(globalThis).resetError = resetError
 
@@ -196,7 +205,7 @@ router.push = async (path) => {
     if (navigationIntent !== _navigationIntent) return
     await _push(path)
   } catch (err) {
-    currentError.value = err instanceof Error ? err.message : String(err)
+    if (navigationIntent === _navigationIntent) currentError.value = err instanceof Error ? err.message : String(err)
   } finally {
     if (navigationIntent === _navigationIntent) {
       _activateClientRouteRendering()
@@ -217,7 +226,7 @@ router.replace = async (path) => {
     if (navigationIntent !== _navigationIntent) return
     await _replace(path)
   } catch (err) {
-    currentError.value = err instanceof Error ? err.message : String(err)
+    if (navigationIntent === _navigationIntent) currentError.value = err instanceof Error ? err.message : String(err)
   } finally {
     if (navigationIntent === _navigationIntent) {
       _activateClientRouteRendering()
@@ -481,6 +490,7 @@ if (typeof window !== 'undefined') {
     // untouched. Load its module after the first paint so explicitly
     // interactive descendants (breadcrumbs, TOCs, menus, etc.) can upgrade
     // without putting the static page chunk on the critical rendering path.
+    void loadContentComponents(window.location.pathname, true, (globalThis).__CER_DATA__).catch((error) => console.error('[cer-app] Content modules failed:', error))
     const _loadStaticRouteModule = () => {
       const _load = _initMatch?.route?.load
       if (typeof _load === 'function') {
@@ -584,7 +594,7 @@ if (typeof window !== 'undefined') {
         // Safari / older environments fallback.
         setTimeout(() => { void _doHydrate() }, 1)
       }
-    } else if (_hydrateStrategy === 'visible') {
+    } else if (_hydrateStrategy === 'visible' && typeof IntersectionObserver === 'function') {
       // Defer until cer-layout-view (or body as fallback) enters the viewport.
       const _el = document.querySelector('cer-layout-view') ?? document.body
       const _io = new IntersectionObserver(([entry]) => {

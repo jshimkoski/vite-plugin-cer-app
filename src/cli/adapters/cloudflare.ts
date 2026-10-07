@@ -9,8 +9,8 @@
  *     generated `_worker.js` (Cloudflare Pages Advanced Mode convention).
  *     The worker sets globalThis.__CER_CLIENT_TEMPLATE__ before dynamically
  *     importing the server bundle, bypassing the node:fs call in server.js.
- *   - Copies content-hashed assets and other public files to dist/ alongside
- *     _worker.js — Cloudflare Pages serves them from the CDN before the worker.
+ *   - Bundles the server graph into _worker.js and removes server intermediates.
+ *   - Copies public files to dist/; the worker forwards asset requests to ASSETS.
  *   - Writes `wrangler.toml` with nodejs_compat for AsyncLocalStorage + streams.
  *
  * SPA/SSG mode:
@@ -25,6 +25,10 @@
  */
 
 import { join } from 'pathe'
+import { requiresServer, prerenderedPaths, prerenderedFallback } from './deployment-mode.js'
+import { WEB_BRIDGE } from './web-bridge.js'
+import { build } from 'vite'
+import { gzipSync } from 'node:zlib'
 import {
   existsSync,
   mkdirSync,
@@ -34,6 +38,7 @@ import {
   cpSync,
   readdirSync,
   statSync,
+  rmSync,
 } from 'node:fs'
 
 // ─── Worker bridge template ───────────────────────────────────────────────────
@@ -53,7 +58,7 @@ import {
  *   buffered until the full page is rendered.
  * - Exports `{ fetch }` — the Cloudflare Pages _worker.js module format.
  */
-function generateWorkerBridge(clientHtml: string): string {
+function generateWorkerBridge(clientHtml: string, paths: string[], fallback?: boolean): string {
   // Escape the HTML for embedding in a JS template literal.
   const escaped = clientHtml.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${')
 
@@ -62,146 +67,58 @@ function generateWorkerBridge(clientHtml: string): string {
 // Cloudflare Pages _worker.js — Advanced Mode SSR bridge.
 // Requires compatibility_flags = ["nodejs_compat"] in wrangler.toml.
 import { Readable } from 'node:stream'
+import { EventEmitter } from 'node:events'
 
 // Inline the client HTML template so the server bundle does not need node:fs.
 // Must be set before the dynamic import below resolves.
 globalThis.__CER_CLIENT_TEMPLATE__ = \`${escaped}\`
 
-const { isrHandler, apiRoutes, runServerMiddleware, runWithRequestContext } = await import('./server/server.js')
-
-function matchApiPattern(pattern, urlPath) {
-  const pp = pattern.split('/')
-  const up = urlPath.split('/')
-  if (pp.length !== up.length) return null
-  const params = {}
-  for (let i = 0; i < pp.length; i++) {
-    if (pp[i].startsWith(':')) params[pp[i].slice(1)] = decodeURIComponent(up[i])
-    else if (pp[i] !== up[i]) return null
-  }
-  return params
-}
-
-function parseQuery(search) {
-  if (!search) return {}
-  const qs = search.startsWith('?') ? search.slice(1) : search
-  const result = {}
-  for (const part of qs.split('&')) {
-    if (!part) continue
-    const eqIdx = part.indexOf('=')
-    if (eqIdx === -1) result[decodeURIComponent(part)] = ''
-    else result[decodeURIComponent(part.slice(0, eqIdx))] = decodeURIComponent(part.slice(eqIdx + 1))
-  }
-  return result
-}
-
-async function toNodeRequest(webReq) {
-  const url = new URL(webReq.url)
-  const hasBody = webReq.body !== null
-    && webReq.method !== 'GET'
-    && webReq.method !== 'HEAD'
-  const body = hasBody ? Buffer.from(await webReq.arrayBuffer()) : null
-  const req = Object.assign(
-    body ? Readable.from([body]) : Readable.from([]),
-    {
-      url: url.pathname + url.search,
-      method: webReq.method,
-      headers: Object.fromEntries(webReq.headers.entries()),
-    },
-  )
-  req.query = parseQuery(url.search)
-  if (body !== null) {
-    const ct = webReq.headers.get('content-type') ?? ''
-    if (ct.includes('application/json')) {
-      try { req.body = JSON.parse(body.toString('utf-8')) } catch { req.body = undefined }
-    } else {
-      req.body = body
+const app = await import('./server/server.js')
+${WEB_BRIDGE}
+const paths = ${JSON.stringify(paths)}
+const dispatchers = new WeakMap()
+async function readDocument(path, req, assets) {
+  let url = new URL(path, 'https://' + req.headers.host)
+  for (let redirects = 0; redirects < 5; redirects++) {
+    const response = await assets.fetch(new Request(url))
+    const location = response.headers.get('location')
+    if (response.status >= 300 && response.status < 400 && location) {
+      await response.body?.cancel()
+      const next = new URL(location, url)
+      if (next.origin !== url.origin) return null
+      url = next
+      continue
     }
+    if (response.status !== 200) { await response.body?.cancel(); return null }
+    return response.text()
   }
-  return req
+  return null
 }
-
-function createNodeResponse() {
-  const { readable, writable } = new TransformStream()
-  const writer = writable.getWriter()
-  const encoder = new TextEncoder()
-  const headers = {}
-  let _resolve
-  let _ended = false
-  const promise = new Promise((res) => { _resolve = res })
-  const res = {
-    statusCode: 200,
-    setHeader(name, value) { headers[name.toLowerCase()] = String(value) },
-    getHeader(name) { return headers[name.toLowerCase()] },
-    removeHeader(name) { delete headers[name.toLowerCase()] },
-    write(chunk) {
-      if (_ended) return
-      void writer.write(typeof chunk === 'string' ? encoder.encode(chunk) : chunk).catch(() => {})
-    },
-    end(chunk) {
-      if (_ended) return
-      _ended = true
-      if (chunk) void writer.write(typeof chunk === 'string' ? encoder.encode(chunk) : chunk).catch(() => {})
-      void writer.close().catch(() => {})
-      _resolve(new Response(readable, { status: res.statusCode, headers }))
-    },
-    json(data) {
-      this.setHeader('Content-Type', 'application/json; charset=utf-8')
-      this.end(JSON.stringify(data))
-    },
-    status(code) { this.statusCode = code; return this },
-    get writableEnded() { return _ended },
-  }
-  return { res, promise }
-}
-
-async function handleRequest(webReq) {
-  const url = new URL(webReq.url)
-  const urlPath = url.pathname
-  const method = webReq.method ?? 'GET'
-
-  const nodeReq = await toNodeRequest(webReq)
-  const { res, promise } = createNodeResponse()
-
-  // Run server middleware chain (auth, logging, CORS, etc.).
-  if (!(await runServerMiddleware(nodeReq, res))) return promise
-
-  // Route /api/* requests to the API handlers exported by the server bundle.
-  if (urlPath.startsWith('/api/')) {
-    for (const route of (apiRoutes ?? [])) {
-      const params = matchApiPattern(route.path, urlPath)
-      if (params !== null) {
-        nodeReq.params = params
-        const fn = route.handlers[method.toLowerCase()]
-          ?? route.handlers[method.toUpperCase()]
-          ?? route.handlers['default']
-        if (typeof fn === 'function') {
-          // Wrap in request context so useCookie / useSession work in API handlers.
-          runWithRequestContext(nodeReq, res, () => Promise.resolve(fn(nodeReq, res))).catch(() => {
-            if (!res.writableEnded) {
-              res.statusCode = 500
-              res.end(JSON.stringify({ error: 'Internal Server Error' }))
-            }
-          })
-          return promise
-        }
-      }
-    }
-    return new Response('Not Found', { status: 404 })
-  }
-
-  // All other requests: SSR (with ISR for routes that declare meta.ssg.revalidate).
-  isrHandler(nodeReq, res).catch(() => {
-    if (!res.writableEnded) {
-      res.statusCode = 500
-      res.end('Internal Server Error')
-    }
-  })
-  return promise
+function dispatcher(assets) {
+  if (!assets || !app.createDispatchRequest) return app.dispatchRequest
+  if (!dispatchers.has(assets)) dispatchers.set(assets, app.createDispatchRequest({ prerendered: {
+    paths, fallback: ${JSON.stringify(fallback)},
+    read: (path, req) => readDocument(path === '/' ? '/index.html' : path.split('/').map(encodeURIComponent).join('/') + '/index.html', req, assets),
+    notFound: (req) => readDocument('/404.html', req, assets),
+  } }))
+  return dispatchers.get(assets)
 }
 
 export default {
-  async fetch(request, _env, _ctx) {
-    return handleRequest(request)
+  async fetch(request, env, _ctx) {
+    let path
+    try { path = decodeURIComponent(new URL(request.url).pathname) }
+    catch { return new Response('Bad Request', { status: 400 }) }
+    if (['server', 'client', '.vite'].includes(path.split('/')[1]) || ['/ssg-manifest.json', '/cer-client-manifest.json', '/cer-startup-manifest.json'].includes(path)) {
+      return new Response('Not Found', { status: 404 })
+    }
+    // Advanced-mode workers own all requests, including static assets.
+    if (env?.ASSETS && (request.method === 'GET' || request.method === 'HEAD') && !path.startsWith('/api/')) {
+      const asset = await env.ASSETS.fetch(request)
+      if (asset.status < 400 && !asset.headers.get('content-type')?.includes('text/html')) return asset
+      await asset.body?.cancel()
+    }
+    return handleRequest(request, dispatcher(env?.ASSETS))
   },
 }
 `
@@ -217,12 +134,10 @@ export async function runCloudflareAdapter(root: string): Promise<void> {
     )
   }
 
-  const serverBundle = join(distDir, 'server/server.js')
-  const ssgManifest = join(distDir, 'ssg-manifest.json')
-  const isSSR = existsSync(serverBundle) && !existsSync(ssgManifest)
+  const isSSR = requiresServer(distDir)
 
   if (isSSR) {
-    _buildSSR(root, distDir)
+    await _buildSSR(root, distDir)
   } else {
     _buildStatic(root, distDir)
   }
@@ -239,7 +154,7 @@ export async function runCloudflareAdapter(root: string): Promise<void> {
 
 // ─── SSR output ───────────────────────────────────────────────────────────────
 
-function _buildSSR(root: string, distDir: string): void {
+async function _buildSSR(root: string, distDir: string): Promise<void> {
   const clientHtmlPath = join(distDir, 'client/index.html')
   const clientHtml = existsSync(clientHtmlPath)
     ? readFileSync(clientHtmlPath, 'utf-8')
@@ -247,32 +162,31 @@ function _buildSSR(root: string, distDir: string): void {
 
   // Write the worker bridge with inlined client HTML.
   const workerPath = join(distDir, '_worker.js')
-  writeFileSync(workerPath, generateWorkerBridge(clientHtml))
+  writeFileSync(workerPath, generateWorkerBridge(clientHtml, prerenderedPaths(distDir), prerenderedFallback(distDir)))
 
-  // P1-4: Warn when the worker file approaches or exceeds Cloudflare's size limits.
-  // Free plan: 1 MB compressed; Paid plan: 10 MB compressed. Check uncompressed as
-  // a conservative proxy — the compressed size will always be smaller.
-  const workerSizeBytes = statSync(workerPath).size
-  const WARN_LIMIT = 900_000   // 900 KB — approaching Free plan limit
-  const ERROR_LIMIT = 9_000_000  // 9 MB — approaching Paid plan limit
-  if (workerSizeBytes > ERROR_LIMIT) {
-    console.error(
-      `[cer-app] Cloudflare _worker.js is ${(workerSizeBytes / 1e6).toFixed(1)} MB — ` +
-      `exceeds the ${(ERROR_LIMIT / 1e6).toFixed(0)} MB limit. Deployment will likely fail.`,
-    )
-    process.exit(1)
-  } else if (workerSizeBytes > WARN_LIMIT) {
-    console.warn(
-      `[cer-app] Cloudflare _worker.js is ${(workerSizeBytes / 1e3).toFixed(0)} KB — ` +
-      `approaching the Cloudflare Free plan 1 MB limit. Consider the Paid plan or reducing bundle size.`,
-    )
-  }
+  // Bundle everything into the platform-reserved worker file. Leaving server/
+  // in the public asset tree could expose source when the platform fails open.
+  const result = await build({
+    root, configFile: false, logLevel: 'error', ssr: { noExternal: true },
+    build: { ssr: workerPath, write: false, target: 'es2022', minify: false,
+      rollupOptions: { output: { inlineDynamicImports: true, entryFileNames: '_worker.js' } },
+    },
+  })
+  const output = (Array.isArray(result) ? result[0] : result) as { output: Array<{ type: string; code?: string }> }
+  const worker = output.output.find((item) => item.type === 'chunk')?.code
+  if (!worker) throw new Error('[cer-app] Cloudflare bundling produced no worker')
+  writeFileSync(workerPath, worker)
+  const compressed = gzipSync(worker).byteLength
+  console.log(`[cer-app] Cloudflare worker: ${Buffer.byteLength(worker)} bytes raw / ${compressed} bytes gzip`)
+  // This is a framework advisory, not a claim about mutable platform plan limits.
+  if (compressed > 1024 * 1024) console.warn('[cer-app] Cloudflare worker exceeds the 1 MiB gzip advisory budget; verify current platform size, startup and CPU limits before deployment.')
 
   // Copy assets from dist/client/ into dist/ (at the same URL paths).
-  // Cloudflare Pages CDN serves files in the deploy directory as static first;
-  // requests that don't match a static file fall through to _worker.js.
+  // Advanced-mode owns all requests and forwards public assets through ASSETS.
   // We deliberately skip index.html so HTML requests hit the SSR worker.
   _copyClientAssets(join(distDir, 'client'), distDir)
+  for (const name of ['server', 'client', '.vite', 'ssg-manifest.json', 'cer-client-manifest.json', 'cer-startup-manifest.json']) rmSync(join(distDir, name), { recursive: true, force: true })
+  writeFileSync(join(distDir, '_routes.json'), JSON.stringify({ version: 1, include: ['/*'], exclude: [] }, null, 2))
 
   // wrangler.toml: nodejs_compat for AsyncLocalStorage + node:stream support.
   _writeWranglerToml(root, true)
@@ -288,6 +202,10 @@ function _buildStatic(root: string, distDir: string): void {
     // Move assets alongside the HTML so Cloudflare Pages serves them correctly.
     _copyClientAssets(clientDir, distDir)
   }
+  // Static deployment has no worker to protect build-only files.
+  for (const name of ['server', 'client', '.vite', 'ssg-manifest.json', 'cer-client-manifest.json', 'cer-startup-manifest.json']) {
+    rmSync(join(distDir, name), { recursive: true, force: true })
+  }
   // SPA: everything is already in dist/ — nothing to reorganise.
 
   _writeWranglerToml(root, false)
@@ -299,7 +217,9 @@ function _writeWranglerToml(root: string, ssrMode: boolean): void {
   const lines = [
     '# Auto-generated by @jasonshimmy/vite-plugin-cer-app — do not edit.',
     'name = "cer-app"',
-    'compatibility_date = "2024-09-23"',
+    // node:fs imports and a full process implementation are used by CER's
+    // server graph even though document/content reads use embedded snapshots.
+    'compatibility_date = "2025-09-15"',
   ]
 
   if (ssrMode) {
@@ -307,8 +227,7 @@ function _writeWranglerToml(root: string, ssrMode: boolean): void {
   }
 
   lines.push('')
-  lines.push('[pages_build_output_dir]')
-  lines.push('dir = "dist"')
+  lines.push('pages_build_output_dir = "dist"')
   lines.push('')
 
   writeFileSync(join(root, 'wrangler.toml'), lines.join('\n'))
@@ -323,7 +242,7 @@ function _copyClientAssets(clientDir: string, destDir: string): void {
   if (!existsSync(clientDir)) return
   mkdirSync(destDir, { recursive: true })
   for (const entry of readdirSync(clientDir)) {
-    if (entry === 'index.html') continue
+    if (entry === 'index.html' || entry === '.vite') continue
     const src = join(clientDir, entry)
     const dest = join(destDir, entry)
     if (statSync(src).isDirectory()) {

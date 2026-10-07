@@ -479,3 +479,7 @@ npm run test:watch
 | API route returns 404 in dev | File not in `server/api/` | Confirm path is `server/api/` (at project root, not inside `app/`) |
 | SSG build skips dynamic routes | `meta.ssg.paths` not exported | Export `meta.ssg.paths` from the page file |
 | Layout not applied | `meta.layout` name mismatch | Ensure the value matches the layout filename without extension |
+
+## Built deployment checks
+
+After `npm run validate`, run `npm run e2e:integration:netlify`, `npm run e2e:integration:vercel` and `npm run e2e:integration:cloudflare`. These rebuild the kitchen-sink fixture and execute the generated entrypoints in Node. Run `npm run e2e:integration:cloudflare:workers` as well to test the worker in pinned Wrangler 4.148.0/workerd; it downloads that CLI through npm exec, needs network access for the first download, opens a temporary local server, checks dynamic/static routing, APIs, content, concurrent request contexts and ISR, then cleans up. The checks do not deploy. Actual hosting account smoke tests remain part of release verification.

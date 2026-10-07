@@ -1,275 +1,100 @@
-import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'pathe'
+// @vitest-environment node
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { startPreview, closePreview } from '../../cli/commands/preview.js'
+import type { PreviewServer } from 'vite'
 
-// Read the preview command source to verify hardening requirements are present.
-const src = readFileSync(
-  resolve(import.meta.dirname, '../../cli/commands/preview.ts'),
-  'utf-8',
-)
-
-// ─── Security headers ─────────────────────────────────────────────────────────
-
-describe('preview server — security headers', () => {
-  it('defines setSecurityHeaders helper', () => {
-    expect(src).toContain('function setSecurityHeaders(')
+let root: string, server: PreviewServer, base: string
+beforeAll(async () => {
+  root = await mkdtemp(join(tmpdir(), 'cer-preview-'))
+  await mkdir(join(root, 'dist/guide'), { recursive: true })
+  await mkdir(join(root, 'dist/assets'), { recursive: true })
+  await mkdir(join(root, 'dist/server'), { recursive: true })
+  await writeFile(join(root, 'dist/server/server.js'), 'secret server code')
+  await writeFile(join(root, 'dist/ssg-manifest.json'), JSON.stringify({ paths: ['/', '/guide'], errors: [] }))
+  await writeFile(join(root, 'dist/index.html'), '<h1>Home</h1>')
+  await writeFile(join(root, 'dist/guide/index.html'), '<h1>Guide</h1>')
+  await writeFile(join(root, 'dist/404.html'), '<meta name="robots" content="noindex"><h1>Missing</h1>')
+  await writeFile(join(root, 'dist/assets/video.mp4'), Buffer.alloc(2048, 1))
+  await writeFile(join(root, 'dist/assets/image.avif'), Buffer.alloc(16))
+  await writeFile(join(root, 'dist/assets/captions.vtt'), 'WEBVTT')
+  server = await startPreview({ root, port: 0, host: '127.0.0.1' })
+  const address = server.httpServer.address() as { port: number }
+  base = `http://127.0.0.1:${address.port}`
+})
+afterAll(async () => { if (server) await closePreview(server); if (root) await rm(root, { recursive: true, force: true }) })
+describe('Vite preview CER document routing', () => {
+  it('serves known slashless documents and query strings', async () => {
+    const response = await fetch(base + '/guide?ref=test')
+    expect(response.status).toBe(200)
+    expect(await response.text()).toContain('Guide')
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff')
+    expect(response.headers.get('cache-control')).toBe('no-cache')
   })
-
-  it('sets X-Content-Type-Options: nosniff', () => {
-    expect(src).toContain("'X-Content-Type-Options'")
-    expect(src).toContain('nosniff')
+  it('serves a dedicated noindex 404 instead of the homepage', async () => {
+    const response = await fetch(base + '/absent')
+    expect(response.status).toBe(404)
+    const html = await response.text()
+    expect(html).toContain('noindex')
+    expect(html).not.toContain('Home')
   })
-
-  it('sets X-Frame-Options: DENY', () => {
-    expect(src).toContain("'X-Frame-Options'")
-    expect(src).toContain('DENY')
+  it('retains Vite range support and correct media types', async () => {
+    const response = await fetch(base + '/assets/video.mp4', { headers: { Range: 'bytes=0-1023' } })
+    expect(response.status).toBe(206)
+    expect(response.headers.get('content-range')).toBe('bytes 0-1023/2048')
+    expect(response.headers.get('content-type')).toContain('video/mp4')
+    expect((await response.arrayBuffer()).byteLength).toBe(1024)
+    expect((await fetch(base + '/assets/image.avif')).headers.get('content-type')).toContain('image/avif')
+    expect((await fetch(base + '/assets/captions.vtt')).headers.get('content-type')).toContain('text/vtt')
   })
-
-  it('sets Referrer-Policy: strict-origin-when-cross-origin', () => {
-    expect(src).toContain("'Referrer-Policy'")
-    expect(src).toContain('strict-origin-when-cross-origin')
+  it('does not expose retained server artifacts', async () => {
+    const response = await fetch(base + '/server/server.js')
+    expect(response.status).toBe(404)
+    expect(await response.text()).not.toContain('secret server code')
   })
-
-  it('calls setSecurityHeaders in serveStaticFile', () => {
-    const fnStart = src.indexOf('function serveStaticFile(')
-    const nextFn = src.indexOf('\nfunction ', fnStart + 1)
-    const body = src.slice(fnStart, nextFn > -1 ? nextFn : undefined)
-    expect(body).toContain('setSecurityHeaders(res)')
-  })
-
-  it('calls setSecurityHeaders at the top of the SSR request handler', () => {
-    const handlerStart = src.indexOf('createHttpServer(async (req: IncomingMessage, res: ServerResponse)')
-    const handlerEnd = src.indexOf('server.listen(port', handlerStart)
-    const handler = src.slice(handlerStart, handlerEnd)
-    expect(handler).toContain('setSecurityHeaders(res)')
-    // It should be the first thing done before any routing logic
-    const secHeadersIdx = handler.indexOf('setSecurityHeaders(res)')
-    const urlParseIdx = handler.indexOf('req.url ?? ')
-    expect(secHeadersIdx).toBeLessThan(urlParseIdx)
-  })
-
-  it('calls setSecurityHeaders at the top of the static request handler', () => {
-    const handlerStart = src.indexOf('createHttpServer((req: IncomingMessage, res: ServerResponse)')
-    const handlerEnd = src.indexOf('server.listen(port', handlerStart)
-    const handler = src.slice(handlerStart, handlerEnd)
-    expect(handler).toContain('setSecurityHeaders(res)')
+  it('keeps hashed assets immutable and supports HEAD', async () => {
+    const response = await fetch(base + '/assets/image.avif', { method: 'HEAD' })
+    expect(response.headers.get('cache-control')).toContain('immutable')
+    expect(await response.text()).toBe('')
   })
 })
 
-// ─── Cache-Control ────────────────────────────────────────────────────────────
-
-describe('preview server — Cache-Control', () => {
-  it('defines getCacheControl helper', () => {
-    expect(src).toContain('function getCacheControl(')
+describe('hybrid preview dispatch', () => {
+  let hybridRoot: string, hybrid: PreviewServer, origin: string
+  beforeAll(async () => {
+    hybridRoot = await mkdtemp(join(tmpdir(), 'cer-preview-hybrid-'))
+    await mkdir(join(hybridRoot, 'dist/releases/v1.2'), { recursive: true })
+    await mkdir(join(hybridRoot, 'dist/server'), { recursive: true })
+    await writeFile(join(hybridRoot, 'package.json'), '{"type":"module"}')
+    await writeFile(join(hybridRoot, 'dist/ssg-manifest.json'), JSON.stringify({ paths: ['/releases/v1.2'], hybrid: true, fallback: false }))
+    await writeFile(join(hybridRoot, 'dist/releases/v1.2/index.html'), '<h1>Release at build time</h1>')
+    await writeFile(join(hybridRoot, 'dist/server/server.js'), `
+      export const routes = [{ path: '/isr', meta: { ssg: { revalidate: 60 } } }, { path: '/spa', meta: { render: 'spa' } }];
+      export function handler(req, res) { res.end('Fresh ' + req.url) }
+      export function spaHandler(req, res) { res.end('Shell') }
+      export async function runServerMiddleware(req, res) { res.setHeader('x-middleware', 'active'); return true }
+    `)
+    hybrid = await startPreview({ root: hybridRoot, port: 0, host: '127.0.0.1' })
+    origin = `http://127.0.0.1:${(hybrid.httpServer.address() as { port: number }).port}`
   })
-
-  it('returns immutable cache for /assets/ paths', () => {
-    expect(src).toContain("'/assets/'")
-    expect(src).toContain('public, max-age=31536000, immutable')
+  afterAll(async () => { if (hybrid) await closePreview(hybrid); if (hybridRoot) await rm(hybridRoot, { recursive: true, force: true }) })
+  it('runs middleware on dotted prerendered documents and SPA shells', async () => {
+    const response = await fetch(origin + '/releases/v1.2')
+    expect(await response.text()).toContain('Release at build time')
+    expect(response.headers.get('x-middleware')).toBe('active')
+    expect(await (await fetch(origin + '/spa')).text()).toBe('Shell')
+    expect((await fetch(origin + '/unlisted')).status).toBe(404)
   })
-
-  it('returns no-cache for non-asset paths', () => {
-    // The getCacheControl function must return 'no-cache' as fallback
-    const fnStart = src.indexOf('function getCacheControl(')
-    const fnEnd = src.indexOf('\nfunction ', fnStart + 1)
-    const body = src.slice(fnStart, fnEnd > -1 ? fnEnd : undefined)
-    expect(body).toContain("'no-cache'")
-  })
-
-  it('uses getCacheControl in serveStaticFile instead of hardcoded no-cache', () => {
-    const fnStart = src.indexOf('function serveStaticFile(')
-    const nextFn = src.indexOf('\nfunction ', fnStart + 1)
-    const body = src.slice(fnStart, nextFn > -1 ? nextFn : undefined)
-    expect(body).toContain('getCacheControl(filePath)')
-    // Must NOT have a hardcoded no-cache
-    expect(body).not.toContain("'no-cache'")
-  })
-
-  it('uses getCacheControl for client assets in the static server', () => {
-    // The static server also serves assets from dist/client — it should use getCacheControl
-    const staticHandlerStart = src.indexOf('createHttpServer((req: IncomingMessage, res: ServerResponse)')
-    expect(src.slice(staticHandlerStart)).toContain('getCacheControl(')
-  })
-})
-
-describe('preview server — SSG not-found status', () => {
-  it('serves the app shell with a 404 status for unmatched SSG paths', () => {
-    expect(src).toContain("existsSync(join(distDir, 'ssg-manifest.json')) ? 404 : 200")
-    const fnStart = src.indexOf('function serveStaticFile(')
-    const fnEnd = src.indexOf('\nfunction ', fnStart + 1)
-    const body = src.slice(fnStart, fnEnd > -1 ? fnEnd : undefined)
-    expect(body).toContain('res.statusCode = fallbackStatus')
-  })
-})
-
-// ─── Graceful shutdown ────────────────────────────────────────────────────────
-
-describe('preview server — graceful shutdown', () => {
-  it('defines registerGracefulShutdown helper', () => {
-    expect(src).toContain('function registerGracefulShutdown(')
-  })
-
-  it('calls server.close() for graceful drain', () => {
-    const fnStart = src.indexOf('function registerGracefulShutdown(')
-    const fnEnd = src.indexOf('\nexport ', fnStart)
-    const body = src.slice(fnStart, fnEnd > -1 ? fnEnd : undefined)
-    expect(body).toContain('server.close(')
-  })
-
-  it('sets a 10-second force-exit timeout', () => {
-    const fnStart = src.indexOf('function registerGracefulShutdown(')
-    const fnEnd = src.indexOf('\nexport ', fnStart)
-    const body = src.slice(fnStart, fnEnd > -1 ? fnEnd : undefined)
-    expect(body).toContain('10_000')
-    expect(body).toContain('process.exit(1)')
-  })
-
-  it('calls t.unref() so the timeout does not keep the event loop alive', () => {
-    const fnStart = src.indexOf('function registerGracefulShutdown(')
-    const fnEnd = src.indexOf('\nexport ', fnStart)
-    const body = src.slice(fnStart, fnEnd > -1 ? fnEnd : undefined)
-    expect(body).toContain('.unref()')
-  })
-
-  it('listens for both SIGTERM and SIGINT', () => {
-    expect(src).toContain("'SIGTERM'")
-    expect(src).toContain("'SIGINT'")
-  })
-
-  it('logs the signal name on shutdown', () => {
-    const fnStart = src.indexOf('function registerGracefulShutdown(')
-    const fnEnd = src.indexOf('\nexport ', fnStart)
-    const body = src.slice(fnStart, fnEnd > -1 ? fnEnd : undefined)
-    expect(body).toContain('signal')
-    expect(body).toContain('console.log(')
-  })
-
-  it('calls registerGracefulShutdown for the SSR server', () => {
-    // registerGracefulShutdown must be called after each server's listen()
-    const firstListen = src.indexOf('server.listen(port')
-    const firstShutdown = src.indexOf('registerGracefulShutdown(server)')
-    expect(firstShutdown).toBeGreaterThan(firstListen)
-  })
-
-  it('calls registerGracefulShutdown for the static server', () => {
-    // Both SSR and static server paths should register graceful shutdown
-    const allShutdowns = src.split('registerGracefulShutdown(server)').length - 1
-    expect(allShutdowns).toBeGreaterThanOrEqual(2)
-  })
-})
-
-// ─── Request timeouts ─────────────────────────────────────────────────────────
-
-describe('preview server — request timeouts', () => {
-  it('sets server.headersTimeout to protect against slow-send attacks', () => {
-    expect(src).toContain('server.headersTimeout')
-    expect(src).toContain('10_000')
-  })
-
-  it('sets server.requestTimeout to limit total request duration', () => {
-    expect(src).toContain('server.requestTimeout')
-    expect(src).toContain('30_000')
-  })
-
-  it('applies timeouts to the SSR server', () => {
-    const ssrListenIdx = src.indexOf("console.log(`[cer-app] SSR preview running at")
-    const ssrTimeoutIdx = src.lastIndexOf('server.requestTimeout', ssrListenIdx)
-    expect(ssrTimeoutIdx).toBeGreaterThan(-1)
-  })
-
-  it('applies timeouts to the static server', () => {
-    const staticListenIdx = src.indexOf("console.log(`[cer-app] Static preview running at")
-    const staticTimeoutIdx = src.lastIndexOf('server.requestTimeout', staticListenIdx)
-    expect(staticTimeoutIdx).toBeGreaterThan(-1)
-  })
-})
-
-// ─── Server middleware + request context ─────────────────────────────────────
-
-describe('preview server — server middleware and request context', () => {
-  it('extracts runServerMiddleware from server bundle', () => {
-    expect(src).toContain('const runServerMiddleware = serverMod.runServerMiddleware')
-  })
-
-  it('extracts runWithRequestContext from server bundle', () => {
-    expect(src).toContain('const runWithRequestContext = serverMod.runWithRequestContext')
-  })
-
-  it('calls runServerMiddleware before API routing and SSR', () => {
-    // runServerMiddleware call must come before the /api/ check in the handler
-    const apiIdx = src.indexOf("urlPath.startsWith('/api/')")
-    const mwIdx = src.indexOf('await runServerMiddleware(req, res)')
-    expect(mwIdx).toBeGreaterThan(0)
-    expect(mwIdx).toBeLessThan(apiIdx)
-  })
-
-  it('short-circuits the request when runServerMiddleware returns false', () => {
-    // The guard pattern: !(await runServerMiddleware(req, res)) => return
-    expect(src).toContain('if (runServerMiddleware && !(await runServerMiddleware(req, res))) return')
-  })
-
-  it('wraps API handler calls in runWithRequestContext so useCookie/useSession work', () => {
-    expect(src).toContain('runWithRequestContext ? runWithRequestContext(req, res, invoke)')
-  })
-
-  it('falls back to direct invocation if runWithRequestContext is not exported by the bundle', () => {
-    // Older bundles without runWithRequestContext: should still call the handler
-    expect(src).toContain(': invoke()')
-  })
-})
-
-// ─── API request body parsing ─────────────────────────────────────────────────
-
-describe('preview server — API request body parsing', () => {
-  it('defines a parseBody helper', () => {
-    expect(src).toContain('async function parseBody(')
-  })
-
-  it('parses JSON bodies for POST/PUT/PATCH requests', () => {
-    const fnStart = src.indexOf('async function parseBody(')
-    const fnEnd = src.indexOf('\nfunction ', fnStart + 1)
-    const body = src.slice(fnStart, fnEnd > -1 ? fnEnd : undefined)
-    expect(body).toContain("application/json")
-    expect(body).toContain("JSON.parse")
-  })
-
-  it('attaches parsed body to augReq.body before invoking the API handler', () => {
-    expect(src).toContain('augReq.body = await parseBody(req)')
-  })
-
-  it('skips body parsing for GET/DELETE requests', () => {
-    const fnStart = src.indexOf('async function parseBody(')
-    const fnEnd = src.indexOf('\nfunction ', fnStart + 1)
-    const body = src.slice(fnStart, fnEnd > -1 ? fnEnd : undefined)
-    expect(body).toContain("'POST'")
-    expect(body).toContain("'PUT'")
-    expect(body).toContain("'PATCH'")
-    expect(body).toContain('return undefined')
-  })
-})
-
-// ─── API query string parsing ─────────────────────────────────────────────────
-
-describe('preview server — API query string parsing', () => {
-  it('defines a parseQuery helper', () => {
-    expect(src).toContain('function parseQuery(')
-  })
-
-  it('attaches parsed query to augReq.query before invoking the API handler', () => {
-    expect(src).toContain('augReq.query = parseQuery(url)')
-  })
-
-  it('parseQuery decodes percent-encoded keys and values', () => {
-    const fnStart = src.indexOf('function parseQuery(')
-    const fnEnd = src.indexOf('\nfunction ', fnStart + 1)
-    const body = src.slice(fnStart, fnEnd > -1 ? fnEnd : undefined)
-    expect(body).toContain('decodeURIComponent')
-  })
-
-  it('parseQuery returns empty object when no query string is present', () => {
-    const fnStart = src.indexOf('function parseQuery(')
-    const fnEnd = src.indexOf('\nfunction ', fnStart + 1)
-    const body = src.slice(fnStart, fnEnd > -1 ? fnEnd : undefined)
-    expect(body).toContain('return {}')
+  it('permits anonymous ISR with default transport options, but bypasses cookies and query strings', async () => {
+    const response = await fetch(origin + '/isr')
+    expect(await response.text()).toBe('Fresh /isr')
+    expect(response.headers.get('x-cache')).toBe('HIT')
+    for (const [path, init] of [['/isr?q=1', {}], ['/isr', { headers: { Cookie: 'session=private' } }]] as const) {
+      const bypass = await fetch(origin + path, init)
+      await bypass.text()
+      expect(bypass.headers.get('x-cache')).toBeNull()
+    }
   })
 })

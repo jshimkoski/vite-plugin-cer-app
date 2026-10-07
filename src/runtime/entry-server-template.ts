@@ -76,7 +76,7 @@ export function deferEntryModulesForFirstPaint(
       const serializedSrc = serializeForInlineScript(src)
       const serializedDsdTags = serializeForInlineScript(dsdTags)
       const start = `function(){if(typeof performance==='object'&&typeof performance.mark==='function')performance.mark('cer:entry-start');globalThis.__CER_STATIC_ENTRY__=true;globalThis.__CER_DSD_TAGS__=new Set(${serializedDsdTags});return import(${serializedSrc}).catch(function(error){console.error('[cer-app] Failed to start client entry:',error)})}`
-      return `<link rel="modulepreload" crossorigin href="${escapedHref}"><script data-cer-deferred-entry>(function(start){var observer=null,fallback=null,started=false,guarding=true,queued=[];function capture(event){if(!guarding||event.defaultPrevented)return;var path=typeof event.composedPath==='function'?event.composedPath():[];if(!path.some(function(node){return node&&typeof node.localName==='string'&&node.localName.indexOf('-')>0}))return;event.preventDefault();event.stopImmediatePropagation();queued.push({target:path[0]||event.target,event:event})}function replay(){guarding=false;document.removeEventListener('click',capture,true);queued.splice(0).forEach(function(item){var event=item.event,target=item.target,init={bubbles:true,composed:true,cancelable:true},clone;if(typeof KeyboardEvent==='function'&&event instanceof KeyboardEvent){clone=new KeyboardEvent(event.type,Object.assign(init,{key:event.key,code:event.code,ctrlKey:event.ctrlKey,metaKey:event.metaKey,shiftKey:event.shiftKey,altKey:event.altKey,repeat:event.repeat}))}else{clone=new MouseEvent(event.type,Object.assign(init,{button:event.button,buttons:event.buttons,clientX:event.clientX,clientY:event.clientY,ctrlKey:event.ctrlKey,metaKey:event.metaKey,shiftKey:event.shiftKey,altKey:event.altKey}))}if(target&&target.isConnected)target.dispatchEvent(clone)})}function ready(){var view=document.querySelector('cer-layout-view'),shell=view&&Array.prototype.find.call(view.children,function(element){return element.localName&&element.localName!=='script'});if(!shell||shell.hasAttribute('data-cer-hydrated')){replay();return}if(typeof MutationObserver!=='function'){setTimeout(replay,0);return}var readiness=new MutationObserver(function(){if(shell.hasAttribute('data-cer-hydrated')){readiness.disconnect();replay()}});readiness.observe(shell,{attributes:true,attributeFilter:['data-cer-hydrated']});setTimeout(function(){readiness.disconnect();replay()},1000)}function boot(){Promise.resolve(start()).then(ready,replay)}function run(){if(started)return;started=true;if(observer)observer.disconnect();if(fallback!==null)clearTimeout(fallback);setTimeout(boot,0)}function byFrame(){if(typeof requestAnimationFrame==='function'){requestAnimationFrame(function(){requestAnimationFrame(function(){requestAnimationFrame(run)})})}else{run()}}document.addEventListener('click',capture,true);if(typeof PerformanceObserver==='function'){try{observer=new PerformanceObserver(function(list){if(list.getEntriesByName('first-contentful-paint').length)run()});fallback=setTimeout(run,1000);observer.observe({type:'paint',buffered:true})}catch(error){byFrame()}}else{byFrame()}})(${start})</script>`
+      return `<link rel="modulepreload" crossorigin href="${escapedHref}"><script data-cer-deferred-entry>(function(start){var observer=null,fallback=null,started=false,guarding=true,queued=[];function capture(event){if(!guarding||event.defaultPrevented)return;if(event.type==='keydown'&&!((event.ctrlKey||event.metaKey)&&String(event.key).toLowerCase()==='k'))return;var path=typeof event.composedPath==='function'?event.composedPath():[];if(event.type!=='keydown'&&!path.some(function(node){return node&&typeof node.localName==='string'&&node.localName.indexOf('-')>0}))return;event.preventDefault();event.stopImmediatePropagation();queued.push({target:path[0]||event.target,event:event})}function replay(){guarding=false;document.removeEventListener('click',capture,true);document.removeEventListener('keydown',capture,true);queued.splice(0).forEach(function(item){var event=item.event,target=item.target,init={bubbles:true,composed:true,cancelable:true},clone;if(typeof KeyboardEvent==='function'&&event instanceof KeyboardEvent){clone=new KeyboardEvent(event.type,Object.assign(init,{key:event.key,code:event.code,ctrlKey:event.ctrlKey,metaKey:event.metaKey,shiftKey:event.shiftKey,altKey:event.altKey,repeat:event.repeat}))}else{clone=new MouseEvent(event.type,Object.assign(init,{button:event.button,buttons:event.buttons,clientX:event.clientX,clientY:event.clientY,ctrlKey:event.ctrlKey,metaKey:event.metaKey,shiftKey:event.shiftKey,altKey:event.altKey}))}if(target&&target.isConnected)target.dispatchEvent(clone)})}function ready(){var view=document.querySelector('cer-layout-view'),shell=view&&Array.prototype.find.call(view.children,function(element){return element.localName&&element.localName!=='script'});if(!shell||shell.hasAttribute('data-cer-hydrated')){replay();return}if(typeof MutationObserver!=='function'){setTimeout(replay,0);return}var readiness=new MutationObserver(function(){if(shell.hasAttribute('data-cer-hydrated')){readiness.disconnect();replay()}});readiness.observe(shell,{attributes:true,attributeFilter:['data-cer-hydrated']});setTimeout(function(){readiness.disconnect();replay()},1000)}function boot(){Promise.resolve(start()).then(ready,replay)}function run(){if(started)return;started=true;if(observer)observer.disconnect();if(fallback!==null)clearTimeout(fallback);setTimeout(boot,0)}function byFrame(){if(typeof requestAnimationFrame==='function'){requestAnimationFrame(function(){requestAnimationFrame(function(){requestAnimationFrame(run)})})}else{run()}}document.addEventListener('click',capture,true);document.addEventListener('keydown',capture,true);if(typeof PerformanceObserver==='function'){try{observer=new PerformanceObserver(function(list){if(list.getEntriesByName('first-contentful-paint').length)run()});fallback=setTimeout(run,1000);observer.observe({type:'paint',buffered:true})}catch(error){byFrame()}}else{byFrame()}})(${start})</script>`
     },
   )
 }
@@ -112,6 +112,7 @@ import { initRouter } from '@jasonshimmy/custom-elements-runtime/router'
 import { beginHeadCollection, endHeadCollection, serializeHeadTags, initRuntimeConfig, resolvePrivateConfig, useSession } from '@jasonshimmy/vite-plugin-cer-app/composables'
 import { errorTag } from 'virtual:cer-error'
 import { createIsrHandler } from '@jasonshimmy/vite-plugin-cer-app/isr'
+import { createRequestDispatcher } from '@jasonshimmy/vite-plugin-cer-app/server'
 
 ${inlineSerializerSource}
 ${dsdTagCollectorSource}
@@ -217,10 +218,17 @@ export async function runServerMiddleware(req, res) {
     let calledNext = false
     try {
       await new Promise((resolve, reject) => {
-        Promise.resolve(mw(req, res, (err) => {
-          if (err) reject(err)
-          else { calledNext = true; resolve() }
-        })).catch(reject)
+        const finish = () => { cleanup(); resolve() }
+        const fail = (err) => { cleanup(); reject(err) }
+        const cleanup = () => { res.off?.('finish', finish); res.off?.('close', finish) }
+        res.once?.('finish', finish)
+        res.once?.('close', finish)
+        try {
+          Promise.resolve(mw(req, res, (err) => {
+            if (err) fail(err)
+            else { calledNext = true; finish() }
+          })).then(() => { if (res.writableEnded) finish() }, fail)
+        } catch (err) { fail(err) }
       })
     } catch (err) {
       if (_hooks?.onError) {
@@ -334,7 +342,7 @@ const _prepareRequest = async (req) => {
 
   // Store the current route info so useRoute() can read it synchronously
   // from any layout or component during this render pass.
-  _cerRouteStore.enterWith({
+  Object.assign(_cerRouteStore.getStore(), {
     path: current.path,
     params,
     query: current.query ?? {},
@@ -451,6 +459,7 @@ export const handler = async (req, res) => {
   if (_hooks?.onRequest) {
     try { await _hooks.onRequest({ path: _requestPath, method: req.method ?? 'GET', req }) } catch { /* hooks must not crash the handler */ }
   }
+  await _cerRouteStore.run({ path: _requestPath, params: {}, query: {}, meta: null }, async () => {
   await _cerStateStore.run(new Map(), async () => {
   await _cerReqStore.run({ req, res }, async () => {
   await _cerDataStore.run(null, async () => {
@@ -462,11 +471,25 @@ export const handler = async (req, res) => {
   if (_authSessionKey) {
     try { _authUser = await useSession({ name: _authSessionKey }).get() } catch { /* no session secret */ }
   }
-  await _cerAuthStore.run(_authUser, async () => {
+  await _cerAuthStore.run({ currentUser: _authUser }, async () => {
     const { vnode, router, head, status, loaderData, hydrationStrategy = 'load' } = await _prepareRequest(req)
+    if (res.destroyed) return
     if (status != null) res.statusCode = status
 
     let _headCollectionOpen = false
+    let reader
+    const stopStream = () => { if (reader) void reader.cancel().catch(() => {}) }
+    res.once?.('close', stopStream)
+    const writeChunk = async (chunk) => {
+      if (res.destroyed) return
+      if (res.write(chunk) === false && typeof res.once === 'function') {
+        await new Promise((resolve) => {
+          const done = () => { res.off?.('drain', done); res.off?.('close', done); resolve() }
+          res.once('drain', done); res.once('close', done)
+          if (res.destroyed) done()
+        })
+      }
+    }
     // Wrap the entire render pass in _cerDataStore.run(loaderData) so that
     // usePageData() inside component renderFn calls sees the correct store
     // value. AsyncLocalStorage.enterWith() inside _prepareRequest does NOT
@@ -500,7 +523,7 @@ export const handler = async (req, res) => {
       const headTags = serializeHeadTags(endHeadCollection())
       _headCollectionOpen = false
 
-      const reader = stream.getReader()
+      reader = stream.getReader()
 
       // Read the first (synchronous) chunk — rejects if the sync render failed.
       const { value: firstChunk = '' } = await reader.read()
@@ -556,22 +579,22 @@ export const handler = async (req, res) => {
       const fromBodyClose  = bodyCloseIdx >= 0 ? merged.slice(bodyCloseIdx) : ''
 
       res.setHeader('Content-Type', 'text/html; charset=utf-8')
-      res.setHeader('Transfer-Encoding', 'chunked')
-      res.write(beforeBodyClose)
+      await writeChunk(beforeBodyClose)
 
       // Stream async component swap scripts through as-is.
       while (true) {
         const { value, done } = await reader.read()
         if (done) break
-        res.write(value)
+        await writeChunk(value)
       }
 
       // Inject DSD polyfill immediately before </body>, then close the document.
-      res.end(DSD_POLYFILL_SCRIPT + fromBodyClose)
+      if (!res.destroyed) res.end(DSD_POLYFILL_SCRIPT + fromBodyClose)
       if (_hooks?.onResponse) {
-        try { void _hooks.onResponse({ path: _requestPath, method: req.method ?? 'GET', statusCode: res.statusCode, duration: Date.now() - _requestStart, req }) } catch { /* ignore */ }
+        try { void Promise.resolve(_hooks.onResponse({ path: _requestPath, method: req.method ?? 'GET', statusCode: res.statusCode, duration: Date.now() - _requestStart, req })).catch(() => {}) } catch { /* ignore */ }
       }
     } catch (_renderErr) {
+      if (res.destroyed) return
       if (_hooks?.onError) {
         try { await _hooks.onError(_renderErr, { type: 'render', path: _requestPath, req }) } catch { /* hooks must not crash the handler */ }
       }
@@ -587,8 +610,11 @@ export const handler = async (req, res) => {
         res.end()
       }
       if (_hooks?.onResponse) {
-        try { void _hooks.onResponse({ path: _requestPath, method: req.method ?? 'GET', statusCode: res.statusCode, duration: Date.now() - _requestStart, req }) } catch { /* ignore */ }
+        try { void Promise.resolve(_hooks.onResponse({ path: _requestPath, method: req.method ?? 'GET', statusCode: res.statusCode, duration: Date.now() - _requestStart, req })).catch(() => {}) } catch { /* ignore */ }
       }
+    } finally {
+      res.off?.('close', stopStream)
+      if (reader) { try { await reader.cancel() } catch { /* already closed */ } }
     }
     }) // _cerDataStore.run(loaderData)
   })  // _cerAuthStore.run
@@ -596,11 +622,15 @@ export const handler = async (req, res) => {
   })  // _cerDataStore.run
   })  // _cerReqStore.run
   })  // _cerStateStore.run
+  })  // _cerRouteStore.run
 }
 
-// ISR-wrapped handler for production integrations (Express, Hono, Fastify).
+// ISR-wrapped handler for Node integrations; Web frameworks require a bridge.
 // Routes with meta.ssg.revalidate are served stale-while-revalidate.
 export const isrHandler = createIsrHandler(routes, handler)
+export const spaHandler = (req, res) => { res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.end(req.method === 'HEAD' ? undefined : ((globalThis).__CER_CLIENT_TEMPLATE__ ?? _clientTemplate ?? '')) }
+export const createDispatchRequest = (options = {}) => createRequestDispatcher({ handler, spaHandler, routes, apiRoutes, runServerMiddleware, runWithRequestContext }, options)
+export const dispatchRequest = createDispatchRequest()
 
 export { apiRoutes, plugins, layouts, routes, serverMiddleware }
 export default handler

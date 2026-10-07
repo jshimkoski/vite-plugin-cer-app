@@ -1,5 +1,6 @@
 import { Command } from 'commander'
 import { resolve } from 'node:path'
+import { checkSeo } from '../checks/seo.js'
 import { checkBuiltLinks } from '../checks/links.js'
 import { checkPerformanceBudgets } from '../checks/performance.js'
 import { LIGHTHOUSE_CATEGORIES, runLighthouseAudit } from '../checks/lighthouse.js'
@@ -30,6 +31,19 @@ export function checkCommand(): Command {
         if (report.failures.length === 0) {
           console.log(`Built-link validation passed: ${report.links} links across ${report.pages} pages.`)
         }
+      }),
+  )
+
+  command.addCommand(
+    new Command('seo')
+      .description('Validate SSG canonical, sitemap and indexing policy')
+      .option('--root <root>', 'Project root directory', process.cwd())
+      .option('--output <directory>', 'Build output directory', 'dist')
+      .requiredOption('--site-url <url>', 'Canonical site origin')
+      .action(async (options: { root: string; output: string; siteUrl: string }) => {
+        const report = await checkSeo({ outputDir: resolve(options.root, options.output), siteUrl: options.siteUrl })
+        printFailures('SEO validation', report.failures)
+        if (!report.failures.length) console.log(`SEO validation passed: ${report.pages} pages.`)
       }),
   )
 

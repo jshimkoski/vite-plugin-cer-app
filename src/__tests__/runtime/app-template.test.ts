@@ -272,8 +272,8 @@ describe('APP_ENTRY_TEMPLATE — loader sequence', () => {
     expect(APP_ENTRY_TEMPLATE).toContain('if (loadVersion !== _pageLoadVersion) return')
   })
 
-  it('_loadPageForPath calls mod.loader with { params, query }', () => {
-    expect(APP_ENTRY_TEMPLATE).toContain('mod.loader({ params, query })')
+  it('_loadPageForPath passes an abort signal to browser loaders', () => {
+    expect(APP_ENTRY_TEMPLATE).toContain('mod.loader({ params, query, signal: controller.signal })')
   })
 
   it('_loadPageForPath sets globalThis.__CER_DATA__ from loader result', () => {

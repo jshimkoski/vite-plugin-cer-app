@@ -1,526 +1,129 @@
 import { Command } from 'commander'
-import { createServer as createHttpServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { createReadStream, existsSync, statSync } from 'node:fs'
-import { createGzip } from 'node:zlib'
-import { resolve, join, extname } from 'pathe'
+import { preview, type PreviewServer, type PreviewOptions, type Plugin } from 'vite'
+import { existsSync, readFileSync, statSync } from 'node:fs'
+import { resolve, join } from 'pathe'
 import { pathToFileURL } from 'node:url'
-import {
-  type IsrCacheEntry,
-  type SsrHandlerFn,
-  isPathBounded,
-  findRevalidate,
-  findRenderMode,
-  renderForIsr,
-  serveFromIsrCache,
-} from './preview-isr.js'
+import { loadCerConfig } from '../config.js'
+import { createRequestDispatcher, normalizeDocumentPath, isPrivateBuildPath, type ServerApplication } from '../../runtime/request-dispatcher.js'
+import { isPathBounded } from './preview-paths.js'
 
-// ─── API route matching & body parsing ───────────────────────────────────────
+const connections = new WeakMap<PreviewServer, Set<import('node:net').Socket>>()
 
-/**
- * Matches an API route pattern (e.g. '/api/items/:id') against a URL path.
- * Returns a params object on match, or null if the pattern does not match.
- */
-function matchApiPattern(pattern: string, urlPath: string): Record<string, string> | null {
-  const patternParts = pattern.split('/')
-  const urlParts = urlPath.split('/')
-  if (patternParts.length !== urlParts.length) return null
-  const params: Record<string, string> = {}
-  for (let i = 0; i < patternParts.length; i++) {
-    const p = patternParts[i]
-    const u = urlParts[i]
-    if (p.startsWith(':')) {
-      params[p.slice(1)] = decodeURIComponent(u)
-    } else if (p !== u) {
-      return null
-    }
+export async function closePreview(server: PreviewServer): Promise<void> {
+  for (const socket of connections.get(server) ?? []) socket.destroy()
+  await new Promise<void>((done) => server.httpServer.close(() => done()))
+}
+
+export interface CerPreviewOptions {
+  root?: string
+  port?: number
+  host?: string
+  ssr?: boolean
+  preview?: PreviewOptions
+}
+
+/** Vite owns transport, compression, media types and range requests. CER owns routing. */
+export async function startPreview(options: CerPreviewOptions = {}): Promise<PreviewServer> {
+  const root = resolve(options.root ?? process.cwd())
+  const distDir = join(root, 'dist')
+  if (!existsSync(distDir)) throw new Error(`No dist/ directory at ${distDir}. Run cer-app build first.`)
+  const manifestPath = join(distDir, 'ssg-manifest.json')
+  const ssg = existsSync(manifestPath)
+  const manifest = ssg ? JSON.parse(readFileSync(manifestPath, 'utf8')) : undefined
+  const paths = new Set<string>(manifest?.paths ?? [])
+  const bundle = join(distDir, 'server/server.js')
+  const useSSR = options.ssr || (existsSync(bundle) && (!ssg || manifest?.fallback || manifest?.hybrid))
+  let app: ServerApplication | undefined
+  if (useSSR) {
+    if (!existsSync(bundle)) throw new Error(`Missing server bundle ${bundle}`)
+    process.env.__CER_APP_ROOT__ = root
+    app = await import(pathToFileURL(bundle).href)
+    if (typeof app?.handler !== 'function') throw new Error('Server bundle does not export handler')
   }
-  return params
-}
-
-const MIME_TYPES: Record<string, string> = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'application/javascript; charset=utf-8',
-  '.mjs': 'application/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon',
-  '.woff': 'font/woff',
-  '.woff2': 'font/woff2',
-  '.ttf': 'font/ttf',
-  '.eot': 'application/vnd.ms-fontobject',
-  '.map': 'application/json',
-}
-
-/**
- * Reads the raw body from an IncomingMessage as a Buffer.
- */
-function readBody(req: IncomingMessage): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = []
-    req.on('data', (chunk: Buffer) => chunks.push(chunk))
-    req.on('end', () => resolve(Buffer.concat(chunks)))
-    req.on('error', reject)
+  const dispatch = app ? createRequestDispatcher(app, { prerendered: {
+    paths: [...paths],
+    fallback: ssg ? manifest?.fallback === true : undefined,
+    notFound: () => existsSync(join(distDir, '404.html')) ? readFileSync(join(distDir, '404.html'), 'utf8') : null,
+    read: (path) => readFileSync(join(distDir, path === '/' ? 'index.html' : path.slice(1) + '/index.html'), 'utf8'),
+  } }) : undefined
+  const plugin: Plugin = {
+    name: 'cer-preview-routing',
+    configurePreviewServer(server) {
+      server.middlewares.use((req, res, next) => {
+        for (const [name, value] of Object.entries({
+          'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY',
+          'Referrer-Policy': 'strict-origin-when-cross-origin', ...options.preview?.headers,
+        })) res.setHeader(name, value)
+        res.setHeader('Cache-Control', req.url?.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache')
+        const raw = (req.url ?? '/').split('?')[0]
+        let path: string
+        try { path = normalizeDocumentPath(raw) } catch { res.statusCode = 400; res.end('Bad Request'); return }
+        if (!isPathBounded(distDir, path) || path.includes('\\')) { res.statusCode = 400; res.end('Bad Request'); return }
+        const normalized = path.replace(/\/+$/, '') || '/'
+        if (isPrivateBuildPath(normalized)) {
+          res.statusCode = 404; res.setHeader('Content-Type', 'text/plain'); res.end('Not found'); return
+        }
+        // Existing public files retain Vite's transport (including range requests).
+        // All other requests are documents or API routes, even when they contain dots.
+        const publicFile = join(distDir, app && !ssg ? 'client' : '', path)
+        if (dispatch && (normalized.startsWith('/api/') || paths.has(normalized) || !existsSync(publicFile) || !statSync(publicFile).isFile())) {
+          void Promise.resolve(dispatch(req, res)).catch(next)
+          return
+        }
+        if (ssg && paths.has(normalized)) req.url = normalized === '/' ? '/index.html' : normalized + '/index.html'
+        next()
+      })
+      return () => {
+        server.middlewares.use((req, res, next) => {
+          if (!ssg || res.headersSent) { next(); return }
+          res.statusCode = 404
+          res.setHeader('Content-Type', 'text/html; charset=utf-8')
+          const notFound = join(distDir, '404.html')
+          const html = existsSync(notFound) ? readFileSync(notFound) : '<!doctype html><meta name="robots" content="noindex"><title>Not found</title><h1>Not found</h1>'
+          res.end(req.method === 'HEAD' ? undefined : html)
+        })
+      }
+    },
+  }
+  const server = await preview({
+    root, configFile: false, appType: ssg || app ? 'mpa' : 'spa', plugins: [plugin],
+    build: { outDir: app && !ssg ? join(distDir, 'client') : distDir },
+    preview: {
+      ...options.preview, host: options.host ?? options.preview?.host ?? 'localhost',
+      // Vite's default CORS middleware adds Vary: Origin to every document,
+      // which correctly bypasses shared ISR. Enable CORS only when requested.
+      cors: options.preview?.cors ?? false,
+      port: options.port ?? options.preview?.port ?? 4173, strictPort: options.preview?.strictPort ?? true,
+      headers: {
+        'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY',
+        'Referrer-Policy': 'strict-origin-when-cross-origin', ...options.preview?.headers,
+      },
+    },
   })
-}
-
-/**
- * Parses URL query string into a plain object.
- */
-function parseQuery(url: string): Record<string, string> {
-  const qIndex = url.indexOf('?')
-  if (qIndex === -1) return {}
-  const qs = url.slice(qIndex + 1)
-  const result: Record<string, string> = {}
-  for (const part of qs.split('&')) {
-    if (!part) continue
-    const eqIdx = part.indexOf('=')
-    if (eqIdx === -1) {
-      result[decodeURIComponent(part)] = ''
-    } else {
-      result[decodeURIComponent(part.slice(0, eqIdx))] = decodeURIComponent(part.slice(eqIdx + 1))
-    }
-  }
-  return result
-}
-
-/**
- * Parses the request body for JSON content types.
- * Returns the parsed object for application/json, raw Buffer for other
- * bodies, or undefined for methods that carry no body.
- */
-async function parseBody(req: IncomingMessage): Promise<unknown> {
-  const contentType = req.headers['content-type'] ?? ''
-  const method = req.method?.toUpperCase() ?? 'GET'
-  if (!['POST', 'PUT', 'PATCH'].includes(method)) return undefined
-  const buf = await readBody(req)
-  if (contentType.includes('application/json')) {
-    try { return JSON.parse(buf.toString('utf-8')) } catch { return undefined }
-  }
-  return buf
-}
-
-function getMimeType(filePath: string): string {
-  const ext = extname(filePath).toLowerCase()
-  return MIME_TYPES[ext] ?? 'application/octet-stream'
-}
-
-// MIME types that benefit from gzip compression. Binary formats (woff2, images)
-// are already compressed and should not be re-compressed.
-const GZIP_TYPES = new Set([
-  'text/html; charset=utf-8',
-  'application/javascript; charset=utf-8',
-  'text/css; charset=utf-8',
-  'application/json; charset=utf-8',
-  'image/svg+xml',
-  'application/json',
-])
-
-function acceptsGzip(req: IncomingMessage): boolean {
-  const ae = req.headers['accept-encoding'] ?? ''
-  return ae.includes('gzip')
-}
-
-/**
- * Returns the appropriate Cache-Control header value for a file.
- * Vite content-hashes assets placed in the /assets/ directory, so they
- * can be cached indefinitely. Everything else (HTML, etc.) must not be cached.
- */
-function getCacheControl(filePath: string): string {
-  if (filePath.includes('/assets/')) return 'public, max-age=31536000, immutable'
-  return 'no-cache'
-}
-
-/**
- * Sets standard security headers on every response.
- */
-function setSecurityHeaders(res: ServerResponse): void {
-  res.setHeader('X-Content-Type-Options', 'nosniff')
-  res.setHeader('X-Frame-Options', 'DENY')
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
-}
-
-/**
- * Serves a static file from the dist directory.
- * Applies gzip compression for compressible text types when the client
- * signals support via the Accept-Encoding request header.
- * Returns true if the file was served, false otherwise.
- */
-function serveStaticFile(
-  req: IncomingMessage,
-  res: ServerResponse,
-  distDir: string,
-  fallbackStatus = 200,
-): boolean {
-  const urlPath = (req.url ?? '/').split('?')[0]
-
-  // Guard against path traversal: resolved path must stay within distDir.
-  if (!isPathBounded(distDir, urlPath)) {
-    res.statusCode = 400
-    res.end('Bad Request')
-    return true
-  }
-
-  // Try exact file path
-  let filePath = join(distDir, urlPath)
-
-  if (!existsSync(filePath) || statSync(filePath).isDirectory()) {
-    // Try index.html in the directory
-    const indexPath = join(distDir, urlPath, 'index.html')
-    if (existsSync(indexPath)) {
-      filePath = indexPath
-    } else if (existsSync(join(distDir, 'index.html'))) {
-      // SPA fallback: serve root index.html
-      filePath = join(distDir, 'index.html')
-      res.statusCode = fallbackStatus
-    } else {
-      return false
-    }
-  }
-
-  const mimeType = getMimeType(filePath)
-  res.setHeader('Content-Type', mimeType)
-  res.setHeader('Cache-Control', getCacheControl(filePath))
-  setSecurityHeaders(res)
-
-  const stream = createReadStream(filePath)
-  if (GZIP_TYPES.has(mimeType) && acceptsGzip(req)) {
-    res.setHeader('Content-Encoding', 'gzip')
-    stream.pipe(createGzip()).pipe(res)
-  } else {
-    stream.pipe(res)
-  }
-  return true
-}
-
-/**
- * Registers SIGTERM/SIGINT handlers that gracefully drain the server before exiting.
- * Waits up to 10 seconds for in-flight requests to complete, then force-exits.
- */
-function registerGracefulShutdown(server: ReturnType<typeof createHttpServer>): void {
-  function shutdown(signal: string): void {
-    console.log(`[cer-app] Received ${signal}, shutting down gracefully...`)
-    server.close(() => {
-      console.log('[cer-app] Server closed.')
-      process.exit(0)
-    })
-    // Force exit if connections haven't drained within 10 seconds.
-    const t = setTimeout(() => {
-      console.error('[cer-app] Forced shutdown after 10 s — connections did not drain.')
-      process.exit(1)
-    }, 10_000)
-    // Allow the Node.js event loop to exit before the timeout fires if all other work is done.
-    t.unref()
-  }
-
-  process.on('SIGTERM', () => shutdown('SIGTERM'))
-  process.on('SIGINT', () => shutdown('SIGINT'))
+  const sockets = new Set<import('node:net').Socket>()
+  connections.set(server, sockets)
+  server.httpServer.on('connection', (socket) => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)) })
+  if ('headersTimeout' in server.httpServer) server.httpServer.headersTimeout = 10_000
+  if ('requestTimeout' in server.httpServer) server.httpServer.requestTimeout = 30_000
+  return server
 }
 
 export function previewCommand(): Command {
   return new Command('preview')
-    .description('Preview the production build')
-    .option('-p, --port <port>', 'Port to listen on', '4173')
-    .option('--host <host>', 'Host to bind to', 'localhost')
+    .description('Preview the production build with Vite and CER routing')
+    .option('-p, --port <port>', 'Port to listen on')
+    .option('--host <host>', 'Host to bind to')
     .option('--root <root>', 'Project root directory', process.cwd())
     .option('--ssr', 'Serve using SSR handler from dist/server/server.js')
     .action(async (options) => {
-      const root = resolve(options.root)
-      const port = parseInt(options.port, 10)
-      const distDir = join(root, 'dist')
-      const serverBundle = join(distDir, 'server/server.js')
-
-      // Check if SSR server bundle exists.
-      // An SSG build also produces a server bundle, but previewing SSG means serving
-      // the pre-rendered static HTML — detect the SSG manifest to avoid switching to
-      // live SSR mode for SSG builds.
-      const hasServerBundle = existsSync(serverBundle)
-      const hasSsgManifest = existsSync(join(distDir, 'ssg-manifest.json'))
-      const useSSR = options.ssr || (hasServerBundle && !hasSsgManifest)
-
-      if (useSSR && hasServerBundle) {
-        console.log('[cer-app] Starting SSR preview server...')
-
-        // Load the server bundle
-        let serverMod: {
-          handler?: SsrHandlerFn
-          default?: SsrHandlerFn
-          runServerMiddleware?: (req: IncomingMessage, res: ServerResponse) => Promise<boolean>
-          runWithRequestContext?: <T>(req: IncomingMessage, res: ServerResponse, fn: () => Promise<T>) => Promise<T>
-          apiRoutes?: Array<{ path: string; handlers: Record<string, unknown> }>
-        }
-        try {
-          // Expose the app root so the server bundle can resolve content files at runtime.
-          process.env.__CER_APP_ROOT__ = root
-          serverMod = await import(pathToFileURL(serverBundle).href)
-        } catch (err) {
-          console.error('[cer-app] Failed to load server bundle:', err)
-          process.exit(1)
-        }
-
-        const handler = serverMod.handler ?? serverMod.default
-        if (typeof handler !== 'function') {
-          console.error('[cer-app] Server bundle does not export a handler function.')
-          process.exit(1)
-        }
-
-        // Server middleware chain exported by the server bundle
-        const runServerMiddleware = serverMod.runServerMiddleware
-        // Request context wrapper — runs fn inside _cerReqStore so useCookie / useSession work in API handlers
-        const runWithRequestContext = serverMod.runWithRequestContext
-
-        // API route array exported by the server bundle: [{ path, handlers }]
-        const apiRoutes: Array<{ path: string; handlers: Record<string, unknown> }> =
-          Array.isArray(serverMod.apiRoutes) ? serverMod.apiRoutes : []
-
-        // Page routes exported by the server bundle (used for ISR revalidate lookup).
-        const pageRoutes: Array<{ path: string; meta?: Record<string, unknown> }> =
-          Array.isArray((serverMod as { routes?: unknown }).routes)
-            ? (serverMod as { routes: Array<{ path: string; meta?: Record<string, unknown> }> }).routes
-            : []
-
-        // ISR cache: path → cached render entry.
-        const isrCache = new Map<string, IsrCacheEntry>()
-
-        const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
-          setSecurityHeaders(res)
-          // Default: HTML and API responses must not be cached. Asset paths below
-          // override this with getCacheControl() for content-hashed files.
-          res.setHeader('Cache-Control', 'no-cache')
-
-          const url = req.url ?? '/'
-          const urlPath = url.split('?')[0]
-          const method = req.method ?? 'GET'
-
-          // Run server middleware before routing — stops chain if it returns false
-          if (runServerMiddleware && !(await runServerMiddleware(req, res))) return
-
-          // Route /api/* requests to the server bundle's API handlers
-          if (urlPath.startsWith('/api/')) {
-            for (const route of apiRoutes) {
-              const matched = matchApiPattern(route.path, urlPath)
-              if (matched !== null) {
-                const augReq = req as IncomingMessage & { params: Record<string, string>; query: Record<string, string>; body: unknown }
-                augReq.params = matched
-                augReq.query = parseQuery(url)
-                augReq.body = await parseBody(req)
-                const augRes = res as ServerResponse & {
-                  json(data: unknown): void
-                  status(code: number): typeof augRes
-                }
-                augRes.json = function (data) {
-                  this.setHeader('Content-Type', 'application/json; charset=utf-8')
-                  this.end(JSON.stringify(data))
-                }
-                augRes.status = function (code) { this.statusCode = code; return this }
-
-                type ApiHandlerFn = (req: typeof augReq, res: typeof augRes) => void | Promise<void>
-                const handlerFn =
-                  (route.handlers[method.toLowerCase()] as ApiHandlerFn | undefined) ??
-                  (route.handlers[method.toUpperCase()] as ApiHandlerFn | undefined) ??
-                  (route.handlers['default'] as ApiHandlerFn | undefined)
-
-                if (typeof handlerFn === 'function') {
-                  try {
-                    const invoke = () => Promise.resolve(handlerFn(augReq, augRes))
-                    await (runWithRequestContext ? runWithRequestContext(req, res, invoke) : invoke())
-                  } catch (err) {
-                    console.error(`[cer-app] API handler error at ${route.path}:`, err)
-                    res.statusCode = 500
-                    res.setHeader('Content-Type', 'application/json')
-                    res.end(JSON.stringify({ error: 'Internal Server Error' }))
-                  }
-                  return
-                }
-              }
-            }
-            res.statusCode = 404
-            res.end('Not Found')
-            return
-          }
-
-          // Serve static assets from dist/client first
-          const clientDist = join(distDir, 'client')
-          if (existsSync(clientDist) && url !== '/' && url.includes('.')) {
-            const served = serveStaticFile(req, res, clientDist)
-            if (served) return
-          }
-
-          // Per-route render strategy — checked before ISR.
-          const renderMode = findRenderMode(pageRoutes, urlPath)
-
-          // render: 'spa' — skip SSR, serve the client index.html shell.
-          if (renderMode === 'spa') {
-            const spaIndex = join(distDir, 'client/index.html')
-            if (existsSync(spaIndex)) {
-              res.setHeader('Content-Type', 'text/html; charset=utf-8')
-              res.setHeader('Cache-Control', 'no-cache')
-              createReadStream(spaIndex).pipe(res)
-            } else {
-              res.statusCode = 404
-              res.setHeader('Content-Type', 'text/plain')
-              res.end('Not Found')
-            }
-            return
-          }
-
-          // render: 'static' — try pre-rendered HTML from dist/, fall through to SSR.
-          if (renderMode === 'static') {
-            const staticFile = urlPath === '/'
-              ? join(distDir, 'index.html')
-              : join(distDir, urlPath.replace(/^\//, ''), 'index.html')
-            if (existsSync(staticFile)) {
-              res.setHeader('Content-Type', 'text/html; charset=utf-8')
-              res.setHeader('Cache-Control', 'no-cache')
-              createReadStream(staticFile).pipe(res)
-              return
-            }
-            // Fall through to SSR if no pre-rendered file exists.
-          }
-
-          // render: 'server' — always SSR, bypass ISR cache.
-          if (renderMode === 'server') {
-            try {
-              await handler(req, res)
-            } catch (err) {
-              console.error('[cer-app] SSR handler error:', err)
-              res.statusCode = 500
-              res.setHeader('Content-Type', 'text/plain')
-              res.end('Internal Server Error')
-            }
-            return
-          }
-
-          // ISR: check whether this route has a revalidate TTL.
-          const revalidate = findRevalidate(pageRoutes, urlPath)
-          if (revalidate !== null) {
-            const cached = isrCache.get(urlPath)
-            const now = Date.now()
-
-            if (cached) {
-              const ageSeconds = (now - cached.builtAt) / 1000
-              if (ageSeconds < cached.revalidate) {
-                // Fresh — serve from cache.
-                serveFromIsrCache(cached, res, 'HIT')
-                return
-              }
-              // Stale — serve stale immediately, revalidate in background.
-              if (!cached.revalidating) {
-                cached.revalidating = true
-                serveFromIsrCache(cached, res, 'STALE')
-                const revalidateTimeout = setTimeout(() => {
-                  if (cached) cached.revalidating = false
-                }, 30_000)
-                renderForIsr(urlPath, handler, revalidate).then((entry) => {
-                  clearTimeout(revalidateTimeout)
-                  if (entry) isrCache.set(urlPath, entry)
-                  else if (cached) cached.revalidating = false
-                }).catch(() => {
-                  clearTimeout(revalidateTimeout)
-                  if (cached) cached.revalidating = false
-                })
-                return
-              }
-              // Already revalidating — serve stale without spawning another render.
-              serveFromIsrCache(cached, res, 'STALE')
-              return
-            }
-
-            // Cache miss — render, cache, then serve.
-            try {
-              const entry = await renderForIsr(urlPath, handler, revalidate)
-              if (entry) {
-                isrCache.set(urlPath, entry)
-                serveFromIsrCache(entry, res, 'HIT')
-              } else {
-                await handler(req, res)
-              }
-            } catch (err) {
-              console.error('[cer-app] ISR render error:', err)
-              res.statusCode = 500
-              res.end('Internal Server Error')
-            }
-            return
-          }
-
-          // Non-ISR: fall through to SSR handler directly.
-          try {
-            await handler(req, res)
-          } catch (err) {
-            console.error('[cer-app] SSR handler error:', err)
-            res.statusCode = 500
-            res.end('Internal Server Error')
-          }
-        })
-
-        // Protect against slow-send attacks: abort requests that stall during
-        // header delivery or that take too long to complete.
-        server.headersTimeout = 10_000   // 10 s to receive all request headers
-        server.requestTimeout = 30_000   // 30 s for the full request/response cycle
-
-        server.listen(port, options.host, () => {
-          console.log(`[cer-app] SSR preview running at http://${options.host}:${port}`)
-        })
-
-        registerGracefulShutdown(server)
-      } else {
-        // Static file server (SPA / SSG)
-        console.log('[cer-app] Starting static preview server...')
-
-        if (!existsSync(distDir)) {
-          console.error(`[cer-app] No dist/ directory found at ${distDir}. Run 'cer-app build' first.`)
-          process.exit(1)
-        }
-
-        const server = createHttpServer((req: IncomingMessage, res: ServerResponse) => {
-          setSecurityHeaders(res)
-          res.setHeader('Cache-Control', 'no-cache')
-
-          const urlPath = (req.url ?? '/').split('?')[0]
-          // SSG builds put assets in dist/client/ while HTML lives in dist/.
-          // For requests with a non-HTML file extension, check dist/client/ first
-          // so the static server finds the Vite-built JS/CSS bundles.
-          const clientDist = join(distDir, 'client')
-          const ext = extname(urlPath).toLowerCase()
-          if (ext && ext !== '.html' && existsSync(clientDist)) {
-            const assetPath = join(clientDist, urlPath)
-            if (
-              isPathBounded(clientDist, urlPath) &&
-              existsSync(assetPath) && !statSync(assetPath).isDirectory()
-            ) {
-              const mimeType = getMimeType(assetPath)
-              res.setHeader('Content-Type', mimeType)
-              res.setHeader('Cache-Control', getCacheControl(assetPath))
-              const stream = createReadStream(assetPath)
-              if (GZIP_TYPES.has(mimeType) && acceptsGzip(req)) {
-                res.setHeader('Content-Encoding', 'gzip')
-                stream.pipe(createGzip()).pipe(res)
-              } else {
-                stream.pipe(res)
-              }
-              return
-            }
-          }
-          const fallbackStatus = existsSync(join(distDir, 'ssg-manifest.json')) ? 404 : 200
-          const served = serveStaticFile(req, res, distDir, fallbackStatus)
-          if (!served) {
-            res.statusCode = 404
-            res.end('Not Found')
-          }
-        })
-
-        server.headersTimeout = 10_000
-        server.requestTimeout = 30_000
-
-        server.listen(port, options.host, () => {
-          console.log(`[cer-app] Static preview running at http://${options.host}:${port}`)
-        })
-
-        registerGracefulShutdown(server)
+      const config = await loadCerConfig(resolve(options.root))
+      const server = await startPreview({ ...options, port: options.port ? Number(options.port) : undefined, preview: config.preview })
+      server.printUrls()
+      const shutdown = async () => {
+        await closePreview(server)
+        process.exit(0)
       }
+      process.once('SIGINT', shutdown)
+      process.once('SIGTERM', shutdown)
     })
 }

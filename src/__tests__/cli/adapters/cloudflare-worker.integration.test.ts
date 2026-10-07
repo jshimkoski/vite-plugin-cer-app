@@ -21,8 +21,7 @@ import { resolve } from 'pathe'
 
 const KITCHEN_SINK = resolve(import.meta.dirname, '../../../../e2e/kitchen-sink')
 const WORKER_PATH = resolve(KITCHEN_SINK, 'dist/_worker.js')
-const SERVER_BUNDLE = resolve(KITCHEN_SINK, 'dist/server/server.js')
-const workerExists = existsSync(WORKER_PATH) && existsSync(SERVER_BUNDLE)
+const workerExists = existsSync(WORKER_PATH)
 
 // ─── Suite ───────────────────────────────────────────────────────────────────
 
@@ -31,12 +30,25 @@ describe.skipIf(!workerExists)('Cloudflare Pages worker — integration', () => 
   let worker: WorkerModule['default']
 
   beforeAll(async () => {
+    delete (globalThis as Record<string, unknown>).__CER_CONTENT_STORE__
     const mod = await import(WORKER_PATH) as WorkerModule
     worker = mod.default
   })
 
   const call = (path: string, init?: RequestInit) =>
     worker.fetch(new Request(`http://localhost${path}`, init))
+
+  it('renders bundled content loader data without a filesystem content store', async () => {
+    expect(await (await call('/content-doc')).text()).toContain('data-cy="content-doc-title"')
+  })
+
+  it('keeps route/query state isolated across concurrent loader awaits and renders', async () => {
+    const bodies = await Promise.all(['alpha', 'beta'].map(async token => (await call('/route-info?token=' + token)).text()))
+    for (const [index, token] of ['alpha', 'beta'].entries()) {
+      expect(bodies[index]).toContain('<code>' + token + ':/route-info</code>')
+      expect(bodies[index]).toContain('<code>Route Info Page</code>')
+    }
+  })
 
   // ─── HTML rendering ────────────────────────────────────────────────────────
 

@@ -11,7 +11,7 @@ CER Content is a file-based content layer built into `vite-plugin-cer-app`. It p
 - **Draft support** — items with `draft: true` in frontmatter are excluded from production builds by default.
 - **Excerpt extraction** — place `<!-- more -->` in a Markdown file to set the excerpt boundary.
 - **Full-text search** — a MiniSearch index is emitted at build time and loaded lazily on the client via `useContentSearch()`.
-- **Works in all modes** — SPA (client fetch), SSR (Node.js filesystem), and SSG (pre-rendered).
+- **Works in all modes** — SPA (client fetch), SSR (embedded server snapshot), and SSG (pre-rendered).
 
 ---
 
@@ -564,7 +564,9 @@ On the client, `queryContent()` lazily fetches `/_content/manifest.json` (all `C
 
 In dev mode, `queryContent()` reads synchronously from the in-memory `globalThis.__CER_CONTENT_STORE__` array populated by the Vite plugin's `buildStart` hook. No filesystem or network access is needed per request.
 
-At production runtime, `__CER_CONTENT_STORE__` is absent — `buildStart` is a build-time hook that does not run at production server startup. The `ContentClient` always falls back to reading `dist/_content/` files via `node:fs`. The manifest and individual documents are cached as module-level singletons, so each file is read and parsed at most once per process lifetime.
+Production SSR builds embed the published content snapshot in the server graph. `queryContent()` reads this in-memory snapshot without relying on the source checkout's working directory or filesystem. Vercel and Cloudflare bundling preserves it. Content changes require a rebuild; large content sets increase server bundle size and memory, so check your target platform's size/startup limits. Browser navigation still fetches the public `/_content/` JSON files.
+
+The low-level `ContentClient` also retains a filesystem fallback for older/custom bundles that do not initialize the store. It searches `dist/server/_content/`, `dist/client/_content/` and `dist/_content/` beneath `__CER_APP_ROOT__` or the working directory, caching parsed data per process. Custom hosts using that fallback must package those files explicitly.
 
 ### SSG mode
 

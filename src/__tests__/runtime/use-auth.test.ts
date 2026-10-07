@@ -167,3 +167,16 @@ describe('useAuth() — client path (__CER_AUTH_USER__)', () => {
     delete (g as Record<string, unknown>)['window']
   })
 })
+
+it('shares logout state across composables using a request cell without enterWith', async () => {
+  const previous = g['__CER_AUTH_STORE__']
+  const cell = { currentUser: { provider: 'google', id: '1' } as import('../../runtime/composables/use-auth.js').AuthUser | null }
+  g['__CER_AUTH_STORE__'] = { getStore: () => cell }
+  try {
+    const first = useAuth(), second = useAuth()
+    expect(second.loggedIn).toBe(true)
+    await first.logout()
+    expect(second.loggedIn).toBe(false)
+    expect(second.user).toBeNull()
+  } finally { g['__CER_AUTH_STORE__'] = previous }
+})

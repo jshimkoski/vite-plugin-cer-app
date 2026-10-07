@@ -1,6 +1,6 @@
 import { gzipSync } from 'node:zlib'
 import { readFile, readdir, stat } from 'node:fs/promises'
-import { basename, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 
 export interface PerformanceBudgetOptions {
   outputDir?: string
@@ -15,6 +15,9 @@ export interface PerformanceBudgetReport {
   htmlBytes: number
   initialJsGzipBytes: number
   entryJsGzipBytes: number
+  /** Bytes requested through modulepreload, independent of execution timing. */
+  preloadedJsGzipBytes: number
+  startupAssets: string[]
   failures: string[]
 }
 
@@ -30,25 +33,59 @@ export async function checkPerformanceBudgets(
   const htmlBytes = (await stat(htmlPath)).size
   const failures: string[] = []
 
-  const assetNames = new Set(
-    [...html.matchAll(/(?:src|href)=(?:"([^"]+\.js)"|'([^']+\.js)')/g)]
-      .map((match) => match[1] ?? match[2])
-      .map((url) => url.slice(url.lastIndexOf('/') + 1)),
-  )
-  let initialJsGzipBytes = 0
-  let entryJsGzipBytes = 0
-  for (const name of assetNames) {
-    try {
-      const bytes = gzipSync(await readFile(join(assetsDir, name))).byteLength
-      initialJsGzipBytes += bytes
-      if (name.startsWith('index-')) entryJsGzipBytes += bytes
-    } catch {
-      failures.push(`homepage references missing JavaScript asset ${name}`)
-    }
+  const localAsset = (url: string, importer = outputDir): string | null => {
+    if (/^(?:[a-z]+:)?\/\//i.test(url)) return null
+    const name = url.split(/[?#]/)[0]
+    const path = name.startsWith('/') ? resolve(outputDir, `.${name}`) : resolve(importer, name)
+    return path.startsWith(outputDir + '/') && /\.m?js$/.test(path) ? path : null
   }
+  const preloadRoots = [...html.matchAll(/<link\b[^>]*rel=["']modulepreload["'][^>]*href=["']([^"']+)["']/g)].map((m) => m[1])
+  const entryRoots = [
+    ...[...html.matchAll(/<script\b[^>]*src=["']([^"']+\.m?js(?:[?#][^"']*)?)["']/g)].map((m) => m[1]),
+    // CER's first-paint bootstrap is an inline import, even when preloads are disabled.
+    ...[...html.matchAll(/\bimport\(\s*["']([^"']+\.m?js)["']\s*\)/g)].map((m) => m[1]),
+  ]
+  type ManifestEntry = { file: string; imports?: string[] }
+  let manifest: Record<string, ManifestEntry> = {}
+  for (const file of ['cer-client-manifest.json', '.vite/manifest.json', 'client/.vite/manifest.json']) {
+    try { manifest = JSON.parse(await readFile(join(outputDir, file), 'utf8')); break } catch { /* older builds */ }
+  }
+  const byFile = new Map(Object.values(manifest).map((entry) => [resolve(outputDir, entry.file), entry]))
+  const sizes = new Map<string, number>()
+  async function graph(roots: string[]): Promise<Set<string>> {
+    const visited = new Set<string>()
+    async function visit(path: string | null): Promise<void> {
+      if (!path || visited.has(path)) return
+      visited.add(path)
+      try {
+        const source = await readFile(path, 'utf8')
+        sizes.set(path, gzipSync(source).byteLength)
+        const entry = byFile.get(path)
+        const dependencies = entry
+          ? (entry.imports ?? []).map((key) => manifest[key]?.file).filter((file): file is string => !!file).map((file) => localAsset('/' + file))
+          : [...source.matchAll(/(?:\b(?:import|export)\s*(?:[^;"']*?\sfrom\s*)?)["']([^"']+)["']/g)].map((m) => localAsset(m[1], dirname(path)))
+        await Promise.all(dependencies.map(visit))
+      } catch {
+        failures.push(`${options.page ?? '/'} references missing JavaScript asset ${path.slice(outputDir.length + 1)}`)
+      }
+    }
+    await Promise.all(roots.map((url) => visit(localAsset(url))))
+    return visited
+  }
+  let startupRoots: string[] = []
+  try {
+    const startup = JSON.parse(await readFile(join(outputDir, 'cer-startup-manifest.json'), 'utf8')) as Record<string, string[]>
+    startupRoots = (startup[page ? '/' + page : '/'] ?? []).map((file) => '/' + file)
+  } catch { /* Older builds do not emit a content startup manifest. */ }
+  const startup = await graph([...entryRoots, ...preloadRoots, ...startupRoots])
+  const preloaded = await graph(preloadRoots)
+  const sum = (paths: Iterable<string>) => [...paths].reduce((total, path) => total + (sizes.get(path) ?? 0), 0)
+  const initialJsGzipBytes = sum(startup)
+  const preloadedJsGzipBytes = sum(preloaded)
+  const entryJsGzipBytes = sum(new Set(entryRoots.map((url) => localAsset(url)).filter((path): path is string => !!path)))
 
   if (options.maxHtmlBytes !== undefined && htmlBytes > options.maxHtmlBytes) {
-    failures.push(`homepage is ${htmlBytes.toLocaleString()} bytes (budget: ${options.maxHtmlBytes.toLocaleString()})`)
+    failures.push(`${options.page ?? '/'} is ${htmlBytes.toLocaleString()} bytes (budget: ${options.maxHtmlBytes.toLocaleString()})`)
   }
   if (
     options.maxInitialJsGzipBytes !== undefined &&
@@ -86,5 +123,5 @@ export async function checkPerformanceBudgets(
     }
   }
 
-  return { htmlBytes, initialJsGzipBytes, entryJsGzipBytes, failures }
+  return { htmlBytes, initialJsGzipBytes, entryJsGzipBytes, preloadedJsGzipBytes, startupAssets: [...startup].map((path) => path.slice(outputDir.length + 1)).sort(), failures }
 }

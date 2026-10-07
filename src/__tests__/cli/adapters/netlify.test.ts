@@ -51,19 +51,7 @@ describe('runNetlifyAdapter — SSR mode', () => {
     expect(bridge).toContain("from '../../dist/server/server.js'")
   })
 
-  it('bridge imports isrHandler and uses it for SSR fallback (enables ISR stale-while-revalidate)', async () => {
-    await runNetlifyAdapter(root)
-    const bridge = readText(root, 'netlify/functions/ssr.mjs')
-    expect(bridge).toContain('isrHandler')
-    expect(bridge).toContain('isrHandler(nodeReq, res)')
-  })
 
-  it('bridge does not import unused handler export (only isrHandler is needed)', async () => {
-    await runNetlifyAdapter(root)
-    const bridge = readText(root, 'netlify/functions/ssr.mjs')
-    // isrHandler wraps handler internally — the bridge only needs isrHandler
-    expect(bridge).not.toMatch(/import\s*\{[^}]*\bhandler\b[^}]*\}/)
-  })
 
   it('bridge exports a default async function', async () => {
     await runNetlifyAdapter(root)
@@ -81,7 +69,7 @@ describe('runNetlifyAdapter — SSR mode', () => {
   it('bridge returns a streaming Web API Response (TransformStream body)', async () => {
     await runNetlifyAdapter(root)
     const bridge = readText(root, 'netlify/functions/ssr.mjs')
-    expect(bridge).toContain('new Response(readable,')
+    expect(bridge).toContain('new Response(bodyless ? null : readable,')
     expect(bridge).toContain('TransformStream')
     expect(bridge).not.toContain('Buffer.concat')
   })
@@ -89,9 +77,9 @@ describe('runNetlifyAdapter — SSR mode', () => {
   it('streaming Response carries status code and accumulated response headers', async () => {
     await runNetlifyAdapter(root)
     const bridge = readText(root, 'netlify/functions/ssr.mjs')
-    // end() resolves with new Response(readable, { status: res.statusCode, headers })
+    // end() resolves with new Response(readable, { status: res.statusCode, headers: responseHeaders })
     expect(bridge).toContain('res.statusCode')
-    expect(bridge).toContain('{ status: res.statusCode, headers }')
+    expect(bridge).toContain('{ status: res.statusCode, headers: responseHeaders }')
   })
 
   it('bridge streams chunks via writer.write() instead of buffering', async () => {
@@ -112,44 +100,18 @@ describe('runNetlifyAdapter — SSR mode', () => {
     await runNetlifyAdapter(root)
     const bridge = readText(root, 'netlify/functions/ssr.mjs')
     expect(bridge).toContain('.catch(() => {})')
-    expect(bridge).toContain('writer.close().catch(() => {})')
+    expect(bridge).toContain('writer.abort(error).catch(() => {})')
   })
 
-  it('bridge handles /api/* routing', async () => {
-    await runNetlifyAdapter(root)
-    const bridge = readText(root, 'netlify/functions/ssr.mjs')
-    expect(bridge).toContain("urlPath.startsWith('/api/')")
-    expect(bridge).toContain('matchApiPattern')
-    expect(bridge).toContain('apiRoutes')
-  })
 
-  it('bridge wraps API handlers in runWithRequestContext for cookie/session access', async () => {
-    await runNetlifyAdapter(root)
-    const bridge = readText(root, 'netlify/functions/ssr.mjs')
-    expect(bridge).toContain('runWithRequestContext')
-    expect(bridge).toContain('runWithRequestContext(nodeReq, res, () => Promise.resolve(fn(nodeReq, res)))')
-  })
 
-  it('bridge attaches req.query (parsed query string) in toNodeRequest', async () => {
-    await runNetlifyAdapter(root)
-    const bridge = readText(root, 'netlify/functions/ssr.mjs')
-    expect(bridge).toContain('parseQuery')
-    expect(bridge).toContain('req.query = parseQuery(')
-  })
 
-  it('bridge attaches req.body (parsed JSON body) in toNodeRequest', async () => {
-    await runNetlifyAdapter(root)
-    const bridge = readText(root, 'netlify/functions/ssr.mjs')
-    expect(bridge).toContain('req.body =')
-    expect(bridge).toContain("'application/json'")
-    expect(bridge).toContain('JSON.parse(')
-  })
 
   it('bridge mock res has writableEnded guard to prevent double end()', async () => {
     await runNetlifyAdapter(root)
     const bridge = readText(root, 'netlify/functions/ssr.mjs')
     expect(bridge).toContain('writableEnded')
-    expect(bridge).toContain('if (_ended) return')
+    expect(bridge).toContain('if (_ended) return this')
   })
 
   it('writes netlify.toml', async () => {
@@ -278,10 +240,19 @@ describe('runNetlifyAdapter — SSG mode', () => {
     expect(existsSync(join(root, '.netlify/publish/ssg-manifest.json'))).toBe(false)
   })
 
+  it('filters manifests even when pure SSG already pruned the client directory', async () => {
+    rmSync(join(root, 'dist/client'), { recursive: true, force: true })
+    writeFile(root, 'dist/assets/main-abc.js', '// asset')
+    await runNetlifyAdapter(root)
+    expect(existsSync(join(root, '.netlify/publish/ssg-manifest.json'))).toBe(false)
+    expect(existsSync(join(root, '.netlify/publish/assets/main-abc.js'))).toBe(true)
+    expect(readText(root, 'netlify.toml')).toContain('publish = ".netlify/publish"')
+  })
+
   it('netlify.toml serves the shell with a 404 status for unmatched SSG paths', async () => {
     await runNetlifyAdapter(root)
     const toml = readText(root, 'netlify.toml')
-    expect(toml).toContain('to = "/index.html"')
+    expect(toml).toContain('to = "/404.html"')
     expect(toml).toContain('status = 404')
   })
 })

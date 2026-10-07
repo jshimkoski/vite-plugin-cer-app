@@ -68,6 +68,8 @@ export type ContentLinkRel =
 
 /** Content layer configuration. Controls parsing, directory, and draft behaviour. */
 export interface CerContentConfig {
+  /** Download policy for content registration modules; independent of hydration. */
+  components?: Record<string, 'load' | 'visible' | 'none'>
   /**
    * Content directory relative to the project root. Defaults to `'content'`,
    * which resolves to `{root}/content/` — at the same level as `app/`, `server/`, and `public/`.

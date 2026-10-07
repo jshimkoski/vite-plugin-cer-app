@@ -22,6 +22,10 @@ export interface ResolvedCerConfig {
   serverMiddlewareDir: string
   port: number
   ssg: {
+    keepServer?: boolean
+    entryPreload?: import('../types/config.js').SsgConfig['entryPreload']
+    sitemap?: import('../types/config.js').SsgConfig['sitemap']
+    netlifyForms?: import('../types/config.js').NetlifyFormSchema[]
     routes: 'auto' | string[]
     concurrency: number
     fallback: boolean
@@ -29,8 +33,10 @@ export interface ResolvedCerConfig {
     inlineStylesheets: false | number
   }
   router: { base?: string; scrollToFragment?: boolean | object }
-  jitCss: { content: string[]; extendedColors: boolean | string[]; customColors?: Record<string, Record<string, string>> }
+  jitCss: { mode?: 'runtime' | 'static'; safelist?: string[]; content: string[]; extendedColors: boolean | string[]; customColors?: Record<string, Record<string, string>> }
   autoImports: { components: boolean; composables: boolean; directives: boolean; runtime: boolean }
+  integrations?: import('../types/config.js').CerAppIntegration[]
+  contentComponents?: Record<string, 'load' | 'visible' | 'none'>
   globalImports: string[]
   runtimeConfig: { public: Record<string, unknown>; private: import('../types/config.js').RuntimePrivateConfig }
   auth: import('../types/config.js').AuthConfig | null

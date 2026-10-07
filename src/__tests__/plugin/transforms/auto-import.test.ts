@@ -530,3 +530,11 @@ describe('autoImportTransform — per-identifier tree shaking (P1-5)', () => {
     expect(result).toContain(`from ${RUNTIME_PKG}`)
   })
 })
+
+describe('partial manual imports', () => {
+  it('still imports other used helpers from the same package', () => {
+    const result = autoImportTransform("import { renderContent } from '@jasonshimmy/vite-plugin-cer-app/composables'; const loader = defineContentPageLoader(); renderContent(doc);", '/project/app/pages/article.ts', opts)
+    expect(result).toContain("import { defineContentPageLoader }")
+    expect(result?.match(/import \{ renderContent \}/g)).toHaveLength(1)
+  })
+})

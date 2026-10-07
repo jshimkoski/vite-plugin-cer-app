@@ -51,6 +51,14 @@
     "./oauth": {
       "import": "./dist/runtime/oauth/index.js",
       "types": "./dist/runtime/oauth/index.d.ts"
+    },
+    "./server": {
+      "types": "./dist/runtime/request-dispatcher.d.ts",
+      "import": "./dist/runtime/request-dispatcher.js"
+    },
+    "./quality": {
+      "types": "./dist/cli/checks/quality.d.ts",
+      "import": "./dist/cli/checks/quality.js"
     }
   },
   "bin": {
@@ -74,6 +82,8 @@
     "e2e:build:ssg": "npm run e2e:clean && node dist/cli/index.js build --mode ssg --root e2e/kitchen-sink",
     "e2e:adapt:netlify": "node dist/cli/index.js adapt --platform netlify --root e2e/kitchen-sink",
     "e2e:integration:netlify": "npm run e2e:build:ssr && npm run e2e:adapt:netlify && vitest run src/__tests__/cli/adapters/netlify-bridge.integration.test.ts",
+    "e2e:integration:vercel": "npm run e2e:build:ssr && node dist/cli/index.js adapt --platform vercel --root e2e/kitchen-sink && vitest run src/__tests__/cli/adapters/vercel-launcher.integration.test.ts",
+    "e2e:integration:cloudflare": "npm run e2e:build:ssr && node dist/cli/index.js adapt --platform cloudflare --root e2e/kitchen-sink && vitest run src/__tests__/cli/adapters/cloudflare-worker.integration.test.ts",
     "e2e:serve:spa": "node dist/cli/index.js preview --root e2e/kitchen-sink --port 4174",
     "e2e:serve:ssr": "node dist/cli/index.js preview --root e2e/kitchen-sink --port 4175 --ssr",
     "e2e:serve:ssg": "node dist/cli/index.js preview --root e2e/kitchen-sink --port 4176",
@@ -87,22 +97,23 @@
     "e2e:ssg": "npm run e2e:build:ssg && start-server-and-test e2e:serve:ssg http://localhost:4176 e2e:run:ssg",
     "e2e:dev": "npm run e2e:clean && start-server-and-test e2e:serve:dev http://localhost:4177 e2e:run:dev",
     "e2e": "npm run e2e:ssr && npm run e2e:ssg && npm run e2e:spa && npm run e2e:dev",
-    "cypress:open": "cypress open"
+    "cypress:open": "cypress open",
+    "e2e:integration:cloudflare:workers": "npm run e2e:build:ssr && node dist/cli/index.js adapt --platform cloudflare --root e2e/kitchen-sink && node e2e/scripts/check-cloudflare-worker.mjs"
   },
   "peerDependencies": {
-    "@jasonshimmy/custom-elements-runtime": ">=3.11.2",
+    "@jasonshimmy/custom-elements-runtime": ">=3.12.0",
     "vite": ">=5.0.0"
   },
   "dependencies": {
     "commander": "^15.0.0",
-    "magic-string": "^1.4.2",
-    "marked": "^18.0.14",
+    "magic-string": "^1.4.3",
+    "marked": "^18.1.0",
     "minisearch": "^7.2.0",
     "pathe": "^2.0.3",
     "yaml": "^2.9.1"
   },
   "devDependencies": {
-    "@jasonshimmy/custom-elements-runtime": "^3.11.2",
+    "@jasonshimmy/custom-elements-runtime": "^3.12.0",
     "@types/node": "^26.6.4",
     "@typescript/native": "npm:typescript@^7.0.2",
     "@vitest/coverage-v8": "^5.0.0",
@@ -110,10 +121,10 @@
     "eslint": "^10.12.0",
     "happy-dom": "^20.14.5",
     "jiti": "^2.7.0",
-    "start-server-and-test": "^3.0.12",
+    "start-server-and-test": "^3.0.13",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
-    "typescript-eslint": "^8.71.0",
-    "vite": "^8.3.2",
+    "typescript-eslint": "^8.71.1",
+    "vite": "^8.3.3",
     "vitest": "^5.0.0"
   },
   "publishConfig": {
@@ -122,5 +133,8 @@
   "allowScripts": {
     "fsevents@2.3.3": true,
     "cypress@16.1.1": true
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }

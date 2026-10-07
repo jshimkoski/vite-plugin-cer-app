@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Node.js 18+
+- Node.js 22.12+ (Node 24 LTS recommended; the Vercel adapter targets Node 24)
 - `@jasonshimmy/custom-elements-runtime` ≥ 3.0.0
 - Vite ≥ 5.0.0
 

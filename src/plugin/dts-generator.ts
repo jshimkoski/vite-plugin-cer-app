@@ -80,6 +80,8 @@ const RUNTIME_GLOBALS = [
   'useExpose',
   'useSlots',
   'useHost',
+  'useLazyContent',
+  'useFormInternals',
   'provide',
   'inject',
   'createComposable',
@@ -116,6 +118,7 @@ const FRAMEWORK_GLOBALS = [
   'normalizeContentPath',
   'useContentBreadcrumbs',
   'useContentHeadings',
+  'renderContent',
   'useContentSeo',
   'useActiveHeadings',
 ]

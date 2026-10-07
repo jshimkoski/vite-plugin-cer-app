@@ -67,6 +67,13 @@ jobs:
       - name: E2E tests (Dev)
         run: xvfb-run --auto-servernum npm run e2e:dev
 
+      - name: Adapter integration tests
+        run: |
+          npm run e2e:integration:netlify
+          npm run e2e:integration:vercel
+          npm run e2e:integration:cloudflare
+          npm run e2e:integration:cloudflare:workers
+
   release:
     name: Version & publish
     needs: validate

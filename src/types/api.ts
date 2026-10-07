@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 
 /**
  * Augmented Node.js `IncomingMessage` passed to API route handlers.
+ * Web hosting adapters provide a compatibility bridge, without Node socket APIs.
  * Route params and query string are pre-parsed; `body` is parsed from JSON automatically.
  */
 export interface ApiRequest extends IncomingMessage {
@@ -12,6 +13,8 @@ export interface ApiRequest extends IncomingMessage {
 
 /**
  * Augmented Node.js `ServerResponse` passed to API route handlers.
+ * Web hosting adapters implement the documented header/write/end contract;
+ * socket-specific Node methods require a native Node transport.
  * Adds convenience methods for JSON responses and fluent status setting.
  */
 export interface ApiResponse extends ServerResponse {

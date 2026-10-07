@@ -237,13 +237,15 @@ component('page-index', () => {
 ```
 
 ```ts
-// app/pages/data.ts — private config, server-only (loader)
-export const loader = async () => {
+// server/api/data.ts — private work belongs in a server API, not a shared page loader
+export const GET = async (_req, res) => {
   const { private: priv } = useRuntimeConfig()
   const rows = await db.query(priv?.dbUrl)
-  return { rows }
+  res.json(rows)
 }
 ```
+
+Page loaders also run in the browser. Fetch the API from a browser-safe loader instead of importing database code or reading private configuration there. Server-side fetches need an absolute API URL; see [useFetch](./use-fetch.md). A static deployment needs a separately deployed API.
 
 **Only use `runtimeConfig.public` for values safe to expose to the browser.** Use `runtimeConfig.private` for secrets — they are never sent to the client.
 

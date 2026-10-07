@@ -196,9 +196,9 @@ jitCss: {
 ### `jitCss.content`
 
 **Type:** `string[]`
-**Default:** Pages, components, and layouts directories.
+**Default:** Application `ts`, `tsx`, `js`, and `html` files, plus content `md` and `html` files.
 
-Glob patterns pointing to files that use utility classes. The JIT compiler scans these files to generate CSS.
+Glob patterns pointing to files that use utility classes. Explicit patterns replace the default scan; include all application/content sources needed during browser navigation. The JIT compiler scans these files to generate CSS.
 
 ### `jitCss.extendedColors`
 
@@ -592,11 +592,7 @@ import type { RuntimePrivateConfig } from '@jasonshimmy/vite-plugin-cer-app/type
 
 Three optional hooks in `cer.config.ts` give you visibility into every SSR request without modifying any application code.
 
-> **SSR mode only.** These hooks are invoked by the Node.js SSR request handler. They do **not** fire in SSG or SPA modes:
-> - **SSG** — pages are pre-rendered to static HTML at build time and served directly by the file server. No Node.js handler processes individual page requests at runtime, so no hooks fire.
-> - **SPA** — there is no server-side render pass; the browser loads `index.html` and renders entirely client-side.
->
-> If you need request logging in SSG/SPA deployments, add it at the reverse-proxy or CDN layer instead.
+These hooks run when the SSR renderer executes: direct SSR requests, SSG build renders, hybrid SSR fallback and ISR cache renders. They do not log static asset responses, already-prerendered document serving, API dispatch, SPA shells or ISR cache hits/stale delivery. For complete request logging, use server middleware or the hosting/CDN layer. Hook failures are isolated from the response; asynchronous `onResponse` failures are swallowed and the hook is not awaited.
 
 ### `onRequest`
 
@@ -787,3 +783,15 @@ import type {
   ResponseHookContext,
 } from '@jasonshimmy/vite-plugin-cer-app/types'
 ```
+
+## Production rendering options
+
+`jitCss.mode` is `'runtime'` by default; `'static'` installs scanned CSS without the browser JIT generator. `jitCss.safelist` contains complete class names that cannot be discovered from literals. Integration `customColors` merge by color/shade; explicit application values win.
+
+`content.components` maps registered Markdown tags to `'load'`, `'visible'` or `'none'` download policies. These are independent of the component's hydration strategy. See [production content](production-content.md).
+
+`ssg.keepServer` retains client/server intermediates for custom consumers. Hybrid, middleware, API, ISR and fallback builds retain their server automatically; configured adapters default to retaining intermediates until adaptation. `ssg.entryPreload` accepts a boolean or `(path) => boolean` to control module preload hints per generated document. It does not disable startup JavaScript.
+
+`ssg.sitemap(path)` returns optional `lastmod`, `images` and `exclude` metadata. `ssg.netlifyForms` declares `{ name, fields, honeypot? }` schemas and generates a hidden noindex discovery document. Keep those schemas consistent with the application's actual native forms.
+
+`preview` accepts Vite preview options, including `https`, `headers`, `host`, `port` and `strictPort`. Preview CORS defaults to disabled; set `preview.cors` explicitly when needed. A CORS response with `Vary: Origin` bypasses shared ISR. Invalid configuration fails loading; SSG render/enumeration failures fail the command by default. Set `ssg.failOnError: false` only when deliberately accepting incomplete output.

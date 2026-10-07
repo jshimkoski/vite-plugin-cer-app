@@ -350,7 +350,7 @@ Overrides the global rendering mode for a single route. Useful in mixed apps whe
 | Value | Behavior |
 |---|---|
 | `'server'` | Always renders server-side. In SSG mode the route is **skipped** during the static build — it is never pre-rendered. |
-| `'static'` | Always serves pre-rendered HTML from disk. In the SSR **preview server**, the framework looks for `dist/<path>/index.html`; falls back to SSR if the file is not found. In SSG mode the route is still pre-rendered at build time as normal. |
+| `'static'` | Eligible for SSG. Preview/adapters serve known generated documents unless ISR is configured. Ungenerated routes follow the build's fallback policy. An SSR-only build renders this route on request; this flag does not create static documents by itself. |
 | `'spa'`    | Client-only. In SSR mode the server returns the SPA shell (`index.html`) without rendering. In SSG mode the route is skipped. |
 
 ```ts
@@ -368,7 +368,7 @@ export const meta = {
 ```
 
 ```ts
-// app/pages/legal/privacy.ts — force static even in SSR mode
+// app/pages/legal/privacy.ts — include in the SSG build
 export const meta = {
   render: 'static',
 }

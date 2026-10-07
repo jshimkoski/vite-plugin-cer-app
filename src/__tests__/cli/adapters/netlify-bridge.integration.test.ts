@@ -31,8 +31,22 @@ describe.skipIf(!bridgeExists)('Netlify SSR bridge — integration', () => {
   let bridge: BridgeFn
 
   beforeAll(async () => {
+    delete (globalThis as Record<string, unknown>).__CER_CONTENT_STORE__
     const mod = await import(BRIDGE_PATH)
     bridge = mod.default as BridgeFn
+  })
+
+  it('renders content loader data without relying on the project working directory', async () => {
+    const response = await bridge(new Request('http://localhost/content-doc'))
+    expect(await response.text()).toContain('data-cy="content-doc-title"')
+  })
+
+  it('keeps route/query state isolated across concurrent loader awaits and renders', async () => {
+    const bodies = await Promise.all(['alpha', 'beta'].map(async token => (await bridge(new Request('http://localhost/route-info?token=' + token))).text()))
+    for (const [index, token] of ['alpha', 'beta'].entries()) {
+      expect(bodies[index]).toContain('<code>' + token + ':/route-info</code>')
+      expect(bodies[index]).toContain('<code>Route Info Page</code>')
+    }
   })
 
   // ─── HTML rendering ─────────────────────────────────────────────────────────
@@ -115,14 +129,35 @@ describe.skipIf(!bridgeExists)('Netlify SSR bridge — integration', () => {
 
   // ─── Request method routing ──────────────────────────────────────────────────
 
-  it('routes GET and POST independently — POST /api/health (no handler) returns 404', async () => {
+  it('routes GET and POST independently — POST /api/health (no handler) returns 405', async () => {
     // The health handler only registers GET. The bridge looks for
     // handlers['post'] ?? handlers['POST'] ?? handlers['default'] — none exist.
     const res = await bridge(new Request('http://localhost/api/health', { method: 'POST' }))
-    expect(res.status).toBe(404)
+    expect(res.status).toBe(405)
+    expect(res.headers.get('allow')).toBe('GET')
   })
 
   // ─── Response integrity ──────────────────────────────────────────────────────
+  it('parses streamed JSON bodies and rejects malformed or oversized bodies', async () => {
+    const call = (body: string) => bridge(new Request('http://localhost/api/echo', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body,
+    }))
+    const valid = await call(JSON.stringify({ message: 'Streamed' }))
+    expect(await valid.json()).toEqual({ echo: { message: 'Streamed' } })
+    expect((await call('{invalid')).status).toBe(400)
+    expect((await call(JSON.stringify({ message: 'x'.repeat(1_048_576) }))).status).toBe(413)
+  })
+  it('passes query parameters and session cookies through the bridge', async () => {
+    const query = await bridge(new Request('http://localhost/api/echo?key=value'))
+    expect(await query.json()).toEqual({ query: { key: 'value' } })
+    const created = await bridge(new Request('http://localhost/api/session', { method: 'POST' }))
+    const cookies = created.headers.getSetCookie()
+    expect(cookies.length).toBeGreaterThan(0)
+    const session = await bridge(new Request('http://localhost/api/session', {
+      headers: { cookie: cookies.map((value) => value.split(';')[0]).join('; ') },
+    }))
+    expect(await session.json()).toEqual({ userId: 'test-user' })
+  })
 
   it('API response body is valid JSON (not truncated)', async () => {
     const res = await bridge(new Request('http://localhost/api/posts'))

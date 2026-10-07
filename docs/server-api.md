@@ -86,13 +86,13 @@ interface ApiResponse extends ServerResponse {
 
 ## Error handling
 
-Unhandled errors thrown inside a handler are caught and return a 500 JSON response:
+Unhandled errors thrown before response headers are sent return a 500 response. The built dispatcher uses a plain-text body:
 
-```json
-{ "error": "Internal Server Error" }
+```text
+Internal Server Error
 ```
 
-For custom error responses, handle errors yourself:
+If headers have already been sent, the response is ended without changing its status. For a consistent JSON error contract, handle errors yourself:
 
 ```ts
 export const GET: ApiHandler = async (req, res) => {
@@ -109,7 +109,7 @@ export const GET: ApiHandler = async (req, res) => {
 
 ## Reading the request body
 
-For `POST`, `PUT`, and `PATCH` requests with `Content-Type: application/json`, the body is automatically parsed and available as `req.body`:
+For `POST`, `PUT`, `PATCH` and `DELETE` requests with `Content-Type: application/json`, the body is automatically parsed and available as `req.body`:
 
 ```ts
 export const POST: ApiHandler = async (req, res) => {
@@ -118,7 +118,9 @@ export const POST: ApiHandler = async (req, res) => {
 }
 ```
 
-For other content types, `req.body` is the raw `Buffer`.
+For other content types, `req.body` is the raw `Buffer`. An empty body is `undefined`. The built dispatcher limits parsed bodies to 1 MiB; malformed JSON/parameters return 400, oversized bodies return 413 and unsupported methods return 405. HEAD falls back to GET when no HEAD handler is exported and sends no response body.
+
+Netlify and Cloudflare adapt Web requests/responses to the documented Node-style API. For portable handlers, use the parsed request fields, header access, `status()`, `json()`, `write()`/`end()`, `setHeader()`/`getHeader()`/`getHeaders()`/`removeHeader()`, `writeHead()` and `flushHeaders()`. Their response bridges preserve separate cookies, streaming, backpressure and cancellation; they do not implement every socket-specific `IncomingMessage`/`ServerResponse` method. Use a native Node host for handlers that require those methods.
 
 ---
 
@@ -209,37 +211,18 @@ export const POST: ApiHandler = async (_req, res) => {
 
 ## Custom server integration
 
-When integrating the server bundle with a custom Node.js server (Express, Fastify, Hono, etc.) instead of the built-in adapters, wrap each API handler call with `runWithRequestContext` so that composables like `useCookie` and `useSession` have access to the current `req`/`res`:
+For custom Node hosting, use the exported `dispatchRequest`: it runs server middleware, matches APIs, parses bodies, provides `res.json()`/`res.status()`, and establishes the request context automatically.
 
 ```ts
-// Express custom server
 import express from 'express'
-import { handler, apiRoutes, runWithRequestContext } from './dist/server/server.js'
-
+import { dispatchRequest } from './dist/server/server.js'
 const app = express()
-
-app.all('/api/*', async (req, res) => {
-  for (const route of apiRoutes) {
-    const params = matchApiPattern(route.path, req.path)
-    if (params) {
-      req.params = params
-      const fn = route.handlers[req.method.toLowerCase()] ?? route.handlers.default
-      if (fn) {
-        await runWithRequestContext(req, res, () => fn(req, res))
-        return
-      }
-    }
-  }
-  res.status(404).send('Not Found')
-})
-
-app.use((req, res) => handler(req, res))
+app.use(express.static('dist/client', { index: false }))
+app.use(dispatchRequest)
 app.listen(3000)
 ```
 
-`runWithRequestContext(req, res, fn)` runs `fn` inside the per-request `AsyncLocalStorage` context. Without it, `useCookie`, `useSession`, and other server-side composables cannot access the current request or response.
-
-> The built-in preview server and all platform adapters (Vercel, Netlify, Cloudflare) call `runWithRequestContext` automatically — you only need this when building a custom integration.
+If you deliberately dispatch individual handlers yourself, wrap each call in `runWithRequestContext(req, res, fn)` and supply the routing/body/response helpers too. Web Request/Response frameworks such as Hono need a transport bridge; these exports take Node request/response objects. Built preview and generated adapters use the shared dispatcher.
 
 ---
 

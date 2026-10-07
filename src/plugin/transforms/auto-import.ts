@@ -35,6 +35,8 @@ const RUNTIME_MAP: Record<string, string> = {
   useExpose: '@jasonshimmy/custom-elements-runtime',
   useSlots: '@jasonshimmy/custom-elements-runtime',
   useHost: '@jasonshimmy/custom-elements-runtime',
+  useLazyContent: '@jasonshimmy/custom-elements-runtime',
+  useFormInternals: '@jasonshimmy/custom-elements-runtime',
   provide: '@jasonshimmy/custom-elements-runtime',
   inject: '@jasonshimmy/custom-elements-runtime',
   createComposable: '@jasonshimmy/custom-elements-runtime',
@@ -78,6 +80,7 @@ const FRAMEWORK_MAP: Record<string, string> = {
   normalizeContentPath: '@jasonshimmy/vite-plugin-cer-app/composables',
   useContentBreadcrumbs: '@jasonshimmy/vite-plugin-cer-app/composables',
   useContentHeadings: '@jasonshimmy/vite-plugin-cer-app/composables',
+  renderContent: '@jasonshimmy/vite-plugin-cer-app/composables',
   useContentSeo: '@jasonshimmy/vite-plugin-cer-app/composables',
   useActiveHeadings: '@jasonshimmy/vite-plugin-cer-app/composables',
 }
@@ -90,12 +93,6 @@ const ALL_MAPS = [RUNTIME_MAP, DIRECTIVE_MAP, FRAMEWORK_MAP]
  * Returns true if the file already manually imports from the given source module.
  * When true, we skip auto-injecting identifiers from that module to avoid duplicates.
  */
-function isAlreadyImported(code: string, sourceModule: string): boolean {
-  return (
-    code.includes(`from '${sourceModule}'`) ||
-    code.includes(`from "${sourceModule}"`)
-  )
-}
 
 /**
  * Builds minimal import statements containing only the identifiers actually
@@ -111,7 +108,9 @@ function buildMinimalImportStatements(code: string, maps: Record<string, string>
   for (const map of maps) {
     for (const [identifier, sourceModule] of Object.entries(map)) {
       // Skip if the file already imports from this module.
-      if (isAlreadyImported(code, sourceModule)) continue
+      const importedNames = [...code.matchAll(/import\s*\{([^}]+)\}\s*from\s*["'][^"']+["']/g)]
+        .flatMap((match) => match[1].split(',').map((binding) => binding.trim().replace(/^type\s+/, '').split(/\s+as\s+/).pop()))
+      if (importedNames.includes(identifier)) continue
       // Skip if identifier not referenced in the file.
       const pattern = new RegExp(`\\b${identifier}\\b`)
       if (!pattern.test(code)) continue

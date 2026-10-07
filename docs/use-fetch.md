@@ -33,12 +33,15 @@ The fetch fires automatically when the component mounts (`useOnConnected`). `dat
 ```ts
 // app/pages/posts.ts
 export const loader = async () => {
-  const { data: posts } = await useFetch<Post[]>('/api/posts')
+  const { data: posts, error } = await useFetch<Post[]>('https://api.example.com/posts')
+  if (error) throw error
   return { posts }
 }
 ```
 
-When called outside a component context (e.g. in a `loader` or server middleware), `useFetch` returns a thenable `UseFetchResult`. Awaiting it blocks the loader until the fetch completes — the response is serialised into `window.__CER_DATA__` for client hydration.
+When called outside a component context (e.g. in a `loader` or server middleware), `useFetch` returns a thenable `UseFetchResult`. Awaiting it blocks the loader until the fetch completes. Fetch cache results are serialized into `window.__CER_FETCH_DATA__` for hydrating pages; the loader's returned object separately populates `window.__CER_DATA__`.
+
+The helper delegates to native `fetch`. Browser calls may use relative URLs, but server-side calls need absolute URLs; CER does not resolve `/api/...` against the incoming request or dispatch it internally. Configure a public absolute API origin for universal loaders. Request cookies and authorization are not forwarded automatically. Fetch errors populate `error`; throw it from a loader when the page should render an error boundary.
 
 ---
 

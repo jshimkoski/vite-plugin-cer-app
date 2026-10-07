@@ -4,6 +4,7 @@ import { existsSync, renameSync } from 'node:fs'
 import type { ResolvedCerConfig } from './dev-server.js'
 import { getGeneratedDir, writeGeneratedDir } from './generated-dir.js'
 import { ENTRY_SERVER_TEMPLATE } from '../runtime/entry-server-template.js'
+import { serverContentSource } from './server-content.js'
 
 /**
  * Resolves the client build entry point for an SSR/SSG build.
@@ -55,6 +56,7 @@ export async function buildSSR(
     ...viteUserConfig,
     root: config.root,
     build: {
+      manifest: true,
       ...viteUserConfig.build,
       outDir: clientOutDir,
       ssrManifest: true,
@@ -74,7 +76,7 @@ export async function buildSSR(
   }
 
   // Generate server entry source inline via a virtual plugin
-  const serverEntryCode = generateServerEntryCode()
+  const serverEntryCode = serverContentSource(clientOutDir) + generateServerEntryCode()
   const VIRTUAL_SERVER_ENTRY = 'virtual:cer-server-entry'
   const RESOLVED_SERVER_ENTRY = '\0virtual:cer-server-entry'
 

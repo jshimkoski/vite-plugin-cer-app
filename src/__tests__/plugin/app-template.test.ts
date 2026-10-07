@@ -45,8 +45,8 @@ describe('app-template (source content)', () => {
     expect(src).toContain('custom-elements-runtime/router')
   })
 
-  it('imports virtual:cer-jit-css', () => {
-    expect(src).toContain('virtual:cer-jit-css')
+  it('omits the unconsumed CSS string import', () => {
+    expect(src).not.toContain("import 'virtual:cer-jit-css'")
   })
 
   it('imports virtual:cer-jit-init before virtual:cer-layouts so JIT CSS is enabled before elements upgrade', () => {
@@ -98,7 +98,7 @@ describe('generateAppEntryTemplate', () => {
 
   it('still includes all standard template content', () => {
     const out = generateAppEntryTemplate()
-    expect(out).toContain('virtual:cer-jit-css')
+    expect(out).not.toContain("import 'virtual:cer-jit-css'")
     expect(out).toContain('virtual:cer-routes')
     expect(out).toContain('export { router }')
   })

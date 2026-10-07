@@ -5,6 +5,8 @@ import type { IncomingMessage } from 'node:http'
 export interface CerAppIntegration {
   /** Stable name used in diagnostics. */
   name: string
+  /** Semantic colors contributed to build and runtime CSS. App values override these. */
+  customColors?: Record<string, Record<string, string>>
   /** Resolve a rendered custom-element tag to its side-effect registration module. */
   componentResolver?: (tag: string) => string | undefined
   /** Imports that must run once in the generated client entry (for example global CSS). */
@@ -137,7 +139,27 @@ export interface I18nConfig {
 }
 
 /** Global Static Site Generation (SSG) configuration. Controls which routes are pre-rendered and at what concurrency. */
+export interface SitemapPageMetadata {
+  /** Actual content modification date, never automatically set to build time. */
+  lastmod?: string
+  images?: string[]
+  /** Exclude deliberately nonindexable pages. */
+  exclude?: boolean
+}
+export interface NetlifyFormSchema {
+  name: string
+  fields: string[]
+  honeypot?: string
+}
 export interface SsgConfig {
+  /** Retain intermediates for custom consumers. Auto retains hybrid/fallback/adapter builds. */
+  keepServer?: boolean
+  /** Control entry downloading independently of hydration, per concrete generated path. */
+  entryPreload?: boolean | ((path: string) => boolean)
+  /** Metadata callback for successfully rendered sitemap entries. */
+  sitemap?: (path: string) => SitemapPageMetadata | Promise<SitemapPageMetadata>
+  /** Optional Netlify registration artifacts, generated from one application schema. */
+  netlifyForms?: NetlifyFormSchema[]
   /**
    * Routes to pre-render.
    * - `'auto'` (default) — pre-render every static route discovered in `app/pages/`.
@@ -166,6 +188,9 @@ export interface SsgConfig {
 
 /** JIT (Just-In-Time) CSS configuration for shadow-DOM style injection. */
 export interface JitCssConfig {
+  /** Static mode supplies scanned CSS to each shadow root without browser JIT. */
+  mode?: 'runtime' | 'static'
+  safelist?: string[]
   /** Additional glob patterns for content files scanned by the JIT CSS engine. */
   content?: string[]
   /** Enable every extended color family or list only the families to retain. Defaults to `false`. */
@@ -297,6 +322,8 @@ export interface CerAppConfig {
   autoImports?: AutoImportsConfig
   /** UI/framework integrations composed into generated entries and component code splitting. */
   integrations?: CerAppIntegration[]
+  /** Options forwarded to Vite preview (including HTTPS certificates and headers). */
+  preview?: import('vite').PreviewOptions
   port?: number
   /**
    * Runtime configuration accessible via `useRuntimeConfig()`.

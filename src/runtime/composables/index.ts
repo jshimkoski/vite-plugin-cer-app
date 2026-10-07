@@ -41,3 +41,6 @@ export type {
 } from './use-content-page.js'
 export { useActiveHeadings } from './use-active-headings.js'
 export type { ActiveHeadingsOptions } from './use-active-headings.js'
+
+export { renderContent } from './render-content.js'
+export type { RenderContentOptions, ContentComponentProps } from './render-content.js'

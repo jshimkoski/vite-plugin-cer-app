@@ -93,15 +93,18 @@ export function generateSitemapXml(
   siteUrl: string,
   paths: string[],
   lastmod?: string,
+  metadata: Record<string, import('../types/config.js').SitemapPageMetadata> = {},
 ): string {
-  const urls = paths.map((p) => {
+  const urls = paths.filter((p) => !metadata[p]?.exclude).map((p) => {
     const loc = escapeXml(siteUrl + (p === '/' ? '' : p))
-    const modified = lastmod ? `\n    <lastmod>${lastmod}</lastmod>` : ''
-    return `  <url>\n    <loc>${loc}</loc>${modified}\n  </url>`
+    const date = metadata[p]?.lastmod ?? lastmod
+    const modified = date ? `\n    <lastmod>${escapeXml(date)}</lastmod>` : ''
+    const images = (metadata[p]?.images ?? []).map((image) => `\n    <image:image><image:loc>${escapeXml(new URL(image, siteUrl).href)}</image:loc></image:image>`).join('')
+    return `  <url>\n    <loc>${loc}</loc>${modified}${images}\n  </url>`
   })
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
-    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"${Object.values(metadata).some((item) => item.images?.length) ? ' xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"' : ''}>`,
     ...urls,
     '</urlset>',
     '',

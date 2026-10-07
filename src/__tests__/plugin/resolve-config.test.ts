@@ -141,9 +141,8 @@ describe('resolveConfig', () => {
 
   it('sets jitCss.content defaults relative to srcDir', () => {
     const cfg = resolveConfig({}, ROOT)
-    expect(cfg.jitCss.content).toContain('/project/app/pages/**/*.ts')
-    expect(cfg.jitCss.content).toContain('/project/app/components/**/*.ts')
-    expect(cfg.jitCss.content).toContain('/project/app/layouts/**/*.ts')
+    expect(cfg.jitCss.content).toContain('/project/app/**/*.{ts,tsx,js,html}')
+    expect(cfg.jitCss.content).toContain('/project/content/**/*.{md,html}')
   })
 
   it('resolves user jitCss globs relative to the configured project root', () => {
@@ -161,9 +160,9 @@ describe('resolveConfig', () => {
     expect(cfg.jitCss.extendedColors).toBe(false)
   })
 
-  it('defaults jitCss.customColors to undefined', () => {
+  it('defaults jitCss.customColors to an empty contribution', () => {
     const cfg = resolveConfig({}, ROOT)
-    expect(cfg.jitCss.customColors).toBeUndefined()
+    expect(cfg.jitCss.customColors).toEqual({})
   })
 
   it('passes jitCss.customColors through unchanged', () => {

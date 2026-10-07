@@ -54,6 +54,7 @@ describe.skipIf(!launcherExists)('Vercel SSR launcher — integration', () => {
   let closeServer: () => Promise<void>
 
   beforeAll(async () => {
+    delete (globalThis as Record<string, unknown>).__CER_CONTENT_STORE__
     const mod = await import(LAUNCHER_PATH)
     launcher = mod.default as LauncherFn
     const srv = await startServer(launcher)
@@ -61,7 +62,22 @@ describe.skipIf(!launcherExists)('Vercel SSR launcher — integration', () => {
     closeServer = srv.close
   })
 
-  // afterAll not available at top level — server runs for suite duration
+  it('renders bundled content loader data outside the source project directory', async () => {
+    const srv = await startServer(launcher)
+    try { expect(await (await fetch(`${srv.url}/content-doc`)).text()).toContain('data-cy="content-doc-title"') }
+    finally { await srv.close() }
+  })
+
+  it('keeps route/query state isolated across concurrent loader awaits and renders', async () => {
+    const srv = await startServer(launcher)
+    try {
+      const bodies = await Promise.all(['alpha', 'beta'].map(async token => (await fetch(srv.url + '/route-info?token=' + token)).text()))
+      for (const [index, token] of ['alpha', 'beta'].entries()) {
+        expect(bodies[index]).toContain('<code>' + token + ':/route-info</code>')
+        expect(bodies[index]).toContain('<code>Route Info Page</code>')
+      }
+    } finally { await srv.close() }
+  })
 
   // ─── HTML rendering ────────────────────────────────────────────────────────
 

@@ -96,46 +96,21 @@ describe('runVercelAdapter — SSR mode', () => {
     await runVercelAdapter(root)
     expect(existsSync(join(root, '.vercel/output/functions/index.func/index.js'))).toBe(true)
     const launcher = readText(root, '.vercel/output/functions/index.func/index.js')
-    expect(launcher).toContain("import { handler, isrHandler, apiRoutes, runServerMiddleware, runWithRequestContext } from './server/server.js'")
-    expect(launcher).toContain('export default async function cerAppHandler')
+    expect(launcher).toContain('dispatchRequest')
   })
 
-  it('launcher uses isrHandler for SSR fallback (enables ISR stale-while-revalidate)', async () => {
-    await runVercelAdapter(root)
-    const launcher = readText(root, '.vercel/output/functions/index.func/index.js')
-    expect(launcher).toContain('isrHandler')
-    expect(launcher).toContain('await isrHandler(req, res)')
-  })
 
   it('launcher uses native Node.js streaming — passes real req/res directly, no TransformStream', async () => {
     await runVercelAdapter(root)
     const launcher = readText(root, '.vercel/output/functions/index.func/index.js')
     // Vercel injects real Node.js req/res, so the launcher passes them straight through.
     // No TransformStream mock is needed — Node.js handles chunked transfer natively.
-    expect(launcher).toContain('await isrHandler(req, res)')
+    expect(launcher).toContain('dispatchRequest')
     expect(launcher).not.toContain('TransformStream')
   })
 
-  it('launcher routes /api/* requests to apiRoutes', async () => {
-    await runVercelAdapter(root)
-    const launcher = readText(root, '.vercel/output/functions/index.func/index.js')
-    expect(launcher).toContain("urlPath.startsWith('/api/')")
-    expect(launcher).toContain('matchApiPattern')
-  })
 
-  it('launcher attaches req.query (parsed query string) before calling handler', async () => {
-    await runVercelAdapter(root)
-    const launcher = readText(root, '.vercel/output/functions/index.func/index.js')
-    expect(launcher).toContain('parseQuery')
-    expect(launcher).toContain('req.query = parseQuery(')
-  })
 
-  it('launcher attaches req.body (parsed JSON body) before calling handler', async () => {
-    await runVercelAdapter(root)
-    const launcher = readText(root, '.vercel/output/functions/index.func/index.js')
-    expect(launcher).toContain('parseBody')
-    expect(launcher).toContain('req.body = await parseBody(req)')
-  })
 
   it('writes package.json with type:module in function dir', async () => {
     await runVercelAdapter(root)
@@ -143,14 +118,14 @@ describe('runVercelAdapter — SSR mode', () => {
     expect(pkg.type).toBe('module')
   })
 
-  it('writes .vc-config.json with nodejs20.x runtime', async () => {
+  it('writes .vc-config.json with nodejs24.x runtime', async () => {
     await runVercelAdapter(root)
     const vc = readJson(root, '.vercel/output/functions/index.func/.vc-config.json') as {
       runtime: string
       handler: string
       launcherType: string
     }
-    expect(vc.runtime).toBe('nodejs20.x')
+    expect(vc.runtime).toBe('nodejs24.x')
     expect(vc.handler).toBe('index.js')
     expect(vc.launcherType).toBe('Nodejs')
   })

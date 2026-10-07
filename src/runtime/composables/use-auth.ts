@@ -83,9 +83,12 @@ export function useAuth(sessionKey = 'auth'): AuthComposable {
   // __CER_AUTH_STORE__ is only present in Node.js (tree-shaken on client).
   const authStore = g['__CER_AUTH_STORE__'] as { getStore(): unknown } | undefined
   let user: AuthUser | null = null
+  let context: { currentUser: AuthUser | null } | undefined
 
   if (authStore) {
-    user = (authStore.getStore() as AuthUser | null) ?? null
+    const value = authStore.getStore() as AuthUser | { currentUser: AuthUser | null } | null
+    if (value && 'currentUser' in value && !('provider' in value)) context = value as { currentUser: AuthUser | null }
+    user = context ? context.currentUser : value as AuthUser | null ?? null
   } else {
     // Client: read from the global hydrated by the client entry.
     user = (g['__CER_AUTH_USER__'] as AuthUser | null) ?? null
@@ -93,11 +96,11 @@ export function useAuth(sessionKey = 'auth'): AuthComposable {
 
   return {
     get user() {
-      return user
+      return context ? context.currentUser : user
     },
 
     get loggedIn() {
-      return user !== null
+      return (context ? context.currentUser : user) !== null
     },
 
     login(provider: string) {
@@ -117,8 +120,12 @@ export function useAuth(sessionKey = 'auth'): AuthComposable {
         // Also clear the local user reference so the current render sees null.
         user = null
         // Clear the ALS store value so concurrent requests are unaffected.
-        const store = (g['__CER_AUTH_STORE__'] as { enterWith(v: unknown): void } | undefined)
-        if (store) store.enterWith(null)
+        if (context) context.currentUser = null
+        else {
+          // Compatibility with custom/older Node bundles that store the user directly.
+          const store = g['__CER_AUTH_STORE__'] as { enterWith?: (v: unknown) => void } | undefined
+          store?.enterWith?.(null)
+        }
       }
     },
   }

@@ -118,11 +118,13 @@ describe('Content doc — queryContent("/docs/getting-started").first()', () => 
 
     it('includes markdown component registration hints in initial HTML', () => {
       cy.request('/content-doc').then((response) => {
-        expect(response.body).to.include('<ks-badge>Docs Badge</ks-badge>')
+        expect(response.body).to.include('<ks-badge')
+        expect(response.body).to.include('shadowrootmode="open"')
         if (mode === 'dev') {
           expect(response.body).to.include('/@cer/app.ts')
         } else {
-          expect(response.body).to.match(/ks-badge-[^"']+\.js/)
+          // Content implementations load per document; their chunks need no eager preload.
+          expect(response.body).to.include('Docs Badge')
         }
         expect(response.body).to.include('Docs Badge')
       })

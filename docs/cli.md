@@ -106,15 +106,16 @@ cer-app preview --port 8080
 
 **Behavior:**
 
-- If `dist/server/server.js` exists (or `--ssr` is passed), starts an SSR preview server
-- Static assets from `dist/client/` are served first; HTML requests fall through to the SSR handler
-- Otherwise, starts a static file server with SPA fallback (serves `index.html` for unknown paths)
-- Returns 404 for paths not found in `dist/` (static mode only)
-- **Path traversal protection:** all file requests are validated against the `dist/` root — requests attempting to escape it (e.g. `GET /../../../../etc/passwd`) receive a `400` response
-- **Security headers:** every response includes `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and `Referrer-Policy: strict-origin-when-cross-origin`
-- **Smart Cache-Control:** Vite content-hashes assets placed in `/assets/` — these are served with `Cache-Control: public, max-age=31536000, immutable`. All other files (HTML, etc.) use `Cache-Control: no-cache` so browsers always revalidate
-- **Graceful shutdown:** on `SIGTERM` or `SIGINT`, the server stops accepting new connections and waits for in-flight requests to finish before exiting. A 10-second timeout triggers a forced exit if connections do not drain
-- **Request timeouts:** `headersTimeout` (10 s) aborts connections that stall while sending headers; `requestTimeout` (30 s) limits the total time allowed per request/response cycle, protecting against slow-client attacks
+- Uses Vite preview for HTTP/HTTPS, MIME types, compression and media range requests. Configure supported options under `preview` in `cer.config.ts`; CLI host/port override those fields.
+- Loads the server for SSR and hybrid/fallback SSG builds. `--ssr` explicitly requires a retained server bundle. A pure SSG build stays static even when intermediates were retained only for a custom consumer.
+- Existing public assets use Vite's transport. Document/API requests enter CER's shared dispatcher, including document URLs containing dots. Hybrid document middleware runs before SPA shells, prerendered HTML and SSR/ISR.
+- Pure SSG serves known generated paths and a dedicated noindex 404 for unknown paths. SPA serves its shell for application routes. Private server/client directories and build manifests are blocked.
+- Sets `nosniff`, `DENY` and `strict-origin-when-cross-origin` headers by default; `preview.headers` can override them. `/assets/` receives immutable cache headers; other responses begin with `no-cache`, which application middleware can override.
+- CORS is disabled unless explicitly configured; Vary headers from custom CORS/middleware can deliberately bypass shared ISR.
+- SIGINT/SIGTERM closes the preview listener and destroys tracked connections. Preview does not promise graceful draining of unfinished responses.
+- Where supported by the underlying server, header receipt has a 10-second timeout and incoming request receipt has a 30-second timeout. These are not limits on loader execution or the total response-rendering duration.
+
+Preview is a local build check, not a production hosting server.
 
 ---
 
@@ -156,6 +157,7 @@ exit non-zero on failure, making them suitable for `npm run validate` and CI.
 
 ```sh
 cer-app check links
+cer-app check seo --site-url https://example.com
 cer-app check performance --expected-pages 201
 cer-app check lighthouse --url http://127.0.0.1:4173 --runs 3
 ```
@@ -164,6 +166,7 @@ cer-app check lighthouse --url http://127.0.0.1:4173 --runs 3
 |---|---|
 | `links` | Crawls generated HTML and verifies internal routes and fragments. |
 | `performance` | Enforces HTML, entry-JavaScript, and total initial-JavaScript gzip budgets. |
+| `seo` | Validates generated canonicals, sitemap membership and noindex 404 output. |
 | `lighthouse` | Requires median 100 scores for performance, accessibility, best practices, and SEO. |
 
 `links` and `performance` inspect `dist/` by default and accept `--root` and
@@ -205,28 +208,29 @@ cer-app adapt --platform vercel --root ./packages/my-app
 
 **Vercel behavior (`--platform vercel`):**
 
-- Writes `.vercel/output/` following the [Vercel Build Output API v3](https://vercel.com/docs/build-output-api/v3).
-- SSR builds: creates a Node.js Serverless Function at `.vercel/output/functions/index.func/` that routes `/api/*` to the exported API handlers and passes everything else to the SSR handler. Content-hashed assets are copied to `.vercel/output/static/` for CDN delivery.
-- SPA/SSG builds: copies static files to `.vercel/output/static/` with a SPA fallback route.
-- Deploy with `vercel deploy --prebuilt`.
+- Writes `.vercel/output/` using the [Build Output API](https://vercel.com/docs/build-output-api/v3).
+- SSR/hybrid/fallback builds use a bundled Node.js 24 function. The function includes lazy server chunks, external JavaScript dependencies and private prerendered documents; document routing and middleware use the shared dispatcher.
+- Public assets and generated sitemap/robots/form registration files are copied to `.vercel/output/static/`.
+- Pure SSG uses generated documents plus a 404 fallback; SPA uses its index shell fallback.
+- Deploy with `vercel deploy --prebuilt`. Native dependencies or arbitrary filesystem assets require additional packaging.
 
 **Netlify behavior (`--platform netlify`):**
 
-- Writes `netlify/functions/ssr.mjs` — a Netlify Functions v2 bridge that converts the Web `Request`/`Response` API to the Node.js-style handler used by the server bundle. Handles `/api/*` routing inline.
-- Copies content-hashed assets to `.netlify/publish/` (no `index.html` — HTML is served by the function).
-- Writes `netlify.toml` with the publish directory, `Cache-Control` headers for assets, and a catch-all redirect to the SSR function.
-- SPA/SSG builds: writes `netlify.toml` only (no function needed).
-- SSR responses are streamed via the Web Streams `TransformStream` API — HTML chunks are forwarded to the client as they are written rather than waiting for the full page to render.
-- Deploy with `netlify deploy`.
+- SSR/hybrid/fallback builds write `netlify/functions/ssr.mjs`, a Web Request/Response bridge to the shared Node-style dispatcher. Prerendered documents remain private in `dist` and are served after middleware.
+- Copies public client assets and generated public metadata to `.netlify/publish/`; writes `netlify.toml` with asset caching and the function fallback.
+- Pure SSG and SPA need no CER function. Their configuration serves a 404 document or SPA shell respectively.
+- The shared bridge exposes its Response on first write/flush, preserving progressive streaming, cookies, backpressure and bodyless HEAD/204/205/304 responses.
+- Deploy with `netlify deploy`; verify the platform's runtime and bundled dependencies in a deployment smoke test.
 
 **Cloudflare behavior (`--platform cloudflare`):**
 
-- Writes `dist/_worker.js` — a Cloudflare Pages [Advanced Mode](https://developers.cloudflare.com/pages/functions/advanced-mode/) worker. The client HTML template is inlined in the worker as a string constant so `node:fs` is never needed at runtime.
-- Requires the `nodejs_compat` compatibility flag (written automatically into `wrangler.toml`) for `AsyncLocalStorage` and `node:stream` support.
-- Copies content-hashed assets to `dist/` alongside the worker. Cloudflare Pages CDN serves matched static files first; all other requests fall through to `_worker.js`.
-- SPA/SSG builds: no worker generated — Cloudflare Pages serves `dist/` as a static site.
-- SSR responses are streamed via the Web Streams `TransformStream` API — HTML chunks are forwarded to the client as they are written rather than waiting for the full page to render.
-- Deploy with `wrangler pages deploy dist`.
+- SSR/hybrid/fallback builds bundle the full server graph into `dist/_worker.js`, using Pages [Advanced Mode](https://developers.cloudflare.com/pages/functions/advanced-mode/). The client template is embedded; CER's document serving does not require filesystem access at runtime.
+- `wrangler.toml` uses compatibility date `2025-09-15`, enables `nodejs_compat` (including filesystem imports and full process support), and declares `pages_build_output_dir`. User dependencies must be compatible with the Workers runtime.
+- Advanced-mode workers own requests. The worker forwards public assets through `env.ASSETS`; hybrid prerendered documents pass through middleware, while server/SPA/ISR routes keep their declared behavior.
+- Removes server/client intermediates and build manifests from the deployment asset tree after bundling. Rebuild before previewing with CER or selecting another adapter.
+- Pure SSG/SPA need no worker. The shared Web bridge provides progressive streaming for dynamic responses.
+- Prints actual raw/gzip worker size and warns above CER's 1 MiB gzip advisory budget. This is not a platform plan limit; Wrangler/deployment validates current platform limits.
+- Deploy with `wrangler pages deploy dist`; smoke-test first with `wrangler pages dev dist` and then the actual deployment.
 
 **Auto-run via `cer.config.ts`:**
 

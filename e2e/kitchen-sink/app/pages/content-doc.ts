@@ -30,7 +30,7 @@ component('page-content-doc', () => {
             `)}
           </ul>
         </nav>
-        <div data-cy="content-doc-body">${unsafeHTML(doc.value.body)}</div>
+        <div data-cy="content-doc-body">${renderContent(doc.value)}</div>
       ` : html`<p data-cy="content-doc-missing">Document not found.</p>`}
     </div>
   `

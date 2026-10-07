@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -26,11 +26,17 @@ export interface LighthouseAuditOptions {
   categories?: string[]
   /** Chromium-family executable. Defaults to CHROME_PATH or a known platform installation. */
   chromePath?: string
+  /** Persistent artifacts directory. Reports are never discarded on failure. */
+  reportsDir?: string
+  ignoreCertificateErrors?: boolean
+  onRun?: (url: string, run: number, scores: Record<string, number>, metrics: Record<string, number>) => void
 }
 
 export interface LighthouseUrlReport {
   url: string
   medians: Record<string, number>
+  metrics: Record<string, number>
+  reportsDir: string
 }
 
 export interface ChromiumDiscoveryOptions {
@@ -94,11 +100,13 @@ export async function runLighthouseAudit(
   const attempts = Math.max(1, options.attempts ?? 3)
   const chromePath = options.chromePath?.trim() || findChromiumExecutable()
   const environment = chromePath ? { ...process.env, CHROME_PATH: chromePath } : process.env
-  const reportsDir = await mkdtemp(join(tmpdir(), 'cer-lighthouse-'))
+  if (!existsSync(cli)) throw new Error('Install lighthouse in the application to run this optional check.')
+  const reportsDir = options.reportsDir ? resolve(options.reportsDir) : await mkdtemp(join(tmpdir(), 'cer-lighthouse-'))
+  await mkdir(reportsDir, { recursive: true })
   const result: LighthouseUrlReport[] = []
 
-  try {
     for (const [urlIndex, url] of options.urls.entries()) {
+      const metrics: Record<string, number[]> = {}
       const scores = Object.fromEntries(categories.map((category) => [category, [] as number[]]))
       for (let runIndex = 0; runIndex < runs; runIndex += 1) {
         const outputPath = join(reportsDir, `${urlIndex}-${runIndex}.json`)
@@ -106,7 +114,7 @@ export async function runLighthouseAudit(
           cli,
           url,
           '--quiet',
-          '--chrome-flags=--headless --no-sandbox',
+          `--chrome-flags=--headless --no-sandbox${options.ignoreCertificateErrors ? ' --ignore-certificate-errors' : ''}`,
           `--only-categories=${categories.join(',')}`,
           '--output=json',
           `--output-path=${outputPath}`,
@@ -130,20 +138,23 @@ export async function runLighthouseAudit(
 
         const report = JSON.parse(await readFile(outputPath, 'utf8')) as {
           categories: Record<string, { score?: number }>
+          audits?: Record<string, { numericValue?: number }>
         }
+        const rawMetrics = Object.fromEntries(['first-contentful-paint', 'largest-contentful-paint', 'total-blocking-time', 'cumulative-layout-shift'].map((key) => [key, report.audits?.[key]?.numericValue ?? 0]))
+        for (const [key, value] of Object.entries(rawMetrics)) (metrics[key] ??= []).push(value)
+        options.onRun?.(url, runIndex + 1, Object.fromEntries(categories.map((key) => [key, report.categories[key]?.score ?? 0])), rawMetrics)
         for (const category of categories) {
           scores[category].push(report.categories[category]?.score ?? 0)
         }
       }
       result.push({
         url,
+        reportsDir,
+        metrics: Object.fromEntries(Object.entries(metrics).map(([key, values]) => [key, median(values)])),
         medians: Object.fromEntries(
           categories.map((category) => [category, median(scores[category])]),
         ),
       })
     }
     return result
-  } finally {
-    await rm(reportsDir, { recursive: true, force: true })
-  }
 }

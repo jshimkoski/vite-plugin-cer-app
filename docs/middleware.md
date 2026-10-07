@@ -193,7 +193,7 @@ type ServerMiddleware = (
 - Call `next()` to pass the request to the next handler.
 - Call `next(err)` with an error to short-circuit the chain. The response status defaults to `500`; attach a numeric `.status` to the error object to send a different status code.
 - Throw (synchronously or via a rejected Promise) to produce the same result as `next(err)`.
-- If you do not call `next()` at all (e.g. you called `res.end()`), the chain stops and subsequent handlers (API routes, SSR) will not run.
+- A middleware that completes the response with `res.end()` stops the chain without calling `next()`. It must either call `next()` or complete the response; doing neither leaves the request waiting.
 
 **Custom status codes in server middleware**
 

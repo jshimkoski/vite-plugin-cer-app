@@ -13,7 +13,8 @@ export default {
       brand: { '500': '#7c3aed', '100': '#ede9fe', '900': '#4c1d95' },
     },
   },
-  ssg: { routes: 'auto', concurrency: 2, inlineStylesheets: 20 * 1024 },
+  // Intentional error routes remain available through SSR fallback during SSG tests.
+  ssg: { routes: 'auto', concurrency: 2, inlineStylesheets: 20 * 1024, failOnError: false, fallback: true },
   autoImports: { runtime: true, components: true, composables: true },
   runtimeConfig: {
     public: {

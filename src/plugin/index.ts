@@ -56,6 +56,14 @@ const RESOLVED_APP_ENTRY = '\0cer-app-entry'
 /**
  * Fills in default values for all config fields and resolves absolute paths.
  */
+function mergeIntegrationColors(config: CerAppConfig): Record<string, Record<string, string>> {
+  const colors: Record<string, Record<string, string>> = {}
+  for (const source of [...(config.integrations ?? []).map((i) => i.customColors), config.jitCss?.customColors]) {
+    for (const [name, shades] of Object.entries(source ?? {})) colors[name] = { ...colors[name], ...shades }
+  }
+  return colors
+}
+
 export function resolveConfig(userConfig: CerAppConfig, root: string = process.cwd()): ResolvedCerConfig {
   const mode = userConfig.mode ?? 'spa'
   const srcDir = resolve(root, userConfig.srcDir ?? 'app')
@@ -77,6 +85,10 @@ export function resolveConfig(userConfig: CerAppConfig, root: string = process.c
     serverMiddlewareDir: join(root, 'server/middleware'),
     port: userConfig.port ?? 3000,
     ssg: {
+      keepServer: userConfig.ssg?.keepServer ?? (userConfig.adapter ? true : undefined),
+      entryPreload: userConfig.ssg?.entryPreload,
+      sitemap: userConfig.ssg?.sitemap,
+      netlifyForms: userConfig.ssg?.netlifyForms,
       routes: userConfig.ssg?.routes ?? 'auto',
       concurrency: userConfig.ssg?.concurrency ?? 4,
       fallback: userConfig.ssg?.fallback ?? false,
@@ -92,15 +104,16 @@ export function resolveConfig(userConfig: CerAppConfig, root: string = process.c
       scrollToFragment: userConfig.router?.scrollToFragment,
     },
     jitCss: {
+      mode: userConfig.jitCss?.mode,
+      safelist: userConfig.jitCss?.safelist,
       content: userConfig.jitCss?.content
         ? userConfig.jitCss.content.map((pattern) => resolve(root, pattern))
         : [
-            `${srcDir}/pages/**/*.ts`,
-            `${srcDir}/components/**/*.ts`,
-            `${srcDir}/layouts/**/*.ts`,
+            `${srcDir}/**/*.{ts,tsx,js,html}`,
+            `${resolve(root, userConfig.content?.dir ?? 'content')}/**/*.{md,html}`,
           ],
       extendedColors: userConfig.jitCss?.extendedColors ?? false,
-      customColors: userConfig.jitCss?.customColors,
+      customColors: mergeIntegrationColors(userConfig),
     },
     autoImports: {
       components: userConfig.autoImports?.components ?? true,
@@ -108,6 +121,8 @@ export function resolveConfig(userConfig: CerAppConfig, root: string = process.c
       directives: userConfig.autoImports?.directives ?? true,
       runtime: userConfig.autoImports?.runtime ?? true,
     },
+    integrations: userConfig.integrations,
+    contentComponents: userConfig.content?.components,
     globalImports: [...new Set(
       (userConfig.integrations ?? []).flatMap((integration) => integration.globalImports ?? []),
     )],
@@ -159,11 +174,11 @@ async function generateVirtualModule(
     case RESOLVED_IDS.error:
       return generateErrorCode(config.srcDir)
     case RESOLVED_IDS.contentComponents:
-      return generateContentComponentsCode(config.componentsDir, config.contentDir)
+      return generateContentComponentsCode(config.componentsDir, config.contentDir, ssr, config.integrations, config.contentComponents)
     case RESOLVED_IDS.i18n:
       return generateI18nModule(config.i18n)
     case RESOLVED_IDS.jitInit:
-      return generateJitInitModule(config.jitCss)
+      return generateJitInitModule(config.jitCss, ssr)
     default:
       return null
   }
@@ -195,7 +210,8 @@ function generateI18nModule(
  * customElements.define(). Without this, applyStyle() runs with _jitCSSEnabled=false
  * and produces unstyled renders that replace the DSD pre-rendered content.
  */
-export function generateJitInitModule(jitCss: ResolvedCerConfig['jitCss']): string {
+export function generateJitInitModule(jitCss: ResolvedCerConfig['jitCss'], ssr = false): string {
+  if (jitCss.mode === 'static' && !ssr) return `import styles from 'virtual:cer-jit-css'\nimport { enableStaticCSS } from '@jasonshimmy/custom-elements-runtime/static-css'\nenableStaticCSS(styles)\n`
   const args: string[] = []
   if (jitCss.extendedColors) {
     args.push(`extendedColors: ${JSON.stringify(jitCss.extendedColors)}`)
@@ -380,7 +396,7 @@ export function cerApp(userConfig: CerAppConfig = {}): Plugin[] {
       // For virtual:cer-app-config and virtual:cer-plugins the SSR and client
       // variants differ: app-config includes private defaults in SSR; plugins
       // excludes .client.ts files in SSR. Use separate cache keys for both.
-      const cacheKey = (id === RESOLVED_IDS.appConfig || id === RESOLVED_IDS.plugins)
+      const cacheKey = (id === RESOLVED_IDS.appConfig || id === RESOLVED_IDS.plugins || id === RESOLVED_IDS.contentComponents || id === RESOLVED_IDS.jitInit)
         ? `${id}:${ssr ? 'ssr' : 'client'}`
         : id
 
@@ -549,6 +565,7 @@ export function cerApp(userConfig: CerAppConfig = {}): Plugin[] {
   // linked workspace does not acquire nominal private Vite types twice.
   const jitPlugins = cerPlugin({
     content: jitContent,
+    safelist: userConfig.jitCss?.safelist,
     ...jitOptions,
     ssr: {
       dsd: true,

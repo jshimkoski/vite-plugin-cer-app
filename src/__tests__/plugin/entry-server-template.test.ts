@@ -181,9 +181,10 @@ describe('entry-server-template (ENTRY_SERVER_TEMPLATE content)', () => {
     expect(src).toContain('text/html; charset=utf-8')
   })
 
-  it('sets Transfer-Encoding: chunked header for streaming', () => {
-    expect(src).toContain('Transfer-Encoding')
-    expect(src).toContain('chunked')
+  it('leaves transfer framing to the transport and honors backpressure/cancellation', () => {
+    expect(src).not.toContain("res.setHeader('Transfer-Encoding'")
+    expect(src).toContain("res.once('drain', done)")
+    expect(src).toContain("res.once?.('close', stopStream)")
   })
 
   it('reads the stream using a reader loop', () => {
@@ -447,4 +448,17 @@ describe('deferEntryModulesForFirstPaint', () => {
     expect(result).toContain('href="/assets/app&amp;test.js"')
     expect(result).toContain('import("/assets/app\\u0026test.js")')
   })
+})
+
+it('isolates synchronous and asynchronous response-hook failures in both render paths', async () => {
+  const fragments = src.match(/try \{ void Promise\.resolve\(_hooks\.onResponse[^\n]+catch \{ \/\* ignore \*\/ \}/g) ?? []
+  expect(fragments).toHaveLength(2)
+  for (const fragment of fragments) {
+    const invoke = new Function('_hooks', '_requestPath', 'req', 'res', '_requestStart', fragment)
+    for (const onResponse of [() => { throw new Error('Logging failed') }, async () => { throw new Error('Async logging failed') }]) {
+      expect(() => invoke({ onResponse }, '/', { method: 'GET' }, { statusCode: 200 }, Date.now())).not.toThrow()
+    }
+  }
+  // Allow rejected hooks to settle; Vitest fails the test run on unhandled rejections.
+  await new Promise((resolve) => setTimeout(resolve, 0))
 })
